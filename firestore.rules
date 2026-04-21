@@ -1,0 +1,150 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper: Check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: Get staff document for current user
+    function getStaff() {
+      return get(/databases/$(database)/documents/staff/$(request.auth.uid));
+    }
+
+    // Helper: Check if user has admin role
+    function isAdmin() {
+      return isAuth() && getStaff().data.role == 'admin';
+    }
+
+    // Helper: Check if user has one of the given roles
+    function hasRole(roles) {
+      return isAuth() && getStaff().data.role in roles;
+    }
+
+    // Companies - admin only
+    match /companies/{companyId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Departments - admin can write, dept-heads can read
+    match /departments/{deptId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // Staff - admin & dept-heads can manage
+    match /staff/{staffId} {
+      allow read: if isAuth();
+      allow create, update: if hasRole(['admin', 'department-head']);
+      allow delete: if isAdmin();
+
+      // Salary history subcollection
+      match /salaryHistory/{histId} {
+        allow read: if isAuth();
+        allow write: if hasRole(['admin', 'accounts']);
+      }
+
+      // Status history subcollection
+      match /statusHistory/{histId} {
+        allow read: if isAuth();
+        allow write: if isAdmin();
+      }
+    }
+
+    // Clients - admin, dept-heads, accounts
+    match /clients/{clientId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'department-head', 'accounts']);
+    }
+
+    // Invoices - admin & accounts
+    match /invoices/{invoiceId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'accounts']);
+    }
+
+    // Invoice Payments
+    match /invoicePayments/{paymentId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'accounts']);
+    }
+
+    // Transactions (accounting)
+    match /transactions/{txnId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'accounts']);
+    }
+
+    // Categories
+    match /categories/{catId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'accounts']);
+    }
+
+    // Leave Requests
+    match /leaveRequests/{leaveId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if hasRole(['admin', 'department-head']);
+      allow delete: if isAdmin();
+    }
+
+    // Tasks
+    match /tasks/{taskId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'department-head']);
+    }
+
+    // Assets
+    match /assets/{assetId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'department-head']);
+    }
+
+    // Calendar Events
+    match /calendar_events/{eventId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'department-head']);
+    }
+
+    // Attendance
+    match /attendance/{attendanceId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update, delete: if hasRole(['admin', 'department-head']);
+    }
+
+    // Payroll - admin & accounts
+    match /payroll/{payrollId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'accounts']);
+    }
+
+    // Notifications
+    match /notifications/{notifId} {
+      allow read: if isAuth();
+      allow write: if isAuth();
+    }
+
+    // Audit Logs - admin read only, system writes
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuth();
+      allow update, delete: if false;
+    }
+
+    // Settings - admin only
+    match /settings/{settingId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    // WhatsApp Messages
+    match /whatsapp_messages/{msgId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+  }
+}
