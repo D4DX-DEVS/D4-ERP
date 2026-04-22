@@ -1,18 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
-  collection,
-  query,
-  getDocs,
-  getCountFromServer,
   QueryConstraint,
   orderBy,
-  limit,
-  startAfter,
-  DocumentSnapshot,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+  getDocumentsPaginated,
+} from "@/lib/firestore";
 
 interface PaginationState<T> {
   data: (T & { id: string })[];
@@ -37,11 +30,14 @@ export function usePagination<T>(
   options: UsePaginationOptions = {}
 ) {
   const {
-    pageSize = 25,
+    pageSize = 10,
     orderByField = "createdAt",
     orderDirection = "desc",
     constraints = [],
   } = options;
+
+  const constraintKey = JSON.stringify(constraints);
+  const stableConstraints = useMemo(() => constraints, [constraintKey]);
 
   const [state, setState] = useState<PaginationState<T>>({
     data: [],
@@ -54,52 +50,28 @@ export function usePagination<T>(
     hasPrev: false,
   });
 
-  const [cursors, setCursors] = useState<(DocumentSnapshot | null)[]>([null]);
-
   const fetchPage = useCallback(
     async (pageNum: number) => {
       setState((prev) => ({ ...prev, loading: true }));
       try {
-        // Build base constraints
-        const baseConstraints: QueryConstraint[] = [
-          ...constraints,
+        const allConstraints: QueryConstraint[] = [
+          ...stableConstraints,
           orderBy(orderByField, orderDirection),
         ];
 
-        // Get total count
-        const countQuery = query(collection(db, collectionName), ...constraints);
-        const countSnap = await getCountFromServer(countQuery);
-        const totalCount = countSnap.data().count;
-        const totalPages = Math.ceil(totalCount / pageSize);
+        const result = await getDocumentsPaginated<T>(
+          collectionName,
+          allConstraints,
+          pageSize,
+          pageNum
+        );
 
-        // Build paginated query
-        const pageConstraints = [...baseConstraints, limit(pageSize)];
-        if (pageNum > 0 && cursors[pageNum]) {
-          pageConstraints.push(startAfter(cursors[pageNum]));
-        }
-
-        const q = query(collection(db, collectionName), ...pageConstraints);
-        const snapshot = await getDocs(q);
-
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as (T & { id: string })[];
-
-        // Store cursor for next page
-        if (snapshot.docs.length > 0) {
-          const lastDoc = snapshot.docs[snapshot.docs.length - 1];
-          setCursors((prev) => {
-            const next = [...prev];
-            next[pageNum + 1] = lastDoc;
-            return next;
-          });
-        }
+        const totalPages = result.totalPages;
 
         setState({
-          data,
+          data: result.data,
           loading: false,
-          totalCount,
+          totalCount: result.total,
           page: pageNum,
           pageSize,
           totalPages,
@@ -111,8 +83,57 @@ export function usePagination<T>(
         setState((prev) => ({ ...prev, loading: false }));
       }
     },
-    [collectionName, constraints, orderByField, orderDirection, pageSize, cursors]
+    [collectionName, stableConstraints, orderByField, orderDirection, pageSize]
   );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadInitialPage() {
+      setState((prev) => ({ ...prev, loading: true }));
+
+      try {
+        const allConstraints: QueryConstraint[] = [
+          ...stableConstraints,
+          orderBy(orderByField, orderDirection),
+        ];
+
+        const result = await getDocumentsPaginated<T>(
+          collectionName,
+          allConstraints,
+          pageSize,
+          0
+        );
+
+        if (!isMounted) return;
+
+        const totalPages = result.totalPages;
+
+        setState({
+          data: result.data,
+          loading: false,
+          totalCount: result.total,
+          page: 0,
+          pageSize,
+          totalPages,
+          hasNext: totalPages > 1,
+          hasPrev: false,
+        });
+      } catch (error) {
+        console.error("Pagination error:", error);
+
+        if (isMounted) {
+          setState((prev) => ({ ...prev, loading: false }));
+        }
+      }
+    }
+
+    void loadInitialPage();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [collectionName, stableConstraints, orderByField, orderDirection, pageSize]);
 
   const goToPage = useCallback(
     (p: number) => {
@@ -130,7 +151,6 @@ export function usePagination<T>(
   }, [fetchPage, state.hasPrev, state.page]);
 
   const refresh = useCallback(() => {
-    setCursors([null]);
     fetchPage(0);
   }, [fetchPage]);
 

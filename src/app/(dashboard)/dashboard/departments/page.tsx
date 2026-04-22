@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Department, Company, Staff } from "@/types";
-import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy, where } from "@/lib/firestore";
+import { getDocuments, createDocument, updateDocument, deleteDocument, where } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,42 +15,64 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { getStatusColor } from "@/lib/utils";
-import { Layers, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Layers, Plus, Pencil, Trash2, Loader2, Eye } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/use-pagination";
 
 export default function DepartmentsPage() {
-  const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
   const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [lookupsLoading, setLookupsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", description: "", companyId: "", headId: "", isActive: true });
   const { toast } = useToast();
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 25;
-
-  const fetchData = async () => {
-    try {
-      const [depts, comps, staff] = await Promise.all([
-        getDocuments<Department>("departments", [orderBy("createdAt", "desc")]),
-        getDocuments<Company>("companies", [where("isActive", "==", true)]),
-        getDocuments<Staff>("staff", [where("isActive", "==", true)]),
-      ]);
-      setDepartments(depts);
-      setCompanies(comps);
-      setStaffList(staff);
-    } catch (error) {
-      console.error("Error fetching departments:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const router = useRouter();
+  const {
+    data: departments,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<Department>("departments", {
+    pageSize: 10,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+  });
 
   useEffect(() => {
-    fetchData();
+    let isMounted = true;
+
+    async function loadLookups() {
+      try {
+        const [comps, staff] = await Promise.all([
+          getDocuments<Company>("companies", [where("isActive", "==", true)]),
+          getDocuments<Staff>("staff", [where("isActive", "==", true)]),
+        ]);
+        if (!isMounted) return;
+        setCompanies(comps);
+        setStaffList(staff);
+      } catch (error) {
+        console.error("Error fetching departments:", error);
+      } finally {
+        if (isMounted) {
+          setLookupsLoading(false);
+        }
+      }
+    }
+
+    void loadLookups();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleOpen = (dept?: Department & { id: string }) => {
@@ -80,7 +103,7 @@ export default function DepartmentsPage() {
       }
       setDialogOpen(false);
       toast("success", editingId ? "Department updated" : "Department created");
-      fetchData();
+      refresh();
     } catch (error) {
       console.error("Error saving department:", error);
       toast("error", "Failed to save department");
@@ -94,7 +117,7 @@ export default function DepartmentsPage() {
     try {
       await deleteDocument("departments", id);
       toast("success", "Department deleted");
-      fetchData();
+      refresh();
     } catch (error) {
       console.error("Error deleting department:", error);
       toast("error", "Failed to delete department");
@@ -110,7 +133,7 @@ export default function DepartmentsPage() {
     return s ? `${s.firstName} ${s.lastName}` : "—";
   };
 
-  if (loading) return <PageLoader />;
+  if (loading || lookupsLoading) return <PageLoader />;
 
   return (
     <div className="space-y-6">
@@ -144,7 +167,7 @@ export default function DepartmentsPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>All Departments ({departments.length})</CardTitle>
+            <CardTitle>All Departments ({totalCount})</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
@@ -159,8 +182,23 @@ export default function DepartmentsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {departments.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((dept) => (
-                  <TableRow key={dept.id}>
+                {departments.map((dept) => {
+                  const detailHref = `/dashboard/departments/${dept.id}`;
+
+                  return (
+                  <TableRow
+                    key={dept.id}
+                    className="cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(detailHref)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(detailHref);
+                      }
+                    }}
+                  >
                     <TableCell className="font-medium">{dept.name}</TableCell>
                     <TableCell>{getCompanyName(dept.companyId)}</TableCell>
                     <TableCell>{getHeadName(dept.headId)}</TableCell>
@@ -171,7 +209,10 @@ export default function DepartmentsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}>
+                        <Button variant="ghost" size="icon" onClick={() => router.push(detailHref)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleOpen(dept)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -181,10 +222,10 @@ export default function DepartmentsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                )})}
               </TableBody>
             </Table>
-            <Pagination page={page} totalPages={Math.ceil(departments.length / PAGE_SIZE)} totalCount={departments.length} hasNext={page < Math.ceil(departments.length / PAGE_SIZE) - 1} hasPrev={page > 0} onNext={() => setPage(page + 1)} onPrev={() => setPage(page - 1)} pageSize={PAGE_SIZE} />
+            <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={10} />
           </CardContent>
         </Card>
       )}

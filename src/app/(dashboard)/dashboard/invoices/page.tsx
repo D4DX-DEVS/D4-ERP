@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Invoice, Client, Company } from "@/types";
-import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
+import { getDocuments, createDocument, where, Timestamp, search as searchConstraint } from "@/lib/firestore";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,20 +19,45 @@ import { FileText, Plus, Trash2, Loader2, Eye, Search } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/use-pagination";
 
 export default function InvoicesPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
-  const [invoices, setInvoices] = useState<(Invoice & { id: string })[]>([]);
   const [clients, setClients] = useState<(Client & { id: string })[]>([]);
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [lookupsLoading, setLookupsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterStatus, setFilterStatus] = useState("");
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 25;
+  const constraints = useMemo(() => {
+    const nextConstraints: Array<ReturnType<typeof where> | ReturnType<typeof searchConstraint>> = [where("type", "==", "invoice")];
+    if (filterStatus) {
+      nextConstraints.push(where("status", "==", filterStatus));
+    }
+    if (search.trim()) {
+      nextConstraints.push(searchConstraint(["invoiceNumber", "clientName"], search.trim()));
+    }
+    return nextConstraints;
+  }, [filterStatus, search]);
+  const {
+    data: invoices,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<Invoice>("invoices", {
+    pageSize: 10,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints,
+  });
 
   const [form, setForm] = useState({
     type: "invoice" as Invoice["type"],
@@ -48,24 +73,35 @@ export default function InvoicesPage() {
     terms: "Payment due within 30 days.",
   });
 
-  const fetchData = async () => {
-    try {
-      const [invs, cls, comps] = await Promise.all([
-        getDocuments<Invoice>("invoices", [orderBy("createdAt", "desc")]),
-        getDocuments<Client>("clients", [where("isActive", "==", true)]),
-        getDocuments<Company>("companies", [where("isActive", "==", true)]),
-      ]);
-      setInvoices(invs);
-      setClients(cls);
-      setCompanies(comps);
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    let isMounted = true;
 
-  useEffect(() => { fetchData(); }, []);
+    async function loadLookups() {
+      try {
+        const [cls, comps] = await Promise.all([
+          getDocuments<Client>("clients", [where("isActive", "==", true)]),
+          getDocuments<Company>("companies", [where("isActive", "==", true)]),
+        ]);
+
+        if (!isMounted) return;
+
+        setClients(cls);
+        setCompanies(comps);
+      } catch (error) {
+        console.error("Error:", error);
+      } finally {
+        if (isMounted) {
+          setLookupsLoading(false);
+        }
+      }
+    }
+
+    void loadLookups();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const updateItem = (idx: number, field: string, value: string | number) => {
     const items = [...form.items];
@@ -142,7 +178,7 @@ export default function InvoicesPage() {
       });
       setDialogOpen(false);
       toast("success", "Invoice created successfully");
-      fetchData();
+      refresh();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to create invoice");
@@ -154,18 +190,9 @@ export default function InvoicesPage() {
   const getClientName = (id: string) => clients.find((c) => c.id === id)?.companyName || "—";
   const getCompanyName = (id: string) => companies.find((c) => c.id === id)?.name || "—";
 
-  const filtered = invoices.filter((i) => {
-    const matchStatus = !filterStatus || i.status === filterStatus;
-    const matchSearch = !search || `${i.invoiceNumber} ${i.clientName}`.toLowerCase().includes(search.toLowerCase());
-    return matchStatus && matchSearch && i.type === "invoice";
-  });
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
   const totals = calculateTotals();
 
-  if (loading) return <PageLoader />;
+  if (loading || lookupsLoading) return <PageLoader />;
 
   return (
     <div className="space-y-6">
@@ -196,7 +223,7 @@ export default function InvoicesPage() {
           className="w-[180px]" />
       </div>
 
-      {filtered.length === 0 ? (
+      {totalCount === 0 ? (
         <Card><CardContent>
           <EmptyState icon={<FileText className="h-12 w-12" />} title="No invoices found" />
         </CardContent></Card>
@@ -217,7 +244,7 @@ export default function InvoicesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paged.map((inv) => (
+              {invoices.map((inv) => (
                 <TableRow key={inv.id}>
                   <TableCell className="font-mono font-medium">{inv.invoiceNumber}</TableCell>
                   <TableCell>{inv.clientName || getClientName(inv.clientId)}</TableCell>
@@ -236,7 +263,7 @@ export default function InvoicesPage() {
               ))}
             </TableBody>
           </Table>
-          <Pagination page={page} totalPages={totalPages} totalCount={filtered.length} hasNext={page < totalPages - 1} hasPrev={page > 0} onNext={() => setPage(page + 1)} onPrev={() => setPage(page - 1)} pageSize={PAGE_SIZE} />
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={10} />
         </CardContent></Card>
       )}
 

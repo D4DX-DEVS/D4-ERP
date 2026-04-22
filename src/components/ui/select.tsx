@@ -15,7 +15,7 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <select
         className={cn(
-          "flex h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-12 w-full appearance-none rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] ring-offset-white/80 backdrop-blur-sm hover:border-teal-300/70 hover:bg-white focus-visible:border-teal-500 focus-visible:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/14 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100",
           className
         )}
         ref={ref}
@@ -70,19 +70,20 @@ function SelectTrigger({ children, className }: { children: React.ReactNode; cla
       type="button"
       onClick={() => setOpen(!open)}
       className={cn(
-        "flex h-10 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-12 w-full items-center justify-between rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-left text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] ring-offset-white/80 backdrop-blur-sm hover:border-teal-300/70 hover:bg-white focus:outline-none focus:ring-4 focus:ring-teal-500/14 focus:ring-offset-0 data-[open=true]:border-teal-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100",
         className
       )}
+      data-open={open}
     >
       {children}
-      <ChevronDown className="h-4 w-4 opacity-50" />
+      <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", open && "rotate-180 text-teal-600")} />
     </button>
   );
 }
 
 function SelectValue({ placeholder }: { placeholder?: string }) {
   const { value } = React.useContext(SelectContext);
-  return <span className={!value ? "text-gray-400" : ""}>{value || placeholder || "Select..."}</span>;
+  return <span className={!value ? "text-slate-400" : "text-slate-800"}>{value || placeholder || "Select..."}</span>;
 }
 
 function SelectContent({ children }: { children: React.ReactNode }) {
@@ -103,7 +104,7 @@ function SelectContent({ children }: { children: React.ReactNode }) {
   return (
     <div
       ref={ref}
-      className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg animate-in fade-in"
+      className="absolute z-50 mt-2 w-full max-h-60 overflow-y-auto rounded-[24px] border border-slate-200/80 bg-white/97 p-2 shadow-[0_18px_48px_rgba(15,23,42,0.12)] backdrop-blur-xl animate-in"
     >
       {children}
     </div>
@@ -116,8 +117,8 @@ function SelectItem({ children, value }: { children: React.ReactNode; value: str
     <div
       onClick={() => { onValueChange(value); setOpen(false); }}
       className={cn(
-        "cursor-pointer px-3 py-2 text-sm hover:bg-gray-100",
-        selected === value && "bg-blue-50 text-blue-600 font-medium"
+        "cursor-pointer rounded-2xl px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-100/90 hover:text-slate-950",
+        selected === value && "bg-teal-50 text-teal-700 font-medium"
       )}
     >
       {children}

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getDocuments, createDocument, Timestamp } from "@/lib/firestore";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,8 +12,11 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Client } from "@/types";
-import { MessageSquare, Send, Phone, Search, Plus, CheckCheck, Clock } from "lucide-react";
+import { MessageSquare, Send, Search, CheckCheck, Clock, Eye } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { EmptyState, PageLoader } from "@/components/ui/loading";
+import { ListingHeader, ListingPanel, ListingStatCard, ListingStatGrid } from "@/components/ui/listing";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface WhatsAppMessage {
   id: string;
@@ -41,6 +45,7 @@ export default function WhatsAppPage() {
   const [search, setSearch] = useState("");
   const [sending, setSending] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
 
   const [form, setForm] = useState({
     clientId: "",
@@ -66,7 +71,39 @@ export default function WhatsAppPage() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadInitialData() {
+      setLoading(true);
+      try {
+        const [msgs, cls] = await Promise.all([
+          getDocuments<WhatsAppMessage>("whatsapp_messages"),
+          getDocuments<Client>("clients"),
+        ]);
+
+        if (!isMounted) return;
+
+        setMessages(msgs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+        setClients(cls);
+      } catch (error) {
+        console.error("Error:", error);
+        if (isMounted) {
+          toast("error", "Failed to load messages");
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadInitialData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [toast]);
 
   const clientMap = Object.fromEntries(clients.map((c) => [c.id, c]));
 
@@ -136,141 +173,166 @@ export default function WhatsAppPage() {
     }
   };
 
+  const totalOutbound = messages.filter((message) => message.type === "outgoing").length;
+  const totalRead = messages.filter((message) => message.status === "read").length;
+  const totalFailed = messages.filter((message) => message.status === "failed").length;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">WhatsApp Messages</h1>
-        <Dialog open={showSend} onOpenChange={setShowSend}>
-          <DialogTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700">
-              <Send className="h-4 w-4 mr-2" /> Send Message
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Send WhatsApp Message</DialogTitle></DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Client (optional)</Label>
-                <SelectRoot value={form.clientId} onValueChange={handleClientSelect}>
-                  <SelectTrigger><SelectValue placeholder="Select Client" /></SelectTrigger>
-                  <SelectContent>
-                    {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
-                  </SelectContent>
-                </SelectRoot>
-              </div>
-              <div>
-                <Label>Phone Number</Label>
-                <Input placeholder="+91 XXXXX XXXXX" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              </div>
-              <div>
-                <Label>Template (optional)</Label>
-                <SelectRoot value={form.template} onValueChange={handleTemplateSelect}>
-                  <SelectTrigger><SelectValue placeholder="Choose template" /></SelectTrigger>
-                  <SelectContent>
-                    {TEMPLATES.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                  </SelectContent>
-                </SelectRoot>
-              </div>
-              <div>
-                <Label>Message</Label>
-                <Textarea rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
-              </div>
-              <Button onClick={handleSend} disabled={sending} className="w-full bg-green-600 hover:bg-green-700">
-                {sending ? "Sending..." : "Send Message"}
+      <ListingHeader
+        title="WhatsApp Messages"
+        description="Template-driven outbound messaging and searchable conversation history in one uniform listing flow."
+        action={
+          <Dialog open={showSend} onOpenChange={setShowSend}>
+            <DialogTrigger asChild>
+              <Button className="bg-green-600 hover:bg-green-700">
+                <Send className="mr-2 h-4 w-4" />
+                Send message
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold">{messages.length}</p>
-            <p className="text-xs text-gray-500">Total Messages</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-green-600">{messages.filter((m) => m.status === "sent" || m.status === "delivered").length}</p>
-            <p className="text-xs text-gray-500">Sent</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-blue-600">{messages.filter((m) => m.status === "read").length}</p>
-            <p className="text-xs text-gray-500">Read</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-red-600">{messages.filter((m) => m.status === "failed").length}</p>
-            <p className="text-xs text-gray-500">Failed</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input placeholder="Search messages..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
-      </div>
-
-      {/* Templates Reference */}
-      <Card>
-        <CardHeader><CardTitle>Message Templates</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {TEMPLATES.map((t) => (
-              <div key={t.id} className="p-3 border rounded-lg">
-                <p className="font-medium text-sm">{t.name}</p>
-                <p className="text-xs text-gray-500 mt-1 line-clamp-2">{t.body}</p>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Send WhatsApp Message</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Client (optional)</Label>
+                  <SelectRoot value={form.clientId} onValueChange={handleClientSelect}>
+                    <SelectTrigger><SelectValue placeholder="Select Client" /></SelectTrigger>
+                    <SelectContent>
+                      {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
+                    </SelectContent>
+                  </SelectRoot>
+                </div>
+                <div>
+                  <Label>Phone Number</Label>
+                  <Input placeholder="+91 XXXXX XXXXX" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                </div>
+                <div>
+                  <Label>Template (optional)</Label>
+                  <SelectRoot value={form.template} onValueChange={handleTemplateSelect}>
+                    <SelectTrigger><SelectValue placeholder="Choose template" /></SelectTrigger>
+                    <SelectContent>
+                      {TEMPLATES.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                    </SelectContent>
+                  </SelectRoot>
+                </div>
+                <div>
+                  <Label>Message</Label>
+                  <Textarea rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+                </div>
+                <Button onClick={handleSend} disabled={sending} className="w-full bg-green-600 hover:bg-green-700">
+                  {sending ? "Sending..." : "Send Message"}
+                </Button>
               </div>
+            </DialogContent>
+          </Dialog>
+        }
+      />
+
+      <ListingStatGrid>
+        <ListingStatCard icon={<MessageSquare className="h-5 w-5" />} label="Total Messages" value={messages.length} toneClassName="bg-slate-100 text-slate-700" meta="All recorded conversations" />
+        <ListingStatCard icon={<Send className="h-5 w-5" />} label="Outbound" value={totalOutbound} toneClassName="bg-emerald-50 text-emerald-700" meta="Messages initiated by your team" />
+        <ListingStatCard icon={<CheckCheck className="h-5 w-5" />} label="Read" value={totalRead} toneClassName="bg-sky-50 text-sky-700" meta="Messages seen by recipients" />
+        <ListingStatCard icon={<Clock className="h-5 w-5" />} label="Failed" value={totalFailed} toneClassName="bg-rose-50 text-rose-700" meta="Delivery issues needing follow-up" />
+      </ListingStatGrid>
+
+      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <ListingPanel title="Message Templates" description="Quick-start templates for the most common client conversations.">
+          <div className="grid gap-3 md:grid-cols-2">
+            {TEMPLATES.map((template) => (
+              <Card key={template.id} className="border border-dashed border-slate-200 bg-slate-50/70 shadow-none">
+                <CardContent className="p-4">
+                  <p className="text-sm font-semibold text-slate-900">{template.name}</p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">{template.body}</p>
+                </CardContent>
+              </Card>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </ListingPanel>
 
-      {/* Message History */}
-      {loading ? (
-        <div className="text-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-green-600 border-t-transparent mx-auto" />
-        </div>
-      ) : (
-        <Card>
-          <CardHeader><CardTitle>Message History</CardTitle></CardHeader>
-          <CardContent>
-            {filtered.length === 0 ? (
-              <div className="text-center py-8">
-                <MessageSquare className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500">No messages yet</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {filtered.slice(0, 50).map((m) => (
-                  <div key={m.id} className="flex items-start gap-3 p-3 border rounded-lg">
-                    <div className={`p-2 rounded-full ${m.type === "outgoing" ? "bg-green-100" : "bg-blue-100"}`}>
-                      {m.type === "outgoing" ? <Send className="h-4 w-4 text-green-600" /> : <Phone className="h-4 w-4 text-blue-600" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{clientMap[m.clientId]?.companyName || "Unknown"}</span>
-                        <span className="text-xs text-gray-400">{m.phone}</span>
-                        {statusIcon(m.status)}
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">{m.message}</p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {m.createdAt?.seconds ? new Date(m.createdAt.seconds * 1000).toLocaleString("en-IN") : "—"}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+        <ListingPanel title="Message History" description="Searchable timeline with explicit view access and row click-through." contentClassName="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input placeholder="Search by client, phone, or message" className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+
+          {loading ? (
+            <PageLoader />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              icon={<MessageSquare className="h-12 w-12" />}
+              title="No messages found"
+              description="Try a different search term or send the first WhatsApp message from this panel."
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Direction</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Preview</TableHead>
+                  <TableHead>Sent At</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.slice(0, 50).map((message) => {
+                  const detailHref = `/dashboard/whatsapp/${message.id}`;
+
+                  return (
+                    <TableRow
+                      key={message.id}
+                      className="cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => router.push(detailHref)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(detailHref);
+                        }
+                      }}
+                    >
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-slate-950">{clientMap[message.clientId]?.companyName || "Unknown client"}</p>
+                          <p className="mt-1 text-xs text-slate-500">{message.phone}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={message.type === "outgoing" ? "bg-emerald-100 text-emerald-700" : "bg-sky-100 text-sky-700"}>
+                          {message.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {statusIcon(message.status)}
+                          <span className="text-sm capitalize text-slate-600">{message.status}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="max-w-[320px]">
+                        <p className="line-clamp-2 text-sm text-slate-600">{message.message}</p>
+                      </TableCell>
+                      <TableCell>
+                        {message.createdAt?.seconds ? new Date(message.createdAt.seconds * 1000).toLocaleString("en-IN") : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}>
+                          <Button variant="ghost" size="icon" onClick={() => router.push(detailHref)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </ListingPanel>
+      </div>
     </div>
   );
 }

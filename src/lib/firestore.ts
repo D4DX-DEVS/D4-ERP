@@ -1,199 +1,166 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where,
-  orderBy,
-  Timestamp,
-  DocumentData,
-  QueryConstraint,
-  limit,
-  startAfter,
-  DocumentSnapshot,
-  getCountFromServer,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+// ==================== MongoDB-backed Firestore-compatible API ====================
+// Drop-in replacement for the old Firebase Firestore client.
+// All functions keep the same signatures so page components need zero changes.
 
-// ==================== Audit Logging ====================
-// Set current user for audit tracking (call from auth)
+// ── Timestamp (Firebase-compatible) ───────────────────────────────────────────
+export class Timestamp {
+  seconds: number;
+  nanoseconds: number;
+
+  constructor(seconds: number, nanoseconds: number = 0) {
+    this.seconds = seconds;
+    this.nanoseconds = nanoseconds;
+  }
+
+  static now(): Timestamp {
+    const ms = Date.now();
+    return new Timestamp(Math.floor(ms / 1000), (ms % 1000) * 1e6);
+  }
+
+  static fromDate(date: Date): Timestamp {
+    const ms = date.getTime();
+    return new Timestamp(Math.floor(ms / 1000), (ms % 1000) * 1e6);
+  }
+
+  toDate(): Date {
+    return new Date(this.seconds * 1000 + this.nanoseconds / 1e6);
+  }
+
+  toJSON() {
+    return { _ts: true, seconds: this.seconds, nanoseconds: this.nanoseconds };
+  }
+}
+
+// ── Query constraint types ────────────────────────────────────────────────────
+export interface QueryConstraint {
+  _type: string;
+  [key: string]: unknown;
+}
+
+export interface SearchConstraint extends QueryConstraint {
+  _type: "search";
+  fields: string[];
+  value: string;
+}
+
+export function where(field: string, op: string, value: unknown): QueryConstraint {
+  return { _type: "where", field, op, value };
+}
+
+export function orderBy(field: string, direction: "asc" | "desc" = "asc"): QueryConstraint {
+  return { _type: "orderBy", field, direction };
+}
+
+export function limit(n: number): QueryConstraint {
+  return { _type: "limit", value: n };
+}
+
+export function search(fields: string[], value: string): SearchConstraint {
+  return { _type: "search", fields, value };
+}
+
+// Kept for API compat but not used with MongoDB pagination
+export function startAfter(): QueryConstraint {
+  return { _type: "startAfter" };
+}
+
+// ── Internal API caller ───────────────────────────────────────────────────────
 let _auditUser: { uid: string; firstName: string; lastName: string } | null = null;
+
 export function setAuditUser(user: typeof _auditUser) {
   _auditUser = user;
 }
 
-async function writeAuditLog(
-  action: "create" | "update" | "delete",
-  collectionName: string,
-  entityId: string,
-  description: string,
-  extra?: { previousData?: Record<string, unknown>; newData?: Record<string, unknown> }
-) {
-  // Don't log audit_logs or settings writes to avoid recursion
-  if (collectionName === "audit_logs" || collectionName === "settings") return;
-  try {
-    await addDoc(collection(db, "audit_logs"), {
-      userId: _auditUser?.uid || "system",
-      userName: _auditUser ? `${_auditUser.firstName} ${_auditUser.lastName}` : "System",
-      action,
-      module: collectionName,
-      entityType: collectionName,
-      entityId,
-      description,
-      details: description,
-      timestamp: Timestamp.now(),
-      previousData: extra?.previousData || null,
-      newData: extra?.newData || null,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    });
-  } catch {
-    // Never let audit logging break main operations
+async function apiCall(body: Record<string, unknown>) {
+  // Attach audit user info for server-side audit logging
+  if (_auditUser) {
+    body.auditUser = { uid: _auditUser.uid, name: `${_auditUser.firstName} ${_auditUser.lastName}` };
   }
+  const res = await fetch("/api/db", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Request failed" }));
+    throw new Error(err.error || "Request failed");
+  }
+  return res.json();
 }
 
-// ==================== Generic CRUD ====================
+// ── Generic CRUD (same signatures as before) ──────────────────────────────────
+
 export async function getDocuments<T>(
   collectionName: string,
   constraints: QueryConstraint[] = []
 ): Promise<(T & { id: string })[]> {
-  const q = query(collection(db, collectionName), ...constraints);
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as (T & { id: string })[];
+  return apiCall({ action: "find", collection: collectionName, constraints });
 }
 
 export async function getDocumentsPaginated<T>(
   collectionName: string,
   constraints: QueryConstraint[] = [],
   pageSize: number = 25,
-  cursor?: DocumentSnapshot | null
-): Promise<{ data: (T & { id: string })[]; lastDoc: DocumentSnapshot | null; total: number }> {
-  // Count
-  const countQ = query(collection(db, collectionName), ...constraints.filter(c => {
-    // Remove orderBy/limit/startAfter for count query — keep only where
-    const str = String(c);
-    return !str.includes("orderBy") && !str.includes("limit") && !str.includes("startAfter");
-  }));
-  let total = 0;
-  try {
-    const countSnap = await getCountFromServer(query(collection(db, collectionName)));
-    total = countSnap.data().count;
-  } catch {
-    total = 0;
-  }
+  page: number = 0
+): Promise<{ data: (T & { id: string })[]; total: number; page: number; pageSize: number; totalPages: number }> {
+  return apiCall({ action: "paginate", collection: collectionName, constraints, pageSize, page });
+}
 
-  // Paginated query
-  const pageConstraints = [...constraints, limit(pageSize)];
-  if (cursor) pageConstraints.push(startAfter(cursor));
-
-  const q = query(collection(db, collectionName), ...pageConstraints);
-  const snapshot = await getDocs(q);
-  const data = snapshot.docs.map((d) => ({
-    id: d.id,
-    ...d.data(),
-  })) as (T & { id: string })[];
-
-  const lastDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
-
-  return { data, lastDoc, total };
+export async function countDocuments(
+  collectionName: string,
+  constraints: QueryConstraint[] = []
+): Promise<number> {
+  const result = await apiCall({ action: "count", collection: collectionName, constraints });
+  return result.total;
 }
 
 export async function getDocument<T>(
   collectionName: string,
   docId: string
 ): Promise<(T & { id: string }) | null> {
-  const docRef = doc(db, collectionName, docId);
-  const snapshot = await getDoc(docRef);
-  if (!snapshot.exists()) return null;
-  return { id: snapshot.id, ...snapshot.data() } as T & { id: string };
+  return apiCall({ action: "findOne", collection: collectionName, id: docId });
 }
 
-export async function createDocument<T extends DocumentData>(
+export async function createDocument(
   collectionName: string,
-  data: T
+  data: Record<string, unknown>
 ): Promise<string> {
-  const docRef = await addDoc(collection(db, collectionName), {
-    ...data,
-    createdAt: Timestamp.now(),
-    updatedAt: Timestamp.now(),
-  });
-  // Auto audit log
-  writeAuditLog("create", collectionName, docRef.id, `Created ${collectionName} record`, {
-    newData: data as Record<string, unknown>,
-  });
-  return docRef.id;
+  const result = await apiCall({ action: "create", collection: collectionName, data });
+  return result.id;
 }
 
-export async function updateDocument<T extends DocumentData>(
+export async function updateDocument(
   collectionName: string,
   docId: string,
-  data: Partial<T>
+  data: Record<string, unknown>
 ): Promise<void> {
-  const docRef = doc(db, collectionName, docId);
-  await updateDoc(docRef, {
-    ...data,
-    updatedAt: Timestamp.now(),
-  });
-  // Auto audit log
-  writeAuditLog("update", collectionName, docId, `Updated ${collectionName} record`, {
-    newData: data as Record<string, unknown>,
-  });
+  await apiCall({ action: "update", collection: collectionName, id: docId, data });
 }
 
 export async function deleteDocument(
   collectionName: string,
   docId: string
 ): Promise<void> {
-  const docRef = doc(db, collectionName, docId);
-  await deleteDoc(docRef);
-  // Auto audit log
-  writeAuditLog("delete", collectionName, docId, `Deleted ${collectionName} record`);
+  await apiCall({ action: "delete", collection: collectionName, id: docId });
 }
 
-// Sub-collection operations
+// ── Sub-collection operations ─────────────────────────────────────────────────
+
 export async function getSubDocuments<T>(
   parentCollection: string,
   parentId: string,
   subCollection: string,
   constraints: QueryConstraint[] = []
 ): Promise<(T & { id: string })[]> {
-  const q = query(
-    collection(db, parentCollection, parentId, subCollection),
-    ...constraints
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as (T & { id: string })[];
+  return apiCall({ action: "findSub", parentCollection, parentId, subCollection, collection: `${parentCollection}_${subCollection}`, constraints });
 }
 
-export async function createSubDocument<T extends DocumentData>(
+export async function createSubDocument(
   parentCollection: string,
   parentId: string,
   subCollection: string,
-  data: T
+  data: Record<string, unknown>
 ): Promise<string> {
-  const docRef = await addDoc(
-    collection(db, parentCollection, parentId, subCollection),
-    {
-      ...data,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
-    }
-  );
-  // Auto audit log
-  writeAuditLog("create", `${parentCollection}/${parentId}/${subCollection}`, docRef.id, `Created ${subCollection} sub-document`);
-  return docRef.id;
+  const result = await apiCall({ action: "createSub", parentCollection, parentId, subCollection, collection: `${parentCollection}_${subCollection}`, data });
+  return result.id;
 }
-
-// Helper exports for query building
-export { where, orderBy, limit, startAfter, Timestamp, query, collection, doc, getCountFromServer };
-export type { DocumentSnapshot, QueryConstraint };

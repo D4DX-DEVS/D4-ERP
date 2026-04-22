@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getDocuments, updateDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
+import { countDocuments, updateDocument, deleteDocument, where, Timestamp } from "@/lib/firestore";
 import { AppNotification } from "@/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bell, CheckCheck, Trash2, Mail, AlertTriangle, Info, CheckCircle } from "lucide-react";
+import { Bell, CheckCheck, Trash2, AlertTriangle, Info, CheckCircle } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/use-pagination";
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
   info: <Info className="h-5 w-5 text-blue-500" />,
@@ -18,31 +20,71 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
 };
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<(AppNotification & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "unread" | "read">("all");
+  const [unreadCount, setUnreadCount] = useState(0);
   const { toast } = useToast();
+  const {
+    data: notifications,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<AppNotification>("notifications", {
+    pageSize: 10,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints:
+      filter === "unread"
+        ? [where("isRead", "==", false)]
+        : filter === "read"
+          ? [where("isRead", "==", true)]
+          : [],
+  });
 
-  const fetchData = async () => {
-    setLoading(true);
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadUnreadCount() {
+      try {
+        const total = await countDocuments("notifications", [where("isRead", "==", false)]);
+        if (!isMounted) return;
+        setUnreadCount(total);
+      } catch (error) {
+        console.error("Error:", error);
+        if (isMounted) {
+          toast("error", "Failed to load notifications");
+        }
+      }
+    }
+
+    void loadUnreadCount();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [toast]);
+
+  const refreshNotifications = async () => {
     try {
-      const data = await getDocuments<AppNotification>("notifications");
-      setNotifications(data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
+      const total = await countDocuments("notifications", [where("isRead", "==", false)]);
+      setUnreadCount(total);
+      refresh();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to load notifications");
-    } finally {
-      setLoading(false);
     }
   };
-
-  useEffect(() => { fetchData(); }, []);
 
   const markAsRead = async (id: string) => {
     try {
       await updateDocument("notifications", id, { isRead: true, readAt: Timestamp.now() });
-      fetchData();
-    } catch (error) {
+      await refreshNotifications();
+    } catch {
       toast("error", "Failed to mark as read");
     }
   };
@@ -52,36 +94,27 @@ export default function NotificationsPage() {
     for (const n of unread) {
       await updateDocument("notifications", n.id, { isRead: true, readAt: Timestamp.now() });
     }
-    fetchData();
+    await refreshNotifications();
   };
 
   const handleDelete = async (id: string) => {
     try {
       await deleteDocument("notifications", id);
       toast("success", "Notification deleted");
-      fetchData();
-    } catch (error) {
+      await refreshNotifications();
+    } catch {
       toast("error", "Failed to delete notification");
     }
   };
 
-  const filtered = notifications.filter((n) => {
-    if (filter === "unread") return !n.isRead;
-    if (filter === "read") return n.isRead;
-    return true;
-  });
-
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
-
   const timeAgo = (ts: { seconds: number } | undefined) => {
     if (!ts) return "";
-    const diff = Date.now() - ts.seconds * 1000;
-    const mins = Math.floor(diff / 60000);
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    return `${days}d ago`;
+    return new Date(ts.seconds * 1000).toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
 
   return (
@@ -118,7 +151,7 @@ export default function NotificationsPage() {
         <div className="text-center py-8">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent mx-auto" />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : notifications.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center">
             <Bell className="h-12 w-12 mx-auto text-gray-300 mb-3" />
@@ -127,7 +160,7 @@ export default function NotificationsPage() {
         </Card>
       ) : (
         <div className="space-y-2">
-          {filtered.map((n) => (
+          {notifications.map((n) => (
             <Card key={n.id} className={!n.isRead ? "border-l-4 border-l-blue-500" : ""}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
@@ -155,6 +188,7 @@ export default function NotificationsPage() {
               </CardContent>
             </Card>
           ))}
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={10} />
         </div>
       )}
     </div>

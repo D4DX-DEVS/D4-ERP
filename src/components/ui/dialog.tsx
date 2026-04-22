@@ -41,17 +41,17 @@ export function Dialog({ children, open: controlledOpen, onOpenChange, onClose, 
     // Legacy inline mode
     return (
       <DialogContext.Provider value={{ open, setOpen }}>
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/50" onClick={() => setOpen(false)} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 lg:left-[calc(var(--sidebar-width)+1.75rem)] lg:w-[calc(100vw-var(--sidebar-width)-1.75rem)] lg:pr-6">
+          <div className="fixed inset-0 bg-slate-950/38 backdrop-blur-[3px]" onClick={() => setOpen(false)} />
           <div
             className={cn(
-              "relative z-50 w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl animate-in fade-in",
+              "erp-dialog-panel relative z-50 w-full max-w-lg max-h-[min(88vh,900px)] overflow-y-auto rounded-[30px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,251,250,0.985))] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.18)] animate-slide-up sm:p-6",
               className
             )}
           >
             <button
               onClick={() => setOpen(false)}
-              className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
+              className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/80 text-slate-500 shadow-sm hover:border-slate-300 hover:bg-white hover:text-slate-800 transition-all cursor-pointer"
             >
               <X className="h-4 w-4" />
             </button>
@@ -112,17 +112,17 @@ export function DialogContent({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={() => setOpen(false)} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 lg:left-[calc(var(--sidebar-width)+1.75rem)] lg:w-[calc(100vw-var(--sidebar-width)-1.75rem)] lg:pr-6">
+      <div className="fixed inset-0 bg-slate-950/38 backdrop-blur-[3px]" onClick={() => setOpen(false)} />
       <div
         className={cn(
-          "relative z-50 w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl bg-white p-6 shadow-xl animate-in fade-in",
+          "erp-dialog-panel relative z-50 w-full max-w-lg max-h-[min(88vh,900px)] overflow-y-auto rounded-[30px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,251,250,0.985))] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.18)] animate-slide-up sm:p-6",
           className
         )}
       >
         <button
           onClick={() => setOpen(false)}
-          className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
+          className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/80 bg-white/80 text-slate-500 shadow-sm hover:border-slate-300 hover:bg-white hover:text-slate-800 transition-all cursor-pointer"
         >
           <X className="h-4 w-4" />
         </button>
@@ -133,13 +133,13 @@ export function DialogContent({
 }
 
 export function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex flex-col space-y-1.5 mb-4", className)} {...props} />;
+  return <div className={cn("mb-5 flex flex-col gap-1 border-b border-slate-200/80 pb-4 pr-10", className)} {...props} />;
 }
 
 export function DialogTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn("text-lg font-semibold leading-none tracking-tight", className)} {...props} />;
+  return <h2 className={cn("text-xl font-semibold leading-none tracking-[-0.02em] text-slate-900", className)} {...props} />;
 }
 
 export function DialogDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-sm text-gray-500", className)} {...props} />;
+  return <p className={cn("text-sm text-slate-500", className)} {...props} />;
 }

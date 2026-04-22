@@ -2,53 +2,94 @@
 
 import { useEffect, useState } from "react";
 import { LeaveRequest, Staff } from "@/types";
-import { getDocuments, updateDocument, orderBy, where, Timestamp } from "@/lib/firestore";
+import { countDocuments, getDocuments, updateDocument, where, Timestamp } from "@/lib/firestore";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { getStatusColor, formatDate } from "@/lib/utils";
-import { CalendarDays, Check, X, Search } from "lucide-react";
+import { CalendarDays, Check, X } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/use-pagination";
 
 export default function LeavesPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
-  const [requests, setRequests] = useState<(LeaveRequest & { id: string })[]>([]);
   const [staffMap, setStaffMap] = useState<Record<string, Staff>>({});
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<Record<string, number>>({ pending: 0, approved: 0, rejected: 0, cancelled: 0 });
+  const [lookupsLoading, setLookupsLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState("pending");
   const [filterType, setFilterType] = useState("");
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 25;
-
-  const fetchData = async () => {
-    try {
-      const constraints = [orderBy("createdAt", "desc")];
-      const [reqs, staffList] = await Promise.all([
-        getDocuments<LeaveRequest>("leaveRequests", constraints),
-        getDocuments<Staff>("staff"),
-      ]);
-      setRequests(reqs);
-
-      const map: Record<string, Staff> = {};
-      staffList.forEach((s) => { map[s.id] = s; });
-      setStaffMap(map);
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const {
+    data: requests,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<LeaveRequest>("leaveRequests", {
+    pageSize: 10,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints: [
+      ...(filterStatus ? [where("status", "==", filterStatus)] : []),
+      ...(filterType ? [where("type", "==", filterType)] : []),
+    ],
+  });
 
   useEffect(() => {
-    fetchData();
+    let isMounted = true;
+
+    async function loadLookupsAndStats() {
+      try {
+        const [staffList, pending, approved, rejected, cancelled] = await Promise.all([
+          getDocuments<Staff>("staff"),
+          countDocuments("leaveRequests", [where("status", "==", "pending")]),
+          countDocuments("leaveRequests", [where("status", "==", "approved")]),
+          countDocuments("leaveRequests", [where("status", "==", "rejected")]),
+          countDocuments("leaveRequests", [where("status", "==", "cancelled")]),
+        ]);
+
+        if (!isMounted) return;
+
+        const map: Record<string, Staff> = {};
+        staffList.forEach((s) => { map[s.id] = s; });
+        setStaffMap(map);
+        setStats({ pending, approved, rejected, cancelled });
+      } catch (error) {
+        console.error("Error:", error);
+      } finally {
+        if (isMounted) {
+          setLookupsLoading(false);
+        }
+      }
+    }
+
+    void loadLookupsAndStats();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  const refreshLeaves = async () => {
+    const [pending, approved, rejected, cancelled] = await Promise.all([
+      countDocuments("leaveRequests", [where("status", "==", "pending")]),
+      countDocuments("leaveRequests", [where("status", "==", "approved")]),
+      countDocuments("leaveRequests", [where("status", "==", "rejected")]),
+      countDocuments("leaveRequests", [where("status", "==", "cancelled")]),
+    ]);
+    setStats({ pending, approved, rejected, cancelled });
+    refresh();
+  };
 
   const handleAction = async (id: string, status: "approved" | "rejected") => {
     try {
@@ -58,21 +99,12 @@ export default function LeavesPage() {
         approvalDate: Timestamp.now(),
       });
       toast("success", `Request ${status} successfully`);
-      fetchData();
+      await refreshLeaves();
     } catch (error) {
       console.error("Error:", error);
       toast("error", `Failed to ${status} request`);
     }
   };
-
-  const filtered = requests.filter((r) => {
-    const matchStatus = !filterStatus || r.status === filterStatus;
-    const matchType = !filterType || r.type === filterType;
-    return matchStatus && matchType;
-  });
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const getStaffName = (staffId: string) => {
     const s = staffMap[staffId];
@@ -86,7 +118,7 @@ export default function LeavesPage() {
     "on-duty": "On Duty",
   };
 
-  if (loading) return <PageLoader />;
+  if (loading || lookupsLoading) return <PageLoader />;
 
   return (
     <div className="space-y-6">
@@ -106,7 +138,7 @@ export default function LeavesPage() {
             onClick={() => setFilterStatus(filterStatus === status ? "" : status)}
           >
             <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold">{requests.filter((r) => r.status === status).length}</p>
+              <p className="text-2xl font-bold">{stats[status]}</p>
               <p className="text-sm text-gray-500 capitalize">{status}</p>
             </CardContent>
           </Card>
@@ -129,7 +161,7 @@ export default function LeavesPage() {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {totalCount === 0 ? (
         <Card>
           <CardContent>
             <EmptyState
@@ -156,7 +188,7 @@ export default function LeavesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paged.map((req) => (
+                {requests.map((req) => (
                   <TableRow key={req.id}>
                     <TableCell className="font-medium">{req.staffName || getStaffName(req.staffId)}</TableCell>
                     <TableCell>
@@ -185,7 +217,7 @@ export default function LeavesPage() {
                 ))}
               </TableBody>
             </Table>
-            <Pagination page={page} totalPages={totalPages} totalCount={filtered.length} hasNext={page < totalPages - 1} hasPrev={page > 0} onNext={() => setPage(page + 1)} onPrev={() => setPage(page - 1)} pageSize={PAGE_SIZE} />
+            <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={10} />
           </CardContent>
         </Card>
       )}

@@ -6,8 +6,8 @@ const Badge = React.forwardRef<HTMLSpanElement, React.HTMLAttributes<HTMLSpanEle
     <span
       ref={ref}
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors",
-        variant || "bg-blue-100 text-blue-800",
+        "inline-flex items-center rounded-full border border-white/75 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors",
+        variant || "bg-teal-50 text-teal-700",
         className
       )}
       {...props}

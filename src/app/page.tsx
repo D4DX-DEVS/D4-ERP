@@ -23,8 +23,14 @@ export default function Home() {
   }, [user, isLoading, router]);
 
   return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+    <div className="mesh-bg flex min-h-screen items-center justify-center px-6">
+      <div className="glass-panel flex items-center gap-4 rounded-[28px] px-6 py-5 text-slate-700">
+        <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-teal-600/20 border-t-teal-600" />
+        <div>
+          <p className="text-sm font-semibold text-slate-950">Preparing sign-in flow</p>
+          <p className="text-sm text-slate-500">Checking your session and routing you to the right workspace.</p>
+        </div>
+      </div>
     </div>
   );
 }

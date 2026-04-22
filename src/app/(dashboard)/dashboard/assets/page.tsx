@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Asset, Staff } from "@/types";
-import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
+import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,19 +17,44 @@ import { formatCurrency, getStatusColor } from "@/lib/utils";
 import { Package, Plus, Pencil, Trash2, Loader2, Search } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/use-pagination";
 
 export default function AssetsPage() {
-  const [assets, setAssets] = useState<(Asset & { id: string })[]>([]);
   const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [lookupsLoading, setLookupsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
   const { toast } = useToast();
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 25;
+  const constraints = useMemo(() => {
+    const nextConstraints: Array<ReturnType<typeof where> | ReturnType<typeof searchConstraint>> = [];
+    if (search.trim()) {
+      nextConstraints.push(searchConstraint(["name", "brand", "serialNumber"], search.trim()));
+    }
+    if (filterCategory) {
+      nextConstraints.push(where("category", "==", filterCategory));
+    }
+    return nextConstraints;
+  }, [search, filterCategory]);
+  const {
+    data: assets,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<Asset>("assets", {
+    pageSize: 10,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints,
+  });
 
   const [form, setForm] = useState({
     name: "", category: "camera" as Asset["category"], brand: "", model: "",
@@ -38,22 +63,29 @@ export default function AssetsPage() {
     currentAssigneeId: "", notes: "", isActive: true,
   });
 
-  const fetchData = async () => {
-    try {
-      const [assetList, staff] = await Promise.all([
-        getDocuments<Asset>("assets", [orderBy("createdAt", "desc")]),
-        getDocuments<Staff>("staff", [where("isActive", "==", true)]),
-      ]);
-      setAssets(assetList);
-      setStaffList(staff);
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    let isMounted = true;
 
-  useEffect(() => { fetchData(); }, []);
+    async function loadLookups() {
+      try {
+        const staff = await getDocuments<Staff>("staff", [where("isActive", "==", true)]);
+        if (!isMounted) return;
+        setStaffList(staff);
+      } catch (error) {
+        console.error("Error:", error);
+      } finally {
+        if (isMounted) {
+          setLookupsLoading(false);
+        }
+      }
+    }
+
+    void loadLookups();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +102,7 @@ export default function AssetsPage() {
       }
       setDialogOpen(false);
       toast("success", editingId ? "Asset updated" : "Asset added");
-      fetchData();
+      refresh();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to save asset");
@@ -84,7 +116,7 @@ export default function AssetsPage() {
     try {
       await deleteDocument("assets", id);
       toast("success", "Asset deleted");
-      fetchData();
+      refresh();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to delete asset");
@@ -97,15 +129,6 @@ export default function AssetsPage() {
     return s ? `${s.firstName} ${s.lastName}` : "—";
   };
 
-  const filtered = assets.filter((a) => {
-    const matchSearch = !search || `${a.name} ${a.brand} ${a.serialNumber}`.toLowerCase().includes(search.toLowerCase());
-    const matchCat = !filterCategory || a.category === filterCategory;
-    return matchSearch && matchCat;
-  });
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
   const categories = [
     { value: "camera", label: "Camera" }, { value: "lens", label: "Lens" },
     { value: "light", label: "Light" }, { value: "drone", label: "Drone" },
@@ -113,14 +136,14 @@ export default function AssetsPage() {
     { value: "other", label: "Other" },
   ];
 
-  if (loading) return <PageLoader />;
+  if (loading || lookupsLoading) return <PageLoader />;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Asset Management</h1>
-          <p className="text-sm text-gray-500 mt-1">{assets.length} assets tracked</p>
+          <p className="text-sm text-gray-500 mt-1">{totalCount} assets tracked</p>
         </div>
         <Button onClick={() => { setEditingId(null); setForm({ name: "", category: "camera", brand: "", model: "", serialNumber: "", purchaseDate: "", purchasePrice: 0, currentValue: 0, companyId: "", status: "available", currentAssigneeId: "", notes: "", isActive: true }); setDialogOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" /> Add Asset
@@ -136,7 +159,7 @@ export default function AssetsPage() {
           options={[{ value: "", label: "All Categories" }, ...categories]} className="w-[180px]" />
       </div>
 
-      {filtered.length === 0 ? (
+      {totalCount === 0 ? (
         <Card><CardContent><EmptyState icon={<Package className="h-12 w-12" />} title="No assets found" /></CardContent></Card>
       ) : (
         <Card><CardContent className="p-0">
@@ -154,7 +177,7 @@ export default function AssetsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {paged.map((asset) => (
+              {assets.map((asset) => (
                 <TableRow key={asset.id}>
                   <TableCell className="font-medium">{asset.name}</TableCell>
                   <TableCell><Badge>{asset.category}</Badge></TableCell>
@@ -165,7 +188,25 @@ export default function AssetsPage() {
                   <TableCell><Badge variant={getStatusColor(asset.status)}>{asset.status}</Badge></TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => { setEditingId(asset.id); setForm({ ...asset as any, purchaseDate: asset.purchaseDate ? new Date(asset.purchaseDate.seconds * 1000).toISOString().split("T")[0] : "" }); setDialogOpen(true); }}>
+                      <Button variant="ghost" size="icon" onClick={() => {
+                        setEditingId(asset.id);
+                        setForm({
+                          name: asset.name,
+                          category: asset.category,
+                          brand: asset.brand || "",
+                          model: asset.model || "",
+                          serialNumber: asset.serialNumber,
+                          purchaseDate: asset.purchaseDate ? new Date(asset.purchaseDate.seconds * 1000).toISOString().split("T")[0] : "",
+                          purchasePrice: asset.purchasePrice || 0,
+                          currentValue: asset.currentValue || 0,
+                          companyId: asset.companyId || "",
+                          status: asset.status,
+                          currentAssigneeId: asset.currentAssigneeId || "",
+                          notes: asset.notes || "",
+                          isActive: asset.isActive,
+                        });
+                        setDialogOpen(true);
+                      }}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDelete(asset.id)}>
@@ -177,7 +218,7 @@ export default function AssetsPage() {
               ))}
             </TableBody>
           </Table>
-          <Pagination page={page} totalPages={totalPages} totalCount={filtered.length} hasNext={page < totalPages - 1} hasPrev={page > 0} onNext={() => setPage(page + 1)} onPrev={() => setPage(page - 1)} pageSize={PAGE_SIZE} />
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={10} />
         </CardContent></Card>
       )}
 

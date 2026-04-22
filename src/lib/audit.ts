@@ -1,7 +1,6 @@
 "use client";
 
 import { createDocument, Timestamp } from "@/lib/firestore";
-import { useAuthStore } from "@/store/auth-store";
 
 interface AuditLogEntry {
   userId: string;
@@ -12,7 +11,7 @@ interface AuditLogEntry {
   entityType: string;
   description: string;
   details?: string;
-  timestamp: typeof Timestamp;
+  timestamp: Timestamp;
   previousData?: Record<string, unknown>;
   newData?: Record<string, unknown>;
 }

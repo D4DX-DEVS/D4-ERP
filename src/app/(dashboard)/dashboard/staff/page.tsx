@@ -1,37 +1,66 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Staff, Company, Department } from "@/types";
-import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
-import { useAuthStore } from "@/store/auth-store";
+import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint } from "@/lib/firestore";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { Pagination } from "@/components/ui/pagination";
-import { getStatusColor, formatCurrency, generateEmployeeCode, formatDate } from "@/lib/utils";
+import { getStatusColor, formatCurrency, generateEmployeeCode } from "@/lib/utils";
 import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search } from "lucide-react";
-import Link from "next/link";
+import { usePagination } from "@/hooks/use-pagination";
 
 export default function StaffPage() {
-  const { user } = useAuthStore();
   const { toast } = useToast();
-  const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
+  const router = useRouter();
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
   const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [lookupsLoading, setLookupsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterDept, setFilterDept] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const constraints = useMemo(() => {
+    const nextConstraints = [] as ReturnType<typeof where>[] | ReturnType<typeof searchConstraint>[] | Array<ReturnType<typeof where> | ReturnType<typeof searchConstraint>>;
+    if (search.trim()) {
+      nextConstraints.push(searchConstraint(["firstName", "lastName", "email", "employeeCode"], search.trim()));
+    }
+    if (filterDept) {
+      nextConstraints.push(where("departmentId", "==", filterDept));
+    }
+    if (filterStatus) {
+      nextConstraints.push(where("status", "==", filterStatus));
+    }
+    return nextConstraints;
+  }, [search, filterDept, filterStatus]);
+  const {
+    data: staffList,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<Staff>("staff", {
+    pageSize: 10,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints,
+  });
 
   const [form, setForm] = useState({
     employeeCode: "",
@@ -53,25 +82,32 @@ export default function StaffPage() {
     isActive: true,
   });
 
-  const fetchData = async () => {
-    try {
-      const [staff, comps, depts] = await Promise.all([
-        getDocuments<Staff>("staff", [orderBy("createdAt", "desc")]),
-        getDocuments<Company>("companies", [where("isActive", "==", true)]),
-        getDocuments<Department>("departments", [where("isActive", "==", true)]),
-      ]);
-      setStaffList(staff);
-      setCompanies(comps);
-      setDepartments(depts);
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchData();
+    let isMounted = true;
+
+    async function loadLookups() {
+      try {
+        const [comps, depts] = await Promise.all([
+          getDocuments<Company>("companies", [where("isActive", "==", true)]),
+          getDocuments<Department>("departments", [where("isActive", "==", true)]),
+        ]);
+        if (!isMounted) return;
+        setCompanies(comps);
+        setDepartments(depts);
+      } catch (error) {
+        console.error("Error:", error);
+      } finally {
+        if (isMounted) {
+          setLookupsLoading(false);
+        }
+      }
+    }
+
+    void loadLookups();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleOpen = (staff?: Staff & { id: string }) => {
@@ -139,7 +175,7 @@ export default function StaffPage() {
         toast("success", "Staff member added successfully");
       }
       setDialogOpen(false);
-      fetchData();
+      refresh();
     } catch (error) {
       console.error("Error saving staff:", error);
       toast("error", "Failed to save staff member. Please try again.");
@@ -153,7 +189,7 @@ export default function StaffPage() {
     try {
       await deleteDocument("staff", id);
       toast("success", "Staff member deleted");
-      fetchData();
+      refresh();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to delete staff member");
@@ -161,33 +197,14 @@ export default function StaffPage() {
   };
 
   const getDeptName = (id: string) => departments.find((d) => d.id === id)?.name || "—";
-  const getCompanyName = (id: string) => companies.find((c) => c.id === id)?.name || "—";
-
-  const filtered = staffList.filter((s) => {
-    const matchSearch =
-      !search ||
-      `${s.firstName} ${s.lastName} ${s.email} ${s.employeeCode}`
-        .toLowerCase()
-        .includes(search.toLowerCase());
-    const matchDept = !filterDept || s.departmentId === filterDept;
-    const matchStatus = !filterStatus || s.status === filterStatus;
-    return matchSearch && matchDept && matchStatus;
-  });
-
-  // Client-side pagination
-  const PAGE_SIZE = 25;
-  const [page, setPage] = useState(0);
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  if (loading) return <PageLoader />;
+  if (loading || lookupsLoading) return <PageLoader />;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Staff Management</h1>
-          <p className="text-sm text-gray-500 mt-1">{staffList.length} total staff members</p>
+          <p className="text-sm text-gray-500 mt-1">{totalCount} total staff members</p>
         </div>
         <Button onClick={() => handleOpen()}>
           <Plus className="h-4 w-4 mr-2" />
@@ -231,7 +248,7 @@ export default function StaffPage() {
         </CardContent>
       </Card>
 
-      {filtered.length === 0 ? (
+      {totalCount === 0 ? (
         <Card>
           <CardContent>
             <EmptyState
@@ -265,8 +282,23 @@ export default function StaffPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paged.map((staff) => (
-                  <TableRow key={staff.id}>
+                {staffList.map((staff) => {
+                  const detailHref = `/dashboard/staff/${staff.id}`;
+
+                  return (
+                  <TableRow
+                    key={staff.id}
+                    className="cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(detailHref)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(detailHref);
+                      }
+                    }}
+                  >
                     <TableCell>
                       <div>
                         <p className="font-medium">{staff.firstName} {staff.lastName}</p>
@@ -283,12 +315,10 @@ export default function StaffPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Link href={`/dashboard/staff/${staff.id}`}>
-                          <Button variant="ghost" size="icon">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </Link>
+                      <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
+                        <Button variant="ghost" size="icon" onClick={() => router.push(detailHref)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleOpen(staff)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -298,18 +328,18 @@ export default function StaffPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                )})}
               </TableBody>
             </Table>
             <Pagination
               page={page}
               totalPages={totalPages}
-              totalCount={filtered.length}
-              hasNext={page < totalPages - 1}
-              hasPrev={page > 0}
-              onNext={() => setPage(page + 1)}
-              onPrev={() => setPage(page - 1)}
-              pageSize={PAGE_SIZE}
+              totalCount={totalCount}
+              hasNext={hasNext}
+              hasPrev={hasPrev}
+              onNext={nextPage}
+              onPrev={prevPage}
+              pageSize={10}
             />
           </CardContent>
         </Card>

@@ -36,6 +36,8 @@ export const useAuthStore = create<AuthState>()(
         if (state?.user) {
           setAuditUser({ uid: state.user.uid, firstName: state.user.firstName, lastName: state.user.lastName });
         }
+        // Mark loading complete after rehydration
+        state?.setLoading(false);
       },
     }
   )

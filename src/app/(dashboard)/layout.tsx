@@ -66,8 +66,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+      <div className="mesh-bg flex min-h-screen items-center justify-center px-6">
+        <div className="glass-panel flex items-center gap-4 rounded-[28px] px-6 py-5 text-slate-700">
+          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-teal-600/20 border-t-teal-600" />
+          <div>
+            <p className="text-sm font-semibold text-slate-950">Preparing workspace</p>
+            <p className="text-sm text-slate-500">Loading your dashboard shell and access rules.</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -78,21 +84,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const allowedRoles = getRouteRoles(pathname);
   if (allowedRoles && !allowedRoles.includes(user.role as StaffRole)) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h1>
-          <p className="text-gray-500">You don&apos;t have permission to access this page.</p>
+      <div className="mesh-bg flex min-h-screen items-center justify-center px-6">
+        <div className="glass-panel max-w-lg rounded-[32px] px-8 py-10 text-center">
+          <p className="eyebrow justify-center">Restricted</p>
+          <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-slate-950">Access denied</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-500">You don&apos;t have permission to access this section with your current role.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="mesh-bg min-h-screen">
       <Sidebar />
-      <div className="pl-[260px]">
+      <div className="relative z-10 min-h-screen lg:pl-[calc(var(--sidebar-width)+1.75rem)]">
         <Header />
-        <main className="p-6">{children}</main>
+        <main className="page-frame px-4 pb-16 pt-4 sm:px-5 lg:px-6 lg:pt-5">
+          <div>{children}</div>
+        </main>
       </div>
     </div>
   );

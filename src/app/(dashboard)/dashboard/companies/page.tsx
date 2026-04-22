@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Company } from "@/types";
-import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy } from "@/lib/firestore";
+import { createDocument, updateDocument, deleteDocument } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,9 +14,10 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { getStatusColor } from "@/lib/utils";
-import { Building2, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Building2, Eye, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/use-pagination";
 
 const emptyCompany: Omit<Company, "id" | "createdAt" | "updatedAt"> = {
   name: "",
@@ -32,30 +34,28 @@ const emptyCompany: Omit<Company, "id" | "createdAt" | "updatedAt"> = {
 };
 
 export default function CompaniesPage() {
-  const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyCompany);
   const { toast } = useToast();
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 25;
-
-  const fetchCompanies = async () => {
-    try {
-      const data = await getDocuments<Company>("companies", [orderBy("createdAt", "desc")]);
-      setCompanies(data);
-    } catch (error) {
-      console.error("Error fetching companies:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchCompanies();
-  }, []);
+  const router = useRouter();
+  const {
+    data: companies,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<Company>("companies", {
+    pageSize: 10,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+  });
 
   const handleOpen = (company?: Company & { id: string }) => {
     if (company) {
@@ -91,7 +91,7 @@ export default function CompaniesPage() {
       }
       setDialogOpen(false);
       toast("success", editingId ? "Company updated" : "Company created");
-      fetchCompanies();
+      refresh();
     } catch (error) {
       console.error("Error saving company:", error);
       toast("error", "Failed to save company");
@@ -105,7 +105,7 @@ export default function CompaniesPage() {
     try {
       await deleteDocument("companies", id);
       toast("success", "Company deleted");
-      fetchCompanies();
+      refresh();
     } catch (error) {
       console.error("Error deleting company:", error);
       toast("error", "Failed to delete company");
@@ -146,7 +146,7 @@ export default function CompaniesPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>All Companies ({companies.length})</CardTitle>
+            <CardTitle>All Companies ({totalCount})</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
@@ -162,8 +162,23 @@ export default function CompaniesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {companies.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((company) => (
-                  <TableRow key={company.id}>
+                {companies.map((company) => {
+                  const detailHref = `/dashboard/companies/${company.id}`;
+
+                  return (
+                  <TableRow
+                    key={company.id}
+                    className="cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(detailHref)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(detailHref);
+                      }
+                    }}
+                  >
                     <TableCell className="font-medium">{company.name}</TableCell>
                     <TableCell>{company.email}</TableCell>
                     <TableCell>{company.phone}</TableCell>
@@ -175,7 +190,10 @@ export default function CompaniesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}>
+                        <Button variant="ghost" size="icon" onClick={() => router.push(detailHref)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleOpen(company)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -185,10 +203,10 @@ export default function CompaniesPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                )})}
               </TableBody>
             </Table>
-            <Pagination page={page} totalPages={Math.ceil(companies.length / PAGE_SIZE)} totalCount={companies.length} hasNext={page < Math.ceil(companies.length / PAGE_SIZE) - 1} hasPrev={page > 0} onNext={() => setPage(page + 1)} onPrev={() => setPage(page - 1)} pageSize={PAGE_SIZE} />
+            <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={10} />
           </CardContent>
         </Card>
       )}

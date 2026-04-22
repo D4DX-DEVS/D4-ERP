@@ -1,35 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Client } from "@/types";
-import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy } from "@/lib/firestore";
+import { createDocument, updateDocument, deleteDocument, search as searchConstraint } from "@/lib/firestore";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { UserCheck, Plus, Pencil, Trash2, Loader2, Search, Eye } from "lucide-react";
-import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/use-pagination";
 
 export default function ClientsPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
-  const [clients, setClients] = useState<(Client & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 25;
+  const constraints = useMemo(() => {
+    if (!search.trim()) return [];
+    return [searchConstraint(["companyName", "contactPerson", "email"], search.trim())];
+  }, [search]);
+  const {
+    data: clients,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<Client>("clients", {
+    pageSize: 10,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints,
+  });
 
   const [form, setForm] = useState({
     companyName: "",
@@ -45,21 +64,6 @@ export default function ClientsPage() {
     isActive: true,
     createdBy: "",
   });
-
-  const fetchClients = async () => {
-    try {
-      const data = await getDocuments<Client>("clients", [orderBy("createdAt", "desc")]);
-      setClients(data);
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchClients();
-  }, []);
 
   const handleOpen = (client?: Client & { id: string }) => {
     if (client) {
@@ -109,7 +113,7 @@ export default function ClientsPage() {
       }
       setDialogOpen(false);
       toast("success", editingId ? "Client updated" : "Client added");
-      fetchClients();
+      refresh();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to save client");
@@ -123,19 +127,12 @@ export default function ClientsPage() {
     try {
       await deleteDocument("clients", id);
       toast("success", "Client deleted");
-      fetchClients();
+      refresh();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to delete client");
     }
   };
-
-  const filtered = clients.filter((c) =>
-    !search || `${c.companyName} ${c.contactPerson} ${c.email}`.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   if (loading) return <PageLoader />;
 
@@ -144,7 +141,7 @@ export default function ClientsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Client Management</h1>
-          <p className="text-sm text-gray-500 mt-1">{clients.length} total clients</p>
+          <p className="text-sm text-gray-500 mt-1">{totalCount} total clients</p>
         </div>
         <Button onClick={() => handleOpen()}>
           <Plus className="h-4 w-4 mr-2" /> Add Client
@@ -160,7 +157,7 @@ export default function ClientsPage() {
         </CardContent>
       </Card>
 
-      {filtered.length === 0 ? (
+      {totalCount === 0 ? (
         <Card>
           <CardContent>
             <EmptyState icon={<UserCheck className="h-12 w-12" />} title="No clients found" action={
@@ -184,8 +181,23 @@ export default function ClientsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paged.map((c) => (
-                  <TableRow key={c.id}>
+                {clients.map((c) => {
+                  const detailHref = `/dashboard/clients/${c.id}`;
+
+                  return (
+                  <TableRow
+                    key={c.id}
+                    className="cursor-pointer"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => router.push(detailHref)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        router.push(detailHref);
+                      }
+                    }}
+                  >
                     <TableCell className="font-medium">{c.companyName}</TableCell>
                     <TableCell>{c.contactPerson}</TableCell>
                     <TableCell>{c.phone}</TableCell>
@@ -193,7 +205,10 @@ export default function ClientsPage() {
                     <TableCell><Badge>{c.category}</Badge></TableCell>
                     <TableCell>{c.gstNumber || "—"}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
+                      <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
+                        <Button variant="ghost" size="icon" onClick={() => router.push(detailHref)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleOpen(c)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -203,10 +218,10 @@ export default function ClientsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                )})}
               </TableBody>
             </Table>
-            <Pagination page={page} totalPages={totalPages} totalCount={filtered.length} hasNext={page < totalPages - 1} hasPrev={page > 0} onNext={() => setPage(page + 1)} onPrev={() => setPage(page - 1)} pageSize={PAGE_SIZE} />
+            <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={10} />
           </CardContent>
         </Card>
       )}

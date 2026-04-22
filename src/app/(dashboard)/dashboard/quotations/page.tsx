@@ -1,33 +1,62 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Invoice, Client, Company } from "@/types";
-import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
+import { getDocuments, createDocument, updateDocument, where, Timestamp, search as searchConstraint } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { FileText, Plus, Trash2, Search, Eye, Copy } from "lucide-react";
+import { EmptyState, PageLoader } from "@/components/ui/loading";
+import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
+import { Plus, Trash2, Search, Eye, Copy, FileText, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
+import { usePagination } from "@/hooks/use-pagination";
 
 export default function QuotationsPage() {
-  const [quotations, setQuotations] = useState<(Invoice & { id: string })[]>([]);
   const [clients, setClients] = useState<(Client & { id: string })[]>([]);
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [lookupsLoading, setLookupsLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const { toast } = useToast();
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 25;
+  const constraints = useMemo(() => {
+    const nextConstraints: Array<ReturnType<typeof where> | ReturnType<typeof searchConstraint>> = [where("type", "==", "quotation")];
+    if (filterStatus) {
+      nextConstraints.push(where("status", "==", filterStatus));
+    }
+    if (search.trim()) {
+      nextConstraints.push(searchConstraint(["invoiceNumber"], search.trim()));
+    }
+    return nextConstraints;
+  }, [filterStatus, search]);
+  const {
+    data: quotations,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<Invoice>("invoices", {
+    pageSize: 10,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints,
+  });
 
   const [form, setForm] = useState({
     companyId: "",
@@ -42,28 +71,36 @@ export default function QuotationsPage() {
     terms: "This quotation is valid for 30 days from the date of issue.",
   });
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [q, c, co] = await Promise.all([
-        getDocuments<Invoice>("invoices", [where("type", "==", "quotation")]),
-        getDocuments<Client>("clients"),
-        getDocuments<Company>("companies"),
-      ]);
-      setQuotations(q);
-      setClients(c);
-      setCompanies(co);
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    let isMounted = true;
 
-  useEffect(() => { fetchData(); }, []);
+    async function loadLookups() {
+      try {
+        const [c, co] = await Promise.all([
+          getDocuments<Client>("clients"),
+          getDocuments<Company>("companies"),
+        ]);
+        if (!isMounted) return;
+        setClients(c);
+        setCompanies(co);
+      } catch (error) {
+        console.error("Error:", error);
+      } finally {
+        if (isMounted) {
+          setLookupsLoading(false);
+        }
+      }
+    }
+
+    void loadLookups();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const clientMap = Object.fromEntries(clients.map((c) => [c.id, c]));
-  const companyMap = Object.fromEntries(companies.map((c) => [c.id, c]));
+  const companyMap = Object.fromEntries(companies.map((company) => [company.id, company]));
 
   const updateItem = (idx: number, field: string, value: string | number) => {
     const newItems = [...form.items];
@@ -94,7 +131,7 @@ export default function QuotationsPage() {
     setSaving(true);
     try {
       const prefix = "QTN";
-      const number = `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+      const number = `${prefix}-${Timestamp.now().seconds.toString(36).toUpperCase()}`;
 
       await createDocument("invoices", {
         type: "quotation",
@@ -128,7 +165,7 @@ export default function QuotationsPage() {
         discount: { type: "fixed", value: 0 }, notes: "",
         terms: "This quotation is valid for 30 days from the date of issue.",
       });
-      fetchData();
+      refresh();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to create quotation");
@@ -139,7 +176,7 @@ export default function QuotationsPage() {
 
   const handleConvertToInvoice = async (quotation: Invoice & { id: string }) => {
     if (!confirm("Convert this quotation to an invoice?")) return;
-    const invNumber = `INV-${Date.now().toString(36).toUpperCase()}`;
+    const invNumber = `INV-${Timestamp.now().seconds.toString(36).toUpperCase()}`;
     await createDocument("invoices", {
       ...quotation,
       type: "invoice",
@@ -149,43 +186,26 @@ export default function QuotationsPage() {
     });
     await updateDocument("invoices", quotation.id, { status: "accepted" });
     toast("success", "Quotation converted to invoice");
-    fetchData();
+    refresh();
   };
 
-  const filtered = quotations.filter((q) => {
-    if (search) {
-      const client = clientMap[q.clientId];
-      const matchSearch = q.invoiceNumber?.toLowerCase().includes(search.toLowerCase()) ||
-        client?.companyName?.toLowerCase().includes(search.toLowerCase());
-      if (!matchSearch) return false;
-    }
-    return true;
-  });
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  const statusColor = (s: string) => {
-    const colors: Record<string, string> = {
-      draft: "bg-gray-100 text-gray-700",
-      sent: "bg-blue-100 text-blue-700",
-      accepted: "bg-green-100 text-green-700",
-      rejected: "bg-red-100 text-red-700",
-      expired: "bg-orange-100 text-orange-700",
-    };
-    return colors[s] || "bg-gray-100 text-gray-700";
-  };
+  if (loading || lookupsLoading) return <PageLoader />;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Quotations</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Quotations</h1>
+          <p className="mt-1 text-sm text-gray-500">Create, search, and convert quotations to invoices</p>
+        </div>
         <Dialog open={showAdd} onOpenChange={setShowAdd}>
           <DialogTrigger asChild>
-            <Button><Plus className="h-4 w-4 mr-2" /> New Quotation</Button>
+            <Button><Plus className="mr-2 h-4 w-4" /> New Quotation</Button>
           </DialogTrigger>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Create Quotation</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Create Quotation</DialogTitle>
+            </DialogHeader>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -234,24 +254,23 @@ export default function QuotationsPage() {
               {/* Line Items */}
               <div>
                 <Label>Items</Label>
-                <div className="space-y-2 mt-1">
+                <div className="mt-1 space-y-2">
                   {form.items.map((item, idx) => (
-                    <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                    <div key={idx} className="grid grid-cols-12 items-end gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3">
                       <Input className="col-span-5" placeholder="Description" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} />
                       <Input className="col-span-2" type="number" placeholder="Qty" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} />
                       <Input className="col-span-2" type="number" placeholder="Rate" value={item.rate} onChange={(e) => updateItem(idx, "rate", Number(e.target.value))} />
-                      <div className="col-span-2 text-sm font-medium text-right pt-2">{formatCurrency(item.amount)}</div>
+                      <div className="col-span-2 pt-2 text-right text-sm font-medium">{formatCurrency(item.amount)}</div>
                       <Button variant="ghost" size="sm" className="col-span-1" onClick={() => removeItem(idx)}>
                         <Trash2 className="h-4 w-4 text-red-400" />
                       </Button>
                     </div>
                   ))}
-                  <Button variant="outline" size="sm" onClick={addItem}><Plus className="h-3 w-3 mr-1" /> Add Item</Button>
+                  <Button variant="outline" size="sm" onClick={addItem}><Plus className="mr-1 h-3 w-3" /> Add Item</Button>
                 </div>
               </div>
 
-              {/* Totals */}
-              <div className="text-right space-y-1 text-sm">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 text-right text-sm space-y-1">
                 <p>Subtotal: <span className="font-medium">{formatCurrency(subtotal)}</span></p>
                 {discountAmount > 0 && <p>Discount: <span className="text-red-500">-{formatCurrency(discountAmount)}</span></p>}
                 {taxAmount > 0 && <p>Tax ({form.gstRate}%): <span>{formatCurrency(taxAmount)}</span></p>}
@@ -262,67 +281,87 @@ export default function QuotationsPage() {
               <div><Label>Terms</Label><Textarea value={form.terms} onChange={(e) => setForm({ ...form, terms: e.target.value })} /></div>
 
               <Button onClick={handleSave} disabled={saving} className="w-full">
-                {saving ? "Saving..." : "Create Quotation"}
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : "Create Quotation"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <Input placeholder="Search quotations..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+      <div className="flex gap-4">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Input placeholder="Search quotations..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+        <Select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          options={[
+            { value: "", label: "All Status" },
+            { value: "draft", label: "Draft" },
+            { value: "sent", label: "Sent" },
+            { value: "accepted", label: "Accepted" },
+            { value: "rejected", label: "Rejected" },
+            { value: "expired", label: "Expired" },
+          ]}
+          className="w-[180px]"
+        />
       </div>
 
-      {loading ? (
-        <div className="text-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent mx-auto" />
-        </div>
+      {totalCount === 0 ? (
+        <Card>
+          <CardContent>
+            <EmptyState
+              icon={<FileText className="h-12 w-12" />}
+              title="No quotations found"
+              description="Create your first quotation or adjust your filters to see results."
+            />
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    <th className="p-3 font-medium">Number</th>
-                    <th className="p-3 font-medium">Client</th>
-                    <th className="p-3 font-medium">Amount</th>
-                    <th className="p-3 font-medium">Status</th>
-                    <th className="p-3 font-medium">Date</th>
-                    <th className="p-3 font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paged.map((q) => (
-                    <tr key={q.id} className="border-b last:border-0 hover:bg-gray-50">
-                      <td className="p-3 font-mono text-xs">{q.invoiceNumber}</td>
-                      <td className="p-3">{clientMap[q.clientId]?.companyName || q.clientId}</td>
-                      <td className="p-3 font-medium">{formatCurrency(q.totalAmount)}</td>
-                      <td className="p-3"><Badge variant={statusColor(q.status)}>{q.status}</Badge></td>
-                      <td className="p-3 text-xs text-gray-500">{q.createdAt?.seconds ? formatDate(new Date(q.createdAt.seconds * 1000)) : "—"}</td>
-                      <td className="p-3 flex gap-1">
-                        <Link href={`/dashboard/invoices/${q.id}`}>
-                          <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>
-                        </Link>
-                        {q.status === "draft" && (
-                          <Button variant="ghost" size="sm" title="Convert to Invoice" onClick={() => handleConvertToInvoice(q)}>
-                            <Copy className="h-4 w-4 text-green-600" />
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {filtered.length === 0 && (
-                    <tr><td colSpan={6} className="p-8 text-center text-gray-500">No quotations found</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {totalPages > 1 && (
-              <Pagination page={page} totalPages={totalPages} totalCount={filtered.length} hasNext={page < totalPages - 1} hasPrev={page > 0} onNext={() => setPage(page + 1)} onPrev={() => setPage(page - 1)} pageSize={PAGE_SIZE} />
-            )}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Quotation #</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Valid Until</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {quotations.map((q) => (
+                  <TableRow key={q.id}>
+                    <TableCell className="font-mono font-medium">{q.invoiceNumber}</TableCell>
+                    <TableCell>{clientMap[q.clientId]?.companyName || q.clientId}</TableCell>
+                    <TableCell>{companyMap[q.companyId]?.name || "—"}</TableCell>
+                    <TableCell>{q.dueDate?.seconds ? formatDate(new Date(q.dueDate.seconds * 1000)) : "—"}</TableCell>
+                    <TableCell className="text-right font-semibold">{formatCurrency(q.totalAmount)}</TableCell>
+                    <TableCell><Badge variant={getStatusColor(q.status)}>{q.status}</Badge></TableCell>
+                    <TableCell className="text-right">
+                      <Link href={`/dashboard/invoices/${q.id}`}>
+                        <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
+                      </Link>
+                      {q.status === "draft" && (
+                        <Button variant="ghost" size="icon" title="Convert to Invoice" onClick={() => handleConvertToInvoice(q)}>
+                          <Copy className="h-4 w-4 text-green-600" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={10} />
           </CardContent>
         </Card>
       )}
