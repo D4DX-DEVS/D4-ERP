@@ -18,6 +18,7 @@ import { Building2, Eye, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const emptyCompany: Omit<Company, "id" | "createdAt" | "updatedAt"> = {
   name: "",
@@ -35,6 +36,7 @@ const emptyCompany: Omit<Company, "id" | "createdAt" | "updatedAt"> = {
 
 export default function CompaniesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ id: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyCompany);
@@ -101,7 +103,11 @@ export default function CompaniesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this company?")) return;
+    setConfirmDialog({ id });
+  };
+
+  const executeDelete = async (id: string) => {
+    setConfirmDialog(null);
     try {
       await deleteDocument("companies", id);
       toast("success", "Company deleted");
@@ -345,6 +351,16 @@ export default function CompaniesPage() {
           </div>
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDialog}
+        title="Delete Company"
+        message="Are you sure you want to delete this company? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => confirmDialog && executeDelete(confirmDialog.id)}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

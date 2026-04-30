@@ -9,8 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { DollarSign, Plus, FileText, CheckCircle, Clock } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PageLoader, EmptyState } from "@/components/ui/loading";
+import { formatCurrency } from "@/lib/utils";
+import { DollarSign, Plus, CheckCircle, Clock, FileText } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 
 export default function PayrollPage() {
@@ -165,55 +167,61 @@ export default function PayrollPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent mx-auto" />
-        </div>
+        <PageLoader />
+      ) : filtered.length === 0 ? (
+        <Card>
+          <CardContent>
+            <EmptyState
+              icon={<FileText className="h-12 w-12" />}
+              title="No payroll records"
+              description={`No salary slips for ${month}. Click Generate Payroll to create.`}
+            />
+          </CardContent>
+        </Card>
       ) : (
         <Card>
           <CardHeader><CardTitle>Salary Slips — {month}</CardTitle></CardHeader>
-          <CardContent>
-            {filtered.length === 0 ? (
-              <p className="text-center py-4 text-gray-500">No payroll records for this month. Click Generate Payroll to create.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left">
-                      <th className="pb-2 font-medium">Staff</th>
-                      <th className="pb-2 font-medium">Basic</th>
-                      <th className="pb-2 font-medium">Earnings</th>
-                      <th className="pb-2 font-medium">Deductions</th>
-                      <th className="pb-2 font-medium">Net Salary</th>
-                      <th className="pb-2 font-medium">Status</th>
-                      <th className="pb-2 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((p) => (
-                      <tr key={p.id} className="border-b last:border-0">
-                        <td className="py-2">{staffMap[p.staffId] ? `${staffMap[p.staffId].firstName} ${staffMap[p.staffId].lastName}` : p.staffId}</td>
-                        <td>{formatCurrency(p.basicSalary || p.baseSalary)}</td>
-                        <td className="text-green-600">{formatCurrency(p.totalEarnings)}</td>
-                        <td className="text-red-600">{formatCurrency(p.totalDeductions)}</td>
-                        <td className="font-bold">{formatCurrency(p.netSalary)}</td>
-                        <td>
-                          <Badge variant={p.status === "paid" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}>
-                            {p.status}
-                          </Badge>
-                        </td>
-                        <td>
-                          {p.status === "draft" && (
-                            <Button size="sm" variant="outline" onClick={() => handleMarkPaid(p.id)}>
-                              Mark Paid
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Staff</TableHead>
+                  <TableHead>Basic</TableHead>
+                  <TableHead>Earnings</TableHead>
+                  <TableHead>Deductions</TableHead>
+                  <TableHead>Net Salary</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-medium">
+                      {staffMap[p.staffId]
+                        ? `${staffMap[p.staffId].firstName} ${staffMap[p.staffId].lastName}`
+                        : p.staffId}
+                    </TableCell>
+                    <TableCell>{formatCurrency(p.basicSalary || p.baseSalary)}</TableCell>
+                    <TableCell className="text-green-600">{formatCurrency(p.totalEarnings)}</TableCell>
+                    <TableCell className="text-red-600">{formatCurrency(p.totalDeductions)}</TableCell>
+                    <TableCell className="font-bold">{formatCurrency(p.netSalary)}</TableCell>
+                    <TableCell>
+                      <Badge variant={p.status === "paid" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}>
+                        {p.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {p.status === "draft" && (
+                        <Button size="sm" variant="outline" onClick={() => handleMarkPaid(p.id)}>
+                          Mark Paid
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       )}

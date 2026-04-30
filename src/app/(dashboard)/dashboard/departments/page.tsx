@@ -19,12 +19,14 @@ import { Layers, Plus, Pencil, Trash2, Loader2, Eye } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function DepartmentsPage() {
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
   const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
   const [lookupsLoading, setLookupsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ id: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", description: "", companyId: "", headId: "", isActive: true });
@@ -113,7 +115,11 @@ export default function DepartmentsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this department?")) return;
+    setConfirmDialog({ id });
+  };
+
+  const executeDelete = async (id: string) => {
+    setConfirmDialog(null);
     try {
       await deleteDocument("departments", id);
       toast("success", "Department deleted");
@@ -288,6 +294,16 @@ export default function DepartmentsPage() {
           </div>
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDialog}
+        title="Delete Department"
+        message="Are you sure you want to delete this department? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => confirmDialog && executeDelete(confirmDialog.id)}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

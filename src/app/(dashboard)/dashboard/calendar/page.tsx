@@ -14,6 +14,7 @@ import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } fro
 import { formatDate } from "@/lib/utils";
 import { Plus, Calendar, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const EVENT_TYPES = ["meeting", "deadline", "event", "holiday", "reminder", "shoot", "delivery"] as const;
 const TYPE_COLORS: Record<string, string> = {
@@ -31,6 +32,7 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const [showAdd, setShowAdd] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ id: string } | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [form, setForm] = useState({
     title: "", description: "", type: "meeting" as string,
@@ -71,7 +73,11 @@ export default function CalendarPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this event?")) return;
+    setConfirmDialog({ id });
+  };
+
+  const executeDelete = async (id: string) => {
+    setConfirmDialog(null);
     try {
       await deleteDocument("calendar_events", id);
       toast("success", "Event deleted");
@@ -98,9 +104,16 @@ export default function CalendarPage() {
   }
 
   const getEventsForDay = (day: number) => {
+    const dayStart = new Date(year, month, day, 0, 0, 0, 0).getTime();
+    const dayEnd = new Date(year, month, day, 23, 59, 59, 999).getTime();
     return events.filter((e) => {
-      const eDate = e.startDate?.seconds ? new Date(e.startDate.seconds * 1000) : null;
-      return eDate && eDate.getFullYear() === year && eDate.getMonth() === month && eDate.getDate() === day;
+      const start = e.startDate?.seconds ? new Date(e.startDate.seconds * 1000) : null;
+      if (!start) return false;
+      const startTime = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+      const end = e.endDate?.seconds
+        ? new Date(new Date(e.endDate.seconds * 1000).getFullYear(), new Date(e.endDate.seconds * 1000).getMonth(), new Date(e.endDate.seconds * 1000).getDate()).getTime()
+        : startTime;
+      return startTime <= dayEnd && end >= dayStart;
     });
   };
 
@@ -220,6 +233,16 @@ export default function CalendarPage() {
             ))}
         </CardContent>
       </Card>
+
+      <ConfirmDialog
+        open={!!confirmDialog}
+        title="Delete Event"
+        message="Are you sure you want to delete this event? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => confirmDialog && executeDelete(confirmDialog.id)}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

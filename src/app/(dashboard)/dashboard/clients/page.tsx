@@ -19,12 +19,14 @@ import { UserCheck, Plus, Pencil, Trash2, Loader2, Search, Eye } from "lucide-re
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function ClientsPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ id: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -123,7 +125,11 @@ export default function ClientsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure?")) return;
+    setConfirmDialog({ id });
+  };
+
+  const executeDelete = async (id: string) => {
+    setConfirmDialog(null);
     try {
       await deleteDocument("clients", id);
       toast("success", "Client deleted");
@@ -303,6 +309,16 @@ export default function ClientsPage() {
           </div>
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDialog}
+        title="Delete Client"
+        message="Are you sure you want to delete this client? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => confirmDialog && executeDelete(confirmDialog.id)}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }
