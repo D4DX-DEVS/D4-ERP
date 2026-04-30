@@ -20,12 +20,14 @@ import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function QuotationsPage() {
   const [clients, setClients] = useState<(Client & { id: string })[]>([]);
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
   const [lookupsLoading, setLookupsLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [confirmConvert, setConfirmConvert] = useState<(Invoice & { id: string }) | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -175,7 +177,11 @@ export default function QuotationsPage() {
   };
 
   const handleConvertToInvoice = async (quotation: Invoice & { id: string }) => {
-    if (!confirm("Convert this quotation to an invoice?")) return;
+    setConfirmConvert(quotation);
+  };
+
+  const executeConvertToInvoice = async (quotation: Invoice & { id: string }) => {
+    setConfirmConvert(null);
     const invNumber = `INV-${Timestamp.now().seconds.toString(36).toUpperCase()}`;
     await createDocument("invoices", {
       ...quotation,
@@ -365,6 +371,17 @@ export default function QuotationsPage() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={!!confirmConvert}
+        title="Convert to Invoice"
+        message="Are you sure you want to convert this quotation to an invoice? This action cannot be undone."
+        confirmLabel="Convert"
+        cancelLabel="Cancel"
+        variant="warning"
+        onConfirm={() => confirmConvert && executeConvertToInvoice(confirmConvert)}
+        onCancel={() => setConfirmConvert(null)}
+      />
     </div>
   );
 }

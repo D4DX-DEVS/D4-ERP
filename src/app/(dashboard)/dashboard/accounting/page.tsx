@@ -19,6 +19,7 @@ import { DollarSign, Plus, Trash2, Loader2, TrendingUp, TrendingDown, Search, Se
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function AccountingPage() {
   const { user } = useAuthStore();
@@ -28,6 +29,7 @@ export default function AccountingPage() {
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ id: string } | null>(null);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterType, setFilterType] = useState("");
@@ -113,7 +115,11 @@ export default function AccountingPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this transaction?")) return;
+    setConfirmDialog({ id });
+  };
+
+  const executeDelete = async (id: string) => {
+    setConfirmDialog(null);
     try {
       await deleteDocument("transactions", id);
       toast("success", "Transaction deleted");
@@ -336,6 +342,16 @@ export default function AccountingPage() {
           </div>
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDialog}
+        title="Delete Transaction"
+        message="Are you sure you want to delete this transaction? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => confirmDialog && executeDelete(confirmDialog.id)}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

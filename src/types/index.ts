@@ -313,6 +313,13 @@ export interface Asset extends BaseDocument {
   image?: string;
   notes?: string;
   isActive: boolean;
+  // D4-Assets integration fields
+  productCode?: string;
+  allowOutside?: boolean;
+  warrantyDetails?: string;
+  warrantyExpiryDate?: Timestamp;
+  noWarranty?: boolean;
+  billUrl?: string;
 }
 
 export interface AssetAssignment extends BaseDocument {
@@ -334,6 +341,83 @@ export interface AssetMaintenance extends BaseDocument {
   completedDate?: Timestamp;
   status: "pending" | "in-progress" | "completed";
   createdBy: string;
+}
+
+// ==================== Asset Management (Events/Movements) ====================
+export type AssetEventStatus = "upcoming" | "active" | "completed";
+export type AssetMovementStatus = "OUT" | "IN";
+export type AssetCondition = "good" | "damaged" | "defective" | "missing";
+export type AssetDamageType = "damage" | "defect" | "missing";
+
+export interface AssetCategoryItem extends BaseDocument {
+  name: string;
+  description?: string;
+  isActive: boolean;
+}
+
+export interface AssetPerson extends BaseDocument {
+  name: string;
+  phone?: string;
+  email?: string;
+  department?: string;
+  isActive: boolean;
+}
+
+export interface AssetEvent extends BaseDocument {
+  name: string;
+  location: string;
+  fromDate: Timestamp;
+  toDate: Timestamp;
+  responsiblePersonId: string;
+  responsiblePersonName?: string;
+  status: AssetEventStatus;
+  isActive: boolean;
+  // Aggregated counts (populated client-side)
+  totalOut?: number;
+  totalIn?: number;
+}
+
+export interface AssetMovement extends BaseDocument {
+  assetId: string;
+  assetName?: string;
+  assetCategory?: string;
+  eventId: string;
+  eventName?: string;
+  eventLocation?: string;
+  allocatedPersonId: string;
+  allocatedPersonName?: string;
+  status: AssetMovementStatus;
+  outDate: Timestamp;
+  outByName?: string;
+  inDate?: Timestamp;
+  returnBy?: string;
+  verifiedBy?: string;
+  condition: AssetCondition;
+  damageReason?: string;
+  remarks?: string;
+}
+
+export interface AssetDamageReport extends BaseDocument {
+  movementId: string;
+  assetId: string;
+  assetName?: string;
+  eventId: string;
+  eventName?: string;
+  type: AssetDamageType;
+  reason: string;
+  reportedByName?: string;
+  isResolved: boolean;
+  resolvedAt?: Timestamp;
+  resolvedByName?: string;
+  notes?: string;
+}
+
+export interface AssetActivityLog extends BaseDocument {
+  userName: string;
+  action: string;
+  module: string;
+  resourceId?: string;
+  details?: string;
 }
 
 // ==================== Attendance ====================

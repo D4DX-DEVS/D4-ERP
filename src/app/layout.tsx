@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
+const appIcon = "/favicon.png";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -17,9 +19,9 @@ export const metadata: Metadata = {
   title: "D4 Media ERP",
   description: "D4 Media - Enterprise Resource Planning System",
   icons: {
-    icon: "/favicon.png",
-    shortcut: "/favicon.png",
-    apple: "/favicon.png",
+    icon: [{ url: appIcon, type: "image/png", sizes: "512x512" }],
+    shortcut: appIcon,
+    apple: appIcon,
   },
 };
 

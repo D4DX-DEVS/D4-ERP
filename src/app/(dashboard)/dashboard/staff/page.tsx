@@ -18,6 +18,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { getStatusColor, formatCurrency, generateEmployeeCode } from "@/lib/utils";
 import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function StaffPage() {
   const { toast } = useToast();
@@ -26,6 +27,7 @@ export default function StaffPage() {
   const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
   const [lookupsLoading, setLookupsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{ id: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -185,7 +187,11 @@ export default function StaffPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this staff member?")) return;
+    setConfirmDialog({ id });
+  };
+
+  const executeDelete = async (id: string) => {
+    setConfirmDialog(null);
     try {
       await deleteDocument("staff", id);
       toast("success", "Staff member deleted");
@@ -483,6 +489,16 @@ export default function StaffPage() {
           </div>
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!confirmDialog}
+        title="Delete Staff Member"
+        message="Are you sure you want to delete this staff member? This action cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => confirmDialog && executeDelete(confirmDialog.id)}
+        onCancel={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }
