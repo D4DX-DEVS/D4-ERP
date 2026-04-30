@@ -270,7 +270,7 @@ export default function InvoiceDetailPage() {
     }
   };
 
-  const getPdfFileName = () => `${invoice.invoiceNumber}.pdf`;
+  const getPdfFileName = () => `${invoice?.invoiceNumber || "invoice"}.pdf`;
 
   const downloadPdfBlob = (blob: Blob) => {
     const blobUrl = URL.createObjectURL(blob);
@@ -284,6 +284,10 @@ export default function InvoiceDetailPage() {
   };
 
   const buildShareText = () => {
+    if (!invoice) {
+      return window.location.href;
+    }
+
     const docType = invoice.type === "quotation" ? "Quotation" : "Invoice";
     const clientName = client?.companyName || "Client";
     const shareUrl = window.location.href;
@@ -353,7 +357,7 @@ export default function InvoiceDetailPage() {
 
       if (typeof navigator.share === "function" && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
         await navigator.share({
-          title: invoice.invoiceNumber,
+          title: invoice?.invoiceNumber || "Invoice",
           text: buildShareText(),
           files: [file],
         });
@@ -384,7 +388,7 @@ export default function InvoiceDetailPage() {
 
       if (typeof navigator.share === "function" && navigator.canShare?.({ files: [file] })) {
         await navigator.share({
-          title: invoice.invoiceNumber,
+          title: invoice?.invoiceNumber || "Invoice",
           text: whatsappMessage,
           files: [file],
         });
