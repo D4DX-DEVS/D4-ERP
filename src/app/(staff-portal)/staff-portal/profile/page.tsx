@@ -15,10 +15,16 @@ export default function StaffProfilePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const staffId = user?.staffId;
+
+    if (!staffId) {
+      setLoading(false);
+      return;
+    }
+
     const fetch = async () => {
-      if (!user?.staffId) return;
       try {
-        const data = await getDocument<Staff>("staff", user.staffId);
+        const data = await getDocument<Staff>("staff", staffId);
         setStaff(data);
       } catch (error) {
         console.error("Error:", error);

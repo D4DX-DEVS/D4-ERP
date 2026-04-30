@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Staff, Company, Department } from "@/types";
-import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint } from "@/lib/firestore";
+import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint, type QueryConstraint } from "@/lib/firestore";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,7 @@ export default function StaffPage() {
   const [filterDept, setFilterDept] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const constraints = useMemo(() => {
-    const nextConstraints = [] as ReturnType<typeof where>[] | ReturnType<typeof searchConstraint>[] | Array<ReturnType<typeof where> | ReturnType<typeof searchConstraint>>;
+    const nextConstraints: QueryConstraint[] = [];
     if (search.trim()) {
       nextConstraints.push(searchConstraint(["firstName", "lastName", "email", "employeeCode"], search.trim()));
     }

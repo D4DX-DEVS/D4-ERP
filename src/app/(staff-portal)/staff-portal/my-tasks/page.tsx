@@ -25,7 +25,10 @@ export default function MyTasksPage() {
   const router = useRouter();
 
   const fetchTasks = async () => {
-    if (!user) return;
+    if (!user?.staffId) {
+      setLoading(false);
+      return;
+    }
     try {
       const data = await getDocuments<Task>("tasks", [
         where("assigneeId", "==", user.staffId),
@@ -39,14 +42,18 @@ export default function MyTasksPage() {
   };
 
   useEffect(() => {
-    if (!user) return;
+    const staffId = user?.staffId;
+    if (!staffId) {
+      setLoading(false);
+      return;
+    }
 
     let isMounted = true;
 
     async function loadInitialTasks() {
       try {
         const data = await getDocuments<Task>("tasks", [
-          where("assigneeId", "==", user.staffId),
+          where("assigneeId", "==", staffId),
         ]);
 
         if (!isMounted) return;
