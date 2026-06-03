@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 
 /* ===== Legacy simple Select (used by older pages) ===== */
 export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
@@ -81,9 +81,12 @@ function SelectTrigger({ children, className }: { children: React.ReactNode; cla
   );
 }
 
-function SelectValue({ placeholder }: { placeholder?: string }) {
+function SelectValue({ placeholder, children }: { placeholder?: string; children?: React.ReactNode }) {
   const { value } = React.useContext(SelectContext);
-  return <span className={!value ? "text-slate-400" : "text-slate-800"}>{value || placeholder || "Select..."}</span>;
+  if (children !== undefined && children !== null && value) {
+    return <span className="text-slate-800">{children}</span>;
+  }
+  return <span className={!value ? "text-slate-400" : "text-slate-800"}>{value ? (children ?? value) : (placeholder || "Select...")}</span>;
 }
 
 function SelectContent({ children }: { children: React.ReactNode }) {
@@ -92,7 +95,7 @@ function SelectContent({ children }: { children: React.ReactNode }) {
 
   React.useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.parentElement?.contains(e.target as Node)) {
+      if (ref.current && !ref.current.closest(".relative")?.contains(e.target as Node)) {
         setOpen(false);
       }
     };
@@ -100,11 +103,16 @@ function SelectContent({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open, setOpen]);
 
-  if (!open) return null;
   return (
     <div
       ref={ref}
-      className="absolute z-50 mt-2 w-full max-h-60 overflow-y-auto rounded-[24px] border border-slate-200/80 bg-white/97 p-2 shadow-[0_18px_48px_rgba(15,23,42,0.12)] backdrop-blur-xl animate-in"
+      style={{
+        opacity: open ? 1 : 0,
+        transform: open ? "translateY(0) scale(1)" : "translateY(-6px) scale(0.97)",
+        pointerEvents: open ? "auto" : "none",
+        transition: "opacity 150ms ease, transform 150ms ease",
+      }}
+      className="absolute z-50 mt-2 w-full max-h-60 overflow-y-auto rounded-[20px] border border-slate-200/80 bg-white p-1.5 shadow-[0_8px_32px_rgba(15,23,42,0.12),0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-xl"
     >
       {children}
     </div>
@@ -113,15 +121,24 @@ function SelectContent({ children }: { children: React.ReactNode }) {
 
 function SelectItem({ children, value }: { children: React.ReactNode; value: string }) {
   const { value: selected, onValueChange, setOpen } = React.useContext(SelectContext);
+  const isSelected = selected === value;
   return (
     <div
       onClick={() => { onValueChange(value); setOpen(false); }}
       className={cn(
-        "cursor-pointer rounded-2xl px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-100/90 hover:text-slate-950",
-        selected === value && "bg-teal-50 text-teal-700 font-medium"
+        "group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors",
+        isSelected
+          ? "bg-teal-50 text-teal-700 font-medium"
+          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
       )}
     >
-      {children}
+      <span className="flex-1">{children}</span>
+      <Check
+        className={cn(
+          "h-3.5 w-3.5 shrink-0 transition-opacity",
+          isSelected ? "opacity-100 text-teal-600" : "opacity-0"
+        )}
+      />
     </div>
   );
 }

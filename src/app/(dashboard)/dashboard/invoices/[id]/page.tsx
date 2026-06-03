@@ -8,15 +8,18 @@ import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
+import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { formatCurrency, formatDate, getStatusColor, numberToWords } from "@/lib/utils";
-import { ArrowLeft, DollarSign, Download, Loader2, MessageCircle, Printer, Send, Share2 } from "lucide-react";
+import { ArrowLeft, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, Printer, Send, Share2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 export default function InvoiceDetailPage() {
   const params = useParams();
@@ -29,6 +32,23 @@ export default function InvoiceDetailPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [payments, setPayments] = useState<(InvoicePayment & { id: string })[]>([]);
+  const [appGstNumber, setAppGstNumber] = useState<string>("");
+  const [allCompanies, setAllCompanies] = useState<(Company & { id: string })[]>([]);
+  const [allClients, setAllClients] = useState<(Client & { id: string })[]>([]);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    companyId: "",
+    clientId: "",
+    dueDate: "",
+    items: [{ description: "", subDescription: "", quantity: 1, rate: 0, amount: 0, sacCode: "" }],
+    taxType: "non-gst" as "gst" | "non-gst",
+    gstRate: 18,
+    isInterState: false,
+    discount: { type: "fixed" as "fixed" | "percentage", value: 0 },
+    notes: "",
+    terms: "",
+  });
+  const [editSaving, setEditSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -48,14 +68,16 @@ export default function InvoiceDetailPage() {
       if (!inv) return;
       setInvoice(inv);
 
-      const [comp, cl, pays] = await Promise.all([
+      const [comp, cl, pays, settingsDocs] = await Promise.all([
         inv.companyId ? getDocument<Company>("companies", inv.companyId) : null,
         inv.clientId ? getDocument<Client>("clients", inv.clientId) : null,
         getDocuments<InvoicePayment>("invoicePayments", [where("invoiceId", "==", invoiceId)]),
+        getDocuments<{ gstNumber?: string }>("settings"),
       ]);
       setCompany(comp);
       setClient(cl);
       setPayments(pays);
+      if (settingsDocs.length > 0) setAppGstNumber(settingsDocs[0].gstNumber || "");
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to load invoice details");
@@ -72,10 +94,13 @@ export default function InvoiceDetailPage() {
         const inv = await getDocument<Invoice>("invoices", invoiceId);
         if (!inv || !isMounted) return;
 
-        const [comp, cl, pays] = await Promise.all([
+        const [comp, cl, pays, settingsDocs, allComps, allCls] = await Promise.all([
           inv.companyId ? getDocument<Company>("companies", inv.companyId) : null,
           inv.clientId ? getDocument<Client>("clients", inv.clientId) : null,
           getDocuments<InvoicePayment>("invoicePayments", [where("invoiceId", "==", invoiceId)]),
+          getDocuments<{ gstNumber?: string }>("settings"),
+          getDocuments<Company>("companies"),
+          getDocuments<Client>("clients"),
         ]);
 
         if (!isMounted) return;
@@ -84,6 +109,9 @@ export default function InvoiceDetailPage() {
         setCompany(comp);
         setClient(cl);
         setPayments(pays);
+        if (settingsDocs.length > 0) setAppGstNumber(settingsDocs[0].gstNumber || "");
+        setAllCompanies(allComps);
+        setAllClients(allCls);
       } catch (error) {
         console.error("Error:", error);
         if (isMounted) {
@@ -147,6 +175,108 @@ export default function InvoiceDetailPage() {
       fetchData();
     } catch {
       toast("error", "Failed to update invoice status");
+    }
+  };
+
+  const openEdit = () => {
+    if (!invoice) return;
+    setEditForm({
+      companyId: invoice.companyId,
+      clientId: invoice.clientId,
+      dueDate: invoice.dueDate?.seconds
+        ? new Date(invoice.dueDate.seconds * 1000).toISOString().split("T")[0]
+        : "",
+      items: (invoice.items || []).map((it) => ({
+        description: it.description,
+        subDescription: it.subDescription || "",
+        quantity: it.quantity,
+        rate: it.rate,
+        amount: it.amount,
+        sacCode: it.sacCode || "",
+      })),
+      taxType: invoice.taxType ?? "non-gst",
+      gstRate: invoice.gstDetails?.gstRate ?? invoice.gstRate ?? 18,
+      isInterState: invoice.gstDetails?.isInterState ?? invoice.isInterState ?? false,
+      discount: invoice.discount ?? { type: "fixed", value: 0 },
+      notes: invoice.notes || "",
+      terms: invoice.terms || "",
+    });
+    setEditOpen(true);
+  };
+
+  const updateEditItem = (idx: number, field: string, value: string | number) => {
+    const items = [...editForm.items];
+    (items[idx] as Record<string, unknown>)[field] = value;
+    if (field === "quantity" || field === "rate") {
+      items[idx].amount = items[idx].quantity * items[idx].rate;
+    }
+    setEditForm({ ...editForm, items });
+  };
+
+  const handleBulletKeyDown = (
+    e: React.KeyboardEvent<HTMLTextAreaElement>,
+    value: string,
+    onChange: (v: string) => void
+  ) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const ta = e.currentTarget;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const insert = "\n• ";
+    const newVal = value.slice(0, start) + insert + value.slice(end);
+    onChange(newVal);
+    requestAnimationFrame(() => {
+      ta.setSelectionRange(start + insert.length, start + insert.length);
+    });
+  };
+
+  const handleEditSave = async () => {
+    if (!invoice) return;
+    setEditSaving(true);
+    try {
+      const subtotal = editForm.items.reduce((s, it) => s + it.amount, 0);
+      const discountAmount = editForm.discount.type === "percentage"
+        ? (subtotal * editForm.discount.value) / 100
+        : editForm.discount.value;
+      const taxable = subtotal - discountAmount;
+      let cgst = 0, sgst = 0, igst = 0;
+      if (editForm.taxType === "gst") {
+        if (editForm.isInterState) igst = (taxable * editForm.gstRate) / 100;
+        else { cgst = (taxable * editForm.gstRate) / 200; sgst = (taxable * editForm.gstRate) / 200; }
+      }
+      const totalAmount = taxable + cgst + sgst + igst;
+      const paidAmount = invoice.paidAmount ?? 0;
+
+      await updateDocument("invoices", invoiceId, {
+        companyId: editForm.companyId,
+        clientId: editForm.clientId,
+        dueDate: editForm.dueDate ? Timestamp.fromDate(new Date(editForm.dueDate)) : null,
+        items: editForm.items,
+        subtotal,
+        discount: editForm.discount,
+        taxType: editForm.taxType,
+        gstDetails: editForm.taxType === "gst" ? {
+          gstRate: editForm.gstRate,
+          cgst,
+          sgst,
+          igst,
+          isInterState: editForm.isInterState,
+        } : null,
+        totalAmount,
+        balanceAmount: Math.max(0, totalAmount - paidAmount),
+        notes: editForm.notes,
+        terms: editForm.terms,
+      });
+
+      setEditOpen(false);
+      toast("success", "Invoice updated successfully");
+      fetchData();
+    } catch (error) {
+      console.error("Error:", error);
+      toast("error", "Failed to update invoice");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -435,6 +565,9 @@ export default function InvoiceDetailPage() {
               <Send className="h-4 w-4 mr-2" /> Mark as Sent
             </Button>
           )}
+          <Button variant="outline" onClick={openEdit}>
+            <Pencil className="h-4 w-4 mr-2" /> Edit
+          </Button>
           <Button variant="outline" onClick={() => setPaymentOpen(true)}>
             <DollarSign className="h-4 w-4 mr-2" /> Record Payment
           </Button>
@@ -458,12 +591,12 @@ export default function InvoiceDetailPage() {
                 <h2 className="text-2xl font-bold text-blue-600">{company?.name || "D4 Media"}</h2>
                 <p className="mt-1 text-sm text-gray-500">{company?.address}</p>
                 <p className="text-sm text-gray-500">{company?.phone} | {company?.email}</p>
-                {company?.gstNumber && <p className="text-sm text-gray-500">GST: {company.gstNumber}</p>}
+                {appGstNumber && <p className="text-sm text-gray-500">GST: {appGstNumber}</p>}
               </div>
               <div className="text-right">
                 <h3 className="text-xl font-bold">{invoice.type === "quotation" ? "QUOTATION" : "INVOICE"}</h3>
                 <p className="mt-1 text-sm text-gray-600">#{invoice.invoiceNumber}</p>
-                <p className="text-sm text-gray-500">Date: {invoice.date ? formatDate(new Date(invoice.date.seconds * 1000)) : "—"}</p>
+                <p className="text-sm text-gray-500">Date: {(invoice.date || invoice.createdAt) ? formatDate(new Date(((invoice.date || invoice.createdAt)!).seconds * 1000)) : "—"}</p>
                 {invoice.dueDate && <p className="text-sm text-gray-500">Due: {formatDate(new Date(invoice.dueDate.seconds * 1000))}</p>}
                 <Badge variant={getStatusColor(invoice.status)} className="mt-2">{invoice.status}</Badge>
               </div>
@@ -493,7 +626,10 @@ export default function InvoiceDetailPage() {
                 {invoice.items?.map((item, idx) => (
                   <tr key={idx} className="border-b border-gray-100">
                     <td className="py-3 text-sm">{idx + 1}</td>
-                    <td className="py-3 text-sm">{item.description}</td>
+                    <td className="py-3 text-sm">
+                  <div>{item.description}</div>
+                  {item.subDescription && <div className="text-xs text-gray-400 mt-0.5">{item.subDescription}</div>}
+                </td>
                     <td className="py-3 text-sm text-right">{item.quantity}</td>
                     <td className="py-3 text-sm text-right">{formatCurrency(item.rate)}</td>
                     <td className="py-3 text-sm text-right font-medium">{formatCurrency(item.amount)}</td>
@@ -526,18 +662,18 @@ export default function InvoiceDetailPage() {
                   <span>Total</span><span>{formatCurrency(invoice.totalAmount)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-green-600">
-                  <span>Paid</span><span>{formatCurrency(invoice.paidAmount)}</span>
+                  <span>Paid</span><span>{formatCurrency(invoice.paidAmount ?? 0)}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2 font-semibold">
-                  <span>Balance Due</span><span>{formatCurrency(invoice.balanceAmount)}</span>
+                  <span>Balance Due</span><span>{formatCurrency(invoice.balanceAmount ?? (invoice.totalAmount - (invoice.paidAmount ?? 0)))}</span>
                 </div>
               </div>
             </div>
 
-            <p className="mt-4 text-xs italic text-gray-500">{numberToWords(invoice.totalAmount)}</p>
+            <p className="mt-4 text-sm font-semibold italic text-slate-700 border-t border-gray-100 pt-3">{numberToWords(invoice.totalAmount)}</p>
 
-            {invoice.notes && <div className="mt-6 text-sm"><p className="mb-1 font-semibold">Notes:</p><p className="text-gray-600">{invoice.notes}</p></div>}
-            {invoice.terms && <div className="mt-4 text-sm"><p className="mb-1 font-semibold">Terms & Conditions:</p><p className="text-gray-600">{invoice.terms}</p></div>}
+            {invoice.notes && <div className="mt-6 text-sm"><p className="mb-1 font-semibold">Notes:</p><div className="text-gray-600 rich-text-content" dangerouslySetInnerHTML={{ __html: invoice.notes.includes("<") ? invoice.notes : invoice.notes.replace(/\n/g, "<br>") }} /></div>}
+            {invoice.terms && <div className="mt-4 text-sm"><p className="mb-1 font-semibold">Terms & Conditions:</p><div className="text-gray-600 rich-text-content" dangerouslySetInnerHTML={{ __html: invoice.terms.includes("<") ? invoice.terms : invoice.terms.replace(/\n/g, "<br>") }} /></div>}
 
             {/* Bank Details */}
             {company?.bankDetails && (
@@ -630,6 +766,92 @@ export default function InvoiceDetailPage() {
             {exportAction === "download" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             Download PDF
           </Button>
+        </div>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} className="max-w-3xl">
+        <DialogHeader><DialogTitle>Edit {invoice.type === "quotation" ? "Quotation" : "Invoice"}</DialogTitle></DialogHeader>
+        <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-2 dialog-scroll">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>Company</Label>
+<SelectRoot value={editForm.companyId} onValueChange={(v) => setEditForm({ ...editForm, companyId: v })}>
+                <SelectTrigger><SelectValue placeholder="Select Company">{allCompanies.find((c) => c.id === editForm.companyId)?.name}</SelectValue></SelectTrigger>
+                <SelectContent>{allCompanies.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+              </SelectRoot>
+            </div>
+            <div className="space-y-1">
+              <Label>Client</Label>
+<SelectRoot value={editForm.clientId} onValueChange={(v) => setEditForm({ ...editForm, clientId: v })}>
+                <SelectTrigger><SelectValue placeholder="Select Client">{allClients.find((c) => c.id === editForm.clientId)?.companyName}</SelectValue></SelectTrigger>
+                <SelectContent>{allClients.map((c) => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
+              </SelectRoot>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <Label>{invoice.type === "quotation" ? "Valid Until" : "Due Date"}</Label>
+              <Input type="date" value={editForm.dueDate} onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Tax Type</Label>
+              <SelectRoot value={editForm.taxType} onValueChange={(v) => setEditForm({ ...editForm, taxType: v as "gst" | "non-gst" })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gst">GST</SelectItem>
+                  <SelectItem value="non-gst">No Tax</SelectItem>
+                </SelectContent>
+              </SelectRoot>
+            </div>
+            {editForm.taxType === "gst" && (
+              <div className="space-y-1">
+                <Label>GST Rate %</Label>
+                <Input type="number" value={editForm.gstRate} onChange={(e) => setEditForm({ ...editForm, gstRate: Number(e.target.value) })} />
+              </div>
+            )}
+          </div>
+
+          {/* Items */}
+          <div className="space-y-2">
+            <Label>Items</Label>
+            {editForm.items.map((item, idx) => (
+              <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                <div className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-5"><Input placeholder="Description" value={item.description} onChange={(e) => updateEditItem(idx, "description", e.target.value)} /></div>
+                  <div className="col-span-2"><Input type="number" placeholder="Qty" value={item.quantity} onChange={(e) => updateEditItem(idx, "quantity", Number(e.target.value))} min={1} /></div>
+                  <div className="col-span-2"><Input type="number" placeholder="Rate" value={item.rate} onChange={(e) => updateEditItem(idx, "rate", Number(e.target.value))} /></div>
+                  <div className="col-span-2 pt-1 text-right text-sm font-medium">{formatCurrency(item.amount)}</div>
+                  <div className="col-span-1">
+                    <Button type="button" variant="ghost" size="icon" onClick={() => setEditForm({ ...editForm, items: editForm.items.filter((_, i) => i !== idx) })} disabled={editForm.items.length <= 1}>
+                      <Trash2 className="h-4 w-4 text-red-400" />
+                    </Button>
+                  </div>
+                </div>
+                <Input className="h-7 text-xs text-gray-500 border-dashed border-gray-300" placeholder="Item description (optional)" value={item.subDescription || ""} onChange={(e) => updateEditItem(idx, "subDescription", e.target.value)} />
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditForm({ ...editForm, items: [...editForm.items, { description: "", subDescription: "", quantity: 1, rate: 0, amount: 0, sacCode: "" }] })}>
+              <Plus className="h-3 w-3 mr-1" /> Add Item
+            </Button>
+          </div>
+
+          <div className="space-y-1">
+            <Label>Notes</Label>
+            <RichTextEditor value={editForm.notes} onChange={(v) => setEditForm((f) => ({ ...f, notes: v }))} placeholder="Add notes..." />
+          </div>
+          <div className="space-y-1">
+            <Label>Terms & Conditions</Label>
+            <RichTextEditor value={editForm.terms} onChange={(v) => setEditForm((f) => ({ ...f, terms: v }))} placeholder="Add terms & conditions..." />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2 border-t">
+            <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button type="button" disabled={editSaving} onClick={handleEditSave}>
+              {editSaving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Changes
+            </Button>
+          </div>
         </div>
       </Dialog>
     </div>

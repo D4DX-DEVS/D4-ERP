@@ -8,18 +8,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select } from "@/components/ui/select";
+import { Select, SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
-import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
+import { cn, formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
 import { FileText, Plus, Trash2, Loader2, Eye, Search } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 
 export default function InvoicesPage() {
   const { user } = useAuthStore();
@@ -64,7 +65,7 @@ export default function InvoicesPage() {
     companyId: "",
     clientId: "",
     dueDate: "",
-    items: [{ description: "", quantity: 1, rate: 0, amount: 0, sacCode: "" }],
+    items: [{ description: "", quantity: 1, rate: 0, amount: 0, sacCode: "", subDescription: "" }],
     taxType: "gst" as Invoice["taxType"],
     gstRate: 18,
     isInterState: false,
@@ -113,7 +114,7 @@ export default function InvoicesPage() {
   };
 
   const addItem = () => {
-    setForm({ ...form, items: [...form.items, { description: "", quantity: 1, rate: 0, amount: 0, sacCode: "" }] });
+    setForm({ ...form, items: [...form.items, { description: "", quantity: 1, rate: 0, amount: 0, sacCode: "", subDescription: "" }] });
   };
 
   const removeItem = (idx: number) => {
@@ -190,6 +191,24 @@ export default function InvoicesPage() {
   const getClientName = (id: string) => clients.find((c) => c.id === id)?.companyName || "—";
   const getCompanyName = (id: string) => companies.find((c) => c.id === id)?.name || "—";
 
+  const handleBulletKeyDown = (
+    e: React.KeyboardEvent<HTMLTextAreaElement>,
+    value: string,
+    onChange: (v: string) => void
+  ) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const ta = e.currentTarget;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const insert = "\n• ";
+    const newVal = value.slice(0, start) + insert + value.slice(end);
+    onChange(newVal);
+    requestAnimationFrame(() => {
+      ta.setSelectionRange(start + insert.length, start + insert.length);
+    });
+  };
+
   const totals = calculateTotals();
 
   if (loading || lookupsLoading) return <PageLoader />;
@@ -211,16 +230,57 @@ export default function InvoicesPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input placeholder="Search invoices..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
         </div>
-        <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-          options={[
-            { value: "", label: "All Status" },
-            { value: "draft", label: "Draft" },
-            { value: "sent", label: "Sent" },
-            { value: "paid", label: "Paid" },
-            { value: "partial", label: "Partial" },
-            { value: "overdue", label: "Overdue" },
-          ]}
-          className="w-[180px]" />
+        <SelectRoot value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="All Status">
+              {filterStatus ? (
+                <span className="flex items-center gap-2">
+                  <span className={cn("inline-block h-2 w-2 rounded-full", {
+                    "bg-slate-400": filterStatus === "draft",
+                    "bg-blue-500": filterStatus === "sent",
+                    "bg-emerald-500": filterStatus === "paid",
+                    "bg-amber-500": filterStatus === "partial",
+                    "bg-red-500": filterStatus === "overdue",
+                  })} />
+                  {filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}
+                </span>
+              ) : null}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All Status</SelectItem>
+            <SelectItem value="draft">
+              <span className="flex items-center gap-2.5">
+                <span className="inline-block h-2 w-2 rounded-full bg-slate-400" />
+                Draft
+              </span>
+            </SelectItem>
+            <SelectItem value="sent">
+              <span className="flex items-center gap-2.5">
+                <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
+                Sent
+              </span>
+            </SelectItem>
+            <SelectItem value="paid">
+              <span className="flex items-center gap-2.5">
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                Paid
+              </span>
+            </SelectItem>
+            <SelectItem value="partial">
+              <span className="flex items-center gap-2.5">
+                <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                Partial
+              </span>
+            </SelectItem>
+            <SelectItem value="overdue">
+              <span className="flex items-center gap-2.5">
+                <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
+                Overdue
+              </span>
+            </SelectItem>
+          </SelectContent>
+        </SelectRoot>
       </div>
 
       {totalCount === 0 ? (
@@ -270,7 +330,7 @@ export default function InvoicesPage() {
       {/* Create Invoice Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} className="max-w-3xl">
         <DialogHeader><DialogTitle>Create Invoice</DialogTitle></DialogHeader>
-        <form onSubmit={handleSave} className="space-y-4 max-h-[65vh] overflow-y-auto pr-2">
+        <form onSubmit={handleSave} className="space-y-4 max-h-[65vh] overflow-y-auto pr-2 dialog-scroll">
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Company *</Label>
@@ -297,28 +357,36 @@ export default function InvoicesPage() {
               </Button>
             </div>
             {form.items.map((item, idx) => (
-              <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-5">
-                  <Label className="text-xs">Description</Label>
-                  <Input value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} required />
+              <div key={idx} className="space-y-1.5 border border-gray-100 rounded-lg p-2">
+                <div className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-5">
+                    <Label className="text-xs">Description</Label>
+                    <Input value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} required />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">Qty</Label>
+                    <Input type="number" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} min={1} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">Rate</Label>
+                    <Input type="number" value={item.rate} onChange={(e) => updateItem(idx, "rate", Number(e.target.value))} />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">Amount</Label>
+                    <Input value={formatCurrency(item.amount)} disabled className="bg-gray-50" />
+                  </div>
+                  <div className="col-span-1">
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)} disabled={form.items.length <= 1}>
+                      <Trash2 className="h-4 w-4 text-red-400" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="col-span-2">
-                  <Label className="text-xs">Qty</Label>
-                  <Input type="number" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} min={1} />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs">Rate</Label>
-                  <Input type="number" value={item.rate} onChange={(e) => updateItem(idx, "rate", Number(e.target.value))} />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs">Amount</Label>
-                  <Input value={formatCurrency(item.amount)} disabled className="bg-gray-50" />
-                </div>
-                <div className="col-span-1">
-                  <Button type="button" variant="ghost" size="icon" onClick={() => removeItem(idx)} disabled={form.items.length <= 1}>
-                    <Trash2 className="h-4 w-4 text-red-400" />
-                  </Button>
-                </div>
+                <Input
+                  className="h-7 text-xs text-gray-500 border-dashed border-gray-300"
+                  placeholder="Item description (optional)"
+                  value={item.subDescription || ""}
+                  onChange={(e) => updateItem(idx, "subDescription", e.target.value)}
+                />
               </div>
             ))}
           </div>
@@ -368,7 +436,11 @@ export default function InvoicesPage() {
 
           <div className="space-y-2">
             <Label>Notes</Label>
-            <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+            <RichTextEditor
+              value={form.notes}
+              onChange={(v) => setForm((f) => ({ ...f, notes: v }))}
+              placeholder="Add notes..."
+            />
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t">

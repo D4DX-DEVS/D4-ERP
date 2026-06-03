@@ -162,6 +162,7 @@ export type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | 
 
 export interface InvoiceItem {
   description: string;
+  subDescription?: string;
   quantity: number;
   rate: number;
   amount: number;
