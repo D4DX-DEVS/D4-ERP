@@ -36,6 +36,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -645,8 +646,8 @@ export default function CalendarPage() {
             </label>
             {!form.isAllDay && (
               <div className="grid grid-cols-2 gap-3">
-                <div><Label>Start Time</Label><Input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></div>
-                <div><Label>End Time</Label><Input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></div>
+                <div><Label>Start Time</Label><TimePicker value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} /></div>
+                <div><Label>End Time</Label><TimePicker value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} /></div>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">

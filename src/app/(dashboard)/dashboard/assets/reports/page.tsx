@@ -111,7 +111,9 @@ export default function AssetReportsPage() {
     setLoading(false);
   }, [reportType, fromDate, toDate, assetName, statusFilter, searchTerm, page]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchReport(); }, [fetchReport]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(1); }, [reportType, fromDate, toDate, assetName, statusFilter, searchTerm]);
 
   function clearFilters() {

@@ -4,6 +4,7 @@ import type {
   EventPriority,
   EventScope,
   LeaveRequest,
+  StudioBooking,
   Task,
 } from "@/types";
 import type { Holiday } from "@/lib/settings";
@@ -32,6 +33,7 @@ export const EVENT_CATEGORIES: CategoryMeta[] = [
   { value: "payroll", label: "Payroll", badge: "bg-emerald-100 text-emerald-700", bar: "bg-emerald-100 text-emerald-700", hex: "#10b981" },
   { value: "personal", label: "Personal", badge: "bg-slate-100 text-slate-700", bar: "bg-slate-100 text-slate-700", hex: "#64748b" },
   { value: "announcement", label: "Announcement", badge: "bg-cyan-100 text-cyan-700", bar: "bg-cyan-100 text-cyan-700", hex: "#06b6d4" },
+  { value: "studio", label: "Studio Booking", badge: "bg-violet-100 text-violet-700", bar: "bg-violet-100 text-violet-700", hex: "#8b5cf6" },
 ];
 
 const CATEGORY_MAP: Record<string, CategoryMeta> = Object.fromEntries(
@@ -49,7 +51,7 @@ export const MANUAL_EVENT_TYPES: EventType[] = [
 ];
 
 // ── Unified calendar item ─────────────────────────────────────────────────────
-export type CalendarSource = "event" | "leave" | "task" | "holiday";
+export type CalendarSource = "event" | "leave" | "task" | "holiday" | "booking";
 
 export interface CalendarItem {
   /** Unique per rendered occurrence (recurring events get suffixed keys). */
@@ -244,6 +246,30 @@ export function holidayToItem(holiday: Holiday): CalendarItem {
     start: dayStart(d),
     end: dayStart(d),
     isAllDay: true,
+    editable: false,
+  };
+}
+
+/** Convert an approved/pending studio booking into a calendar overlay item. */
+export function bookingToItem(booking: StudioBooking & { id: string }): CalendarItem | null {
+  if (!booking.date) return null;
+  const d = parseDateKey(booking.date);
+  const studio = booking.studioName ?? "Studio";
+  const title = `${studio} · ${booking.purpose || "Booking"}`;
+  return {
+    key: `booking-${booking.id}`,
+    id: booking.id,
+    source: "booking",
+    title: booking.status === "pending" ? `${title} (pending)` : title,
+    type: "studio",
+    start: dayStart(d),
+    end: dayStart(d),
+    startTime: booking.startTime,
+    endTime: booking.endTime,
+    isAllDay: false,
+    location: booking.studioName,
+    description: booking.notes || booking.clientName,
+    href: `/dashboard/studio`,
     editable: false,
   };
 }

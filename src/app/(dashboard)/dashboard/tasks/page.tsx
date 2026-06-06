@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Task, Staff, Department } from "@/types";
+import { Task, Staff } from "@/types";
 import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
@@ -10,46 +10,69 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { PageLoader } from "@/components/ui/loading";
-import { formatDate } from "@/lib/utils";
-import { ClipboardList, Plus, Loader2, GripVertical } from "lucide-react";
+import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
+import { formatDate, cn } from "@/lib/utils";
+import { Plus, Loader2, Pencil, Trash2, CheckSquare, Square, X, CalendarClock, ListTodo, Loader, CheckCircle2, LayoutGrid, Rows3, Search } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 
+type TaskDoc = Task & { id: string };
+
 const statusColumns = [
-  { key: "todo", label: "To Do", color: "bg-gray-100" },
-  { key: "in-progress", label: "In Progress", color: "bg-blue-50" },
-  { key: "review", label: "Review", color: "bg-yellow-50" },
-  { key: "done", label: "Done", color: "bg-green-50" },
+  { key: "todo", label: "To Do", dot: "bg-slate-400", accent: "from-slate-50/80 to-white/40", ring: "ring-slate-200/70" },
+  { key: "in-progress", label: "In Progress", dot: "bg-sky-500", accent: "from-sky-50/80 to-white/40", ring: "ring-sky-200/70" },
+  { key: "review", label: "Review", dot: "bg-amber-500", accent: "from-amber-50/80 to-white/40", ring: "ring-amber-200/70" },
+  { key: "done", label: "Done", dot: "bg-emerald-500", accent: "from-emerald-50/80 to-white/40", ring: "ring-emerald-200/70" },
 ] as const;
 
 const priorityColors: Record<string, string> = {
-  low: "bg-gray-100 text-gray-700",
-  medium: "bg-blue-100 text-blue-700",
-  high: "bg-orange-100 text-orange-700",
-  urgent: "bg-red-100 text-red-700",
+  low: "bg-slate-100 text-slate-600 border-slate-200/60",
+  medium: "bg-sky-100 text-sky-700 border-sky-200/60",
+  high: "bg-orange-100 text-orange-700 border-orange-200/60",
+  urgent: "bg-red-100 text-red-700 border-red-200/60",
+};
+
+const VIEWS = [
+  { id: "board", label: "Board", icon: LayoutGrid },
+  { id: "table", label: "Table", icon: Rows3 },
+] as const;
+type ViewId = (typeof VIEWS)[number]["id"];
+
+const emptyForm = {
+  title: "",
+  description: "",
+  status: "todo" as Task["status"],
+  priority: "medium" as Task["priority"],
+  assigneeId: "",
+  dueDate: "",
+  tags: "",
 };
 
 export default function TasksPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
-  const [tasks, setTasks] = useState<(Task & { id: string })[]>([]);
+  const [tasks, setTasks] = useState<TaskDoc[]>([]);
   const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TaskDoc | null>(null);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const [view, setView] = useState<ViewId>("board");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | Task["status"]>("all");
+  const [priorityFilter, setPriorityFilter] = useState<"all" | Task["priority"]>("all");
 
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    status: "todo" as Task["status"],
-    priority: "medium" as Task["priority"],
-    assigneeId: "",
-    dueDate: "",
-    tags: "",
-  });
+  const [form, setForm] = useState(emptyForm);
+  const [subtasks, setSubtasks] = useState<{ title: string; isCompleted: boolean }[]>([]);
+  const [newSubtask, setNewSubtask] = useState("");
 
   const fetchData = async () => {
     try {
@@ -61,126 +84,464 @@ export default function TasksPage() {
       setStaffList(staff);
     } catch (error) {
       console.error("Error:", error);
+      toast("error", "Failed to load tasks");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const openCreate = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setSubtasks([]);
+    setNewSubtask("");
+    setDialogOpen(true);
+  };
+
+  const openEdit = (task: TaskDoc) => {
+    setEditingId(task.id);
+    setForm({
+      title: task.title,
+      description: task.description ?? "",
+      status: task.status,
+      priority: task.priority,
+      assigneeId: task.assigneeId ?? "",
+      dueDate: task.dueDate ? new Date(task.dueDate.seconds * 1000).toISOString().split("T")[0] : "",
+      tags: (task.tags ?? []).join(", "),
+    });
+    setSubtasks(task.subtasks ?? []);
+    setNewSubtask("");
+    setDialogOpen(true);
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
       const assignee = staffList.find((s) => s.id === form.assigneeId);
-      await createDocument("tasks", {
-        title: form.title,
-        description: form.description,
+      const payload = {
+        title: form.title.trim(),
+        description: form.description.trim(),
         status: form.status,
         priority: form.priority,
         assigneeId: form.assigneeId,
         assigneeName: assignee ? `${assignee.firstName} ${assignee.lastName}` : "",
-        assignedBy: user?.staffId || "",
         dueDate: form.dueDate ? Timestamp.fromDate(new Date(form.dueDate)) : Timestamp.now(),
-        subtasks: [],
-        tags: form.tags ? form.tags.split(",").map((t) => t.trim()) : [],
-        createdBy: user?.staffId || "",
-      });
+        subtasks,
+        tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+      };
+      if (editingId) {
+        await updateDocument("tasks", editingId, {
+          ...payload,
+          ...(form.status === "done" ? { completedAt: Timestamp.now() } : {}),
+        });
+        toast("success", "Task updated successfully");
+      } else {
+        await createDocument("tasks", {
+          ...payload,
+          assignedBy: user?.staffId || "",
+          createdBy: user?.staffId || "",
+        });
+        toast("success", "Task created successfully");
+      }
       setDialogOpen(false);
-      setForm({ title: "", description: "", status: "todo", priority: "medium", assigneeId: "", dueDate: "", tags: "" });
-      toast("success", "Task created successfully");
-      fetchData();
+      setEditingId(null);
+      setForm(emptyForm);
+      setSubtasks([]);
+      void fetchData();
     } catch (error) {
       console.error("Error:", error);
-      toast("error", "Failed to create task");
+      toast("error", editingId ? "Failed to update task" : "Failed to create task");
     } finally {
       setSaving(false);
     }
   };
 
   const handleStatusChange = async (taskId: string, newStatus: Task["status"]) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.status === newStatus) return;
+    // Optimistic update for snappy drag-and-drop
+    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
     try {
       await updateDocument("tasks", taskId, {
         status: newStatus,
         ...(newStatus === "done" ? { completedAt: Timestamp.now() } : {}),
       });
-      toast("success", `Task moved to ${newStatus}`);
-      fetchData();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to update task status");
+      void fetchData();
     }
   };
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteDocument("tasks", deleteTarget.id);
+      toast("success", "Task deleted");
+      setDeleteTarget(null);
+      void fetchData();
+    } catch (error) {
+      console.error("Error:", error);
+      toast("error", "Failed to delete task");
+    }
+  };
+
+  const addSubtask = () => {
+    const title = newSubtask.trim();
+    if (!title) return;
+    setSubtasks((prev) => [...prev, { title, isCompleted: false }]);
+    setNewSubtask("");
+  };
+
+  const toggleSubtask = (idx: number) =>
+    setSubtasks((prev) => prev.map((s, i) => (i === idx ? { ...s, isCompleted: !s.isCompleted } : s)));
+
+  const removeSubtask = (idx: number) => setSubtasks((prev) => prev.filter((_, i) => i !== idx));
+
   if (loading) return <PageLoader />;
+
+  const todayKey = new Date().toISOString().split("T")[0];
+  const stats = {
+    total: tasks.length,
+    inProgress: tasks.filter((t) => t.status === "in-progress").length,
+    overdue: tasks.filter(
+      (t) => t.status !== "done" && t.dueDate && new Date(t.dueDate.seconds * 1000).toISOString().split("T")[0] < todayKey
+    ).length,
+    done: tasks.filter((t) => t.status === "done").length,
+  };
+
+  const q = query.trim().toLowerCase();
+  const filteredTasks = tasks.filter((t) => {
+    if (statusFilter !== "all" && t.status !== statusFilter) return false;
+    if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
+    if (q) {
+      const haystack = `${t.title} ${t.description ?? ""} ${t.assigneeName ?? ""} ${(t.tags ?? []).join(" ")}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
-          <p className="text-sm text-gray-500 mt-1">{tasks.length} total tasks</p>
+      <ListingHeader
+        title="Task Board"
+        description="Coordinate deliverables across your team — drag cards between columns to update status."
+        action={
+          <Button onClick={openCreate}>
+            <Plus className="h-4 w-4" /> New Task
+          </Button>
+        }
+      />
+
+      <ListingStatGrid>
+        <ListingStatCard icon={<ListTodo className="h-5 w-5" />} label="Total Tasks" value={stats.total} toneClassName="bg-slate-100 text-slate-700" />
+        <ListingStatCard icon={<Loader className="h-5 w-5" />} label="In Progress" value={stats.inProgress} toneClassName="bg-sky-50 text-sky-700" />
+        <ListingStatCard icon={<CalendarClock className="h-5 w-5" />} label="Overdue" value={stats.overdue} toneClassName="bg-red-50 text-red-700" />
+        <ListingStatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Completed" value={stats.done} toneClassName="bg-emerald-50 text-emerald-700" />
+      </ListingStatGrid>
+
+      {/* View switcher + filters */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="inline-flex rounded-full border border-slate-200/90 bg-white/80 p-1 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+          {VIEWS.map((v) => {
+            const Icon = v.icon;
+            const active = view === v.id;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setView(v.id)}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all",
+                  active
+                    ? "bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-500 text-white shadow-[0_10px_24px_rgba(15,118,110,0.24)]"
+                    : "text-slate-600 hover:text-slate-950"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {v.label}
+              </button>
+            );
+          })}
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" /> New Task
-        </Button>
+
+        {view === "table" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder="Search tasks…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="w-auto min-w-[200px] pl-9"
+              />
+            </div>
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as "all" | Task["status"])}
+              className="w-auto min-w-[150px]"
+              options={[{ value: "all", label: "All statuses" }, ...statusColumns.map((c) => ({ value: c.key, label: c.label }))]}
+            />
+            <Select
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value as "all" | Task["priority"])}
+              className="w-auto min-w-[150px]"
+              options={[
+                { value: "all", label: "All priorities" },
+                { value: "low", label: "Low" },
+                { value: "medium", label: "Medium" },
+                { value: "high", label: "High" },
+                { value: "urgent", label: "Urgent" },
+              ]}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Kanban Board */}
-      <div className="grid grid-cols-4 gap-4">
+      {view === "board" ? (
+      /* Kanban Board */
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {statusColumns.map((col) => {
           const colTasks = tasks.filter((t) => t.status === col.key);
+          const isOver = dragOverCol === col.key;
           return (
-            <div key={col.key} className={`rounded-xl p-4 ${col.color} min-h-[400px]`}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-sm">{col.label}</h3>
-                <Badge>{colTasks.length}</Badge>
+            <div
+              key={col.key}
+              onDragOver={(e) => { e.preventDefault(); setDragOverCol(col.key); }}
+              onDragLeave={() => setDragOverCol((c) => (c === col.key ? null : c))}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggedId) void handleStatusChange(draggedId, col.key);
+                setDraggedId(null);
+                setDragOverCol(null);
+              }}
+              className={cn(
+                "flex min-h-[420px] flex-col rounded-[24px] border border-white/70 bg-gradient-to-b p-4 shadow-[0_14px_36px_rgba(15,23,42,0.05)] backdrop-blur-md transition-all",
+                col.accent,
+                isOver ? `scale-[1.01] ring-2 ${col.ring}` : "ring-1 ring-transparent"
+              )}
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={cn("h-2.5 w-2.5 rounded-full", col.dot)} />
+                  <h3 className="text-sm font-semibold tracking-[-0.01em] text-slate-800">{col.label}</h3>
+                </div>
+                <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-white/70 px-2 text-xs font-semibold text-slate-500">
+                  {colTasks.length}
+                </span>
               </div>
-              <div className="space-y-3">
-                {colTasks.map((task) => (
-                  <Card key={task.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                    <CardContent className="p-4 space-y-2">
-                      <div className="flex items-start justify-between">
-                        <h4 className="text-sm font-medium leading-tight">{task.title}</h4>
-                        <Badge variant={priorityColors[task.priority]} className="text-[10px] ml-2 flex-shrink-0">
-                          {task.priority}
-                        </Badge>
-                      </div>
-                      {task.description && (
-                        <p className="text-xs text-gray-500 line-clamp-2">{task.description}</p>
-                      )}
-                      <div className="flex items-center justify-between text-xs text-gray-400">
-                        <span>{task.assigneeName || "Unassigned"}</span>
-                        {task.dueDate && (
-                          <span>{formatDate(new Date(task.dueDate.seconds * 1000))}</span>
+
+              <div className="flex-1 space-y-3">
+                {colTasks.length === 0 ? (
+                  <div className="flex h-28 items-center justify-center rounded-2xl border border-dashed border-slate-200/80 text-xs text-slate-400">
+                    Drop tasks here
+                  </div>
+                ) : (
+                  colTasks.map((task) => {
+                    const subDone = (task.subtasks ?? []).filter((s) => s.isCompleted).length;
+                    const subTotal = (task.subtasks ?? []).length;
+                    const dueKey = task.dueDate ? new Date(task.dueDate.seconds * 1000).toISOString().split("T")[0] : null;
+                    const overdue = task.status !== "done" && dueKey !== null && dueKey < todayKey;
+                    return (
+                      <Card
+                        key={task.id}
+                        draggable
+                        onDragStart={() => setDraggedId(task.id)}
+                        onDragEnd={() => { setDraggedId(null); setDragOverCol(null); }}
+                        onClick={() => openEdit(task)}
+                        className={cn(
+                          "group cursor-pointer border-white/80 bg-white/90 transition-all hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.1)]",
+                          draggedId === task.id && "opacity-50"
                         )}
-                      </div>
-                      {/* Quick status change */}
-                      <div className="flex gap-1 pt-1">
-                        {statusColumns
-                          .filter((s) => s.key !== task.status)
-                          .map((s) => (
-                            <button
-                              key={s.key}
-                              onClick={() => handleStatusChange(task.id, s.key)}
-                              className="text-[10px] px-2 py-0.5 rounded bg-white border border-gray-200 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <CardContent className="space-y-2.5 p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="text-sm font-semibold leading-tight text-slate-800">{task.title}</h4>
+                            <Badge
+                              variant={priorityColors[task.priority]}
+                              className="ml-1 flex-shrink-0 border px-2 py-0.5 text-[9px] tracking-[0.12em]"
                             >
-                              → {s.label}
-                            </button>
-                          ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                              {task.priority}
+                            </Badge>
+                          </div>
+
+                          {task.description && (
+                            <p className="line-clamp-2 text-xs leading-relaxed text-slate-500">{task.description}</p>
+                          )}
+
+                          {subTotal > 0 && (
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-[10px] font-medium text-slate-400">
+                                <span className="inline-flex items-center gap-1"><CheckSquare className="h-3 w-3" /> Subtasks</span>
+                                <span>{subDone}/{subTotal}</span>
+                              </div>
+                              <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all"
+                                  style={{ width: `${subTotal ? (subDone / subTotal) * 100 : 0}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {(task.tags ?? []).length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {task.tags.slice(0, 3).map((tag) => (
+                                <span key={tag} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">#{tag}</span>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
+                            <span className="flex items-center gap-1.5 text-slate-500">
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-500 text-[9px] font-semibold uppercase text-white">
+                                {task.assigneeName ? task.assigneeName.charAt(0) : "?"}
+                              </span>
+                              <span className="max-w-[90px] truncate">{task.assigneeName || "Unassigned"}</span>
+                            </span>
+                            {dueKey && (
+                              <span className={cn("flex items-center gap-1", overdue ? "font-semibold text-red-600" : "text-slate-400")}>
+                                <CalendarClock className="h-3 w-3" />
+                                {formatDate(new Date(task.dueDate.seconds * 1000))}
+                              </span>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
+                )}
               </div>
             </div>
           );
         })}
       </div>
+      ) : (
+      /* Table View */
+      <div className="space-y-2">
+        <p className="px-1 text-xs text-slate-500">{filteredTasks.length} of {tasks.length} tasks</p>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Task</TableHead>
+              <TableHead>Assignee</TableHead>
+              <TableHead>Priority</TableHead>
+              <TableHead className="min-w-[150px]">Status</TableHead>
+              <TableHead>Due Date</TableHead>
+              <TableHead>Subtasks</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredTasks.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-10 text-center text-sm text-slate-400">
+                  No tasks match your filters.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredTasks.map((task) => {
+                const subDone = (task.subtasks ?? []).filter((s) => s.isCompleted).length;
+                const subTotal = (task.subtasks ?? []).length;
+                const dueKey = task.dueDate ? new Date(task.dueDate.seconds * 1000).toISOString().split("T")[0] : null;
+                const overdue = task.status !== "done" && dueKey !== null && dueKey < todayKey;
+                return (
+                  <TableRow key={task.id} className="cursor-pointer" onClick={() => openEdit(task)}>
+                    <TableCell>
+                      <div className="font-semibold text-slate-800">{task.title}</div>
+                      {(task.tags ?? []).length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {task.tags.slice(0, 3).map((tag) => (
+                            <span key={tag} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">#{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-500 text-[10px] font-semibold uppercase text-white">
+                          {task.assigneeName ? task.assigneeName.charAt(0) : "?"}
+                        </span>
+                        <span className="text-sm text-slate-600">{task.assigneeName || "Unassigned"}</span>
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={priorityColors[task.priority]} className="border px-2 py-0.5 text-[9px] tracking-[0.12em]">
+                        {task.priority}
+                      </Badge>
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Select
+                        value={task.status}
+                        onChange={(e) => void handleStatusChange(task.id, e.target.value as Task["status"])}
+                        className="w-full min-w-[140px]"
+                        options={statusColumns.map((c) => ({ value: c.key, label: c.label }))}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {dueKey ? (
+                        <span className={cn("flex items-center gap-1 text-sm", overdue ? "font-semibold text-red-600" : "text-slate-500")}>
+                          <CalendarClock className="h-3.5 w-3.5" />
+                          {formatDate(new Date(task.dueDate.seconds * 1000))}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-slate-400">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {subTotal > 0 ? (
+                        <span className="flex items-center gap-2">
+                          <span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
+                            <span
+                              className="block h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500"
+                              style={{ width: `${(subDone / subTotal) * 100}%` }}
+                            />
+                          </span>
+                          <span className="text-xs text-slate-500">{subDone}/{subTotal}</span>
+                        </span>
+                      ) : (
+                        <span className="text-sm text-slate-400">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(task)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-500 transition-colors hover:border-teal-300 hover:text-teal-600"
+                          aria-label="Edit task"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteTarget(task)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-500 transition-colors hover:border-red-300 hover:text-red-600"
+                          aria-label="Delete task"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+      )}
 
-      {/* New Task Dialog */}
+      {/* Create / Edit Task Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)}>
-        <DialogHeader><DialogTitle>New Task</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{editingId ? "Edit Task" : "New Task"}</DialogTitle></DialogHeader>
         <form onSubmit={handleSave} className="space-y-4">
           <div className="space-y-2">
             <Label>Title *</Label>
@@ -203,23 +564,81 @@ export default function TasksPage() {
                 options={[{ value: "low", label: "Low" }, { value: "medium", label: "Medium" }, { value: "high", label: "High" }, { value: "urgent", label: "Urgent" }]} />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>Due Date *</Label>
-            <DatePicker value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} required />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Task["status"] })}
+                options={statusColumns.map((c) => ({ value: c.key, label: c.label }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Due Date *</Label>
+              <DatePicker value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} required />
+            </div>
           </div>
+
+          <div className="space-y-2">
+            <Label>Subtasks</Label>
+            {subtasks.length > 0 && (
+              <div className="space-y-1.5">
+                {subtasks.map((s, idx) => (
+                  <div key={idx} className="flex items-center gap-2 rounded-xl border border-slate-200/70 bg-slate-50/60 px-3 py-1.5">
+                    <button type="button" onClick={() => toggleSubtask(idx)} className="cursor-pointer text-slate-500 hover:text-teal-600">
+                      {s.isCompleted ? <CheckSquare className="h-4 w-4 text-teal-600" /> : <Square className="h-4 w-4" />}
+                    </button>
+                    <span className={cn("flex-1 text-sm", s.isCompleted ? "text-slate-400 line-through" : "text-slate-700")}>{s.title}</span>
+                    <button type="button" onClick={() => removeSubtask(idx)} className="cursor-pointer text-slate-400 hover:text-red-500">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Input
+                value={newSubtask}
+                onChange={(e) => setNewSubtask(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSubtask(); } }}
+                placeholder="Add a subtask"
+              />
+              <Button type="button" variant="outline" onClick={addSubtask}>Add</Button>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label>Tags (comma-separated)</Label>
             <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="design, urgent" />
           </div>
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Create Task
-            </Button>
+
+          <div className="flex items-center justify-between gap-3 border-t pt-4">
+            {editingId ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { const t = tasks.find((x) => x.id === editingId); if (t) { setDialogOpen(false); setDeleteTarget(t); } }}
+                className="border-red-200 text-red-600 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4" /> Delete
+              </Button>
+            ) : <span />}
+            <div className="flex gap-3">
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {editingId ? "Save Changes" : "Create Task"}
+              </Button>
+            </div>
           </div>
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Task"
+        message={`Are you sure you want to delete "${deleteTarget?.title}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

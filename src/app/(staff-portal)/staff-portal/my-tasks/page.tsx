@@ -44,6 +44,7 @@ export default function MyTasksPage() {
   useEffect(() => {
     const staffId = user?.staffId;
     if (!staffId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }

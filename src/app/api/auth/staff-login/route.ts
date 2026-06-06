@@ -52,11 +52,15 @@ export async function POST(req: NextRequest) {
     }
 
     const uid = (staff._id as object).toString();
+    const grantedFeatures = Array.isArray(staff.grantedFeatures)
+      ? (staff.grantedFeatures as unknown[]).filter((f): f is string => typeof f === "string")
+      : [];
     const token = signToken({
       uid,
       email: (staff.email as string) || "",
       role: (staff.role as string) || "staff",
       name: `${staff.firstName ?? ""} ${staff.lastName ?? ""}`.trim(),
+      features: grantedFeatures,
     });
 
     const res = NextResponse.json({
@@ -69,6 +73,7 @@ export async function POST(req: NextRequest) {
         lastName: staff.lastName,
         companyId: staff.companyId,
         departmentId: staff.departmentId,
+        grantedFeatures,
       },
     });
     res.cookies.set(AUTH_COOKIE, token, sessionCookieOptions());

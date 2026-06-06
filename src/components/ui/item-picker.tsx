@@ -42,6 +42,7 @@ export function ItemPicker({ onSelect, className }: ItemPickerProps) {
   useEffect(() => {
     if (!open) return;
     let active = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     const handle = setTimeout(async () => {
       try {

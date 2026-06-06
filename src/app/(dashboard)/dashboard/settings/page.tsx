@@ -6,18 +6,31 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
 import { Label } from "@/components/ui/label";
 import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Building, Save, Globe, Clock, IndianRupee, CalendarOff, Plus, Trash2, MapPin, FileText } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import {
   AppSettings,
-  DEFAULT_SETTINGS,
   WeekdayKey,
   WEEKDAYS_UI,
   cloneWeeklySchedule,
   normalizeSettings,
 } from "@/lib/settings";
+
+const SETTINGS_TABS = [
+  { id: "general", label: "General", icon: Building },
+  { id: "tax", label: "Tax & Invoice", icon: IndianRupee },
+  { id: "numbering", label: "Document Numbers", icon: FileText },
+  { id: "schedule", label: "Work Schedule", icon: Clock },
+  { id: "attendance", label: "Attendance", icon: MapPin },
+  { id: "holidays", label: "Holidays", icon: CalendarOff },
+  { id: "leave", label: "Leave Policy", icon: Clock },
+  { id: "integrations", label: "Integrations", icon: Globe },
+] as const;
+
+type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<AppSettings>(() => normalizeSettings(null));
@@ -25,6 +38,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [newHoliday, setNewHoliday] = useState({ date: "", name: "" });
+  const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -42,6 +56,7 @@ export default function SettingsPage() {
       }
     };
     fetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const updateDay = (key: WeekdayKey, patch: Partial<AppSettings["weeklySchedule"][WeekdayKey]>) => {
@@ -120,21 +135,45 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <Button onClick={handleSave} disabled={saving}>
-          <Save className="h-4 w-4 mr-2" /> {saving ? "Saving..." : "Save Settings"}
-        </Button>
-      </div>
-
-      {saved && (
-        <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-          Settings saved successfully!
+    <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
+      {/* Left settings navigation */}
+      <aside className="w-full shrink-0 lg:w-56">
+        <div className="glass-panel sticky top-24 rounded-[20px] p-2">
+          <nav className="flex flex-row gap-1 overflow-x-auto lg:flex-col lg:overflow-x-visible">
+            {SETTINGS_TABS.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={`flex items-center gap-2.5 rounded-[14px] px-3 py-2.5 text-sm font-medium transition-all whitespace-nowrap ${
+                  activeTab === id
+                    ? "bg-slate-950 text-white shadow-[0_8px_16px_rgba(15,23,42,0.12)]"
+                    : "text-slate-600 hover:bg-white/70 hover:text-slate-950"
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" /> {label}
+              </button>
+            ))}
+          </nav>
         </div>
-      )}
+      </aside>
+
+      {/* Right content area */}
+      <div className="min-w-0 flex-1 space-y-4">
+        <div className="flex items-center justify-end">
+          <Button onClick={handleSave} disabled={saving}>
+            <Save className="h-4 w-4 mr-2" /> {saving ? "Saving..." : "Save Settings"}
+          </Button>
+        </div>
+
+        {saved && (
+          <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+            Settings saved successfully!
+          </div>
+        )}
 
       {/* General */}
+      {activeTab === "general" && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -221,6 +260,10 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
+
+      {/* Tax & Invoice */}
+      {activeTab === "tax" && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -259,8 +302,10 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Document Number Formats */}
+      {activeTab === "numbering" && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -312,8 +357,10 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Weekly Work Schedule */}
+      {activeTab === "schedule" && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -330,16 +377,14 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end rounded-lg border border-gray-100 bg-gray-50/60 p-4">
             <div>
               <Label>Default Start Time</Label>
-              <Input
-                type="time"
+              <TimePicker
                 value={settings.workingHours.start}
                 onChange={(e) => setSettings({ ...settings, workingHours: { ...settings.workingHours, start: e.target.value } })}
               />
             </div>
             <div>
               <Label>Default End Time</Label>
-              <Input
-                type="time"
+              <TimePicker
                 value={settings.workingHours.end}
                 onChange={(e) => setSettings({ ...settings, workingHours: { ...settings.workingHours, end: e.target.value } })}
               />
@@ -370,8 +415,7 @@ export default function SettingsPage() {
                   <span className="font-medium text-sm">{label}</span>
                   <div>
                     <Label className="sm:hidden">Start</Label>
-                    <Input
-                      type="time"
+                    <TimePicker
                       value={day.start}
                       disabled={!day.enabled}
                       onChange={(e) => updateDay(key, { start: e.target.value })}
@@ -379,8 +423,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <Label className="sm:hidden">End</Label>
-                    <Input
-                      type="time"
+                    <TimePicker
                       value={day.end}
                       disabled={!day.enabled}
                       onChange={(e) => updateDay(key, { end: e.target.value })}
@@ -401,8 +444,10 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Attendance Rules */}
+      {activeTab === "attendance" && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -459,8 +504,10 @@ export default function SettingsPage() {
           </p>
         </CardContent>
       </Card>
+      )}
 
       {/* Holiday Calendar */}
+      {activeTab === "holidays" && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -511,8 +558,10 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Leave Policy */}
+      {activeTab === "leave" && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -536,8 +585,10 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Integrations */}
+      {activeTab === "integrations" && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -562,6 +613,8 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+      )}
+      </div>
     </div>
   );
 }

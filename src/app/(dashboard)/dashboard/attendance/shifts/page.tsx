@@ -6,6 +6,7 @@ import { getDocuments, createDocument, updateDocument, deleteDocument } from "@/
 import { useRoleGuard } from "@/hooks/use-role-guard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TimePicker } from "@/components/ui/time-picker";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -55,6 +56,7 @@ export default function ShiftsPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (authorized) loadShifts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authorized]);
@@ -200,11 +202,11 @@ export default function ShiftsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Start Time *</Label>
-              <Input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} required />
+              <TimePicker value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} required />
             </div>
             <div className="space-y-2">
               <Label>End Time *</Label>
-              <Input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} required />
+              <TimePicker value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} required />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

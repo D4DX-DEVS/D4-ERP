@@ -19,6 +19,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
     const triggerRef = React.useRef<HTMLButtonElement>(null);
 
     React.useImperativeHandle(ref, () => triggerRef.current as HTMLButtonElement);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     React.useEffect(() => setMounted(true), []);
 
     const stringValue = value === undefined || value === null ? "" : String(value);

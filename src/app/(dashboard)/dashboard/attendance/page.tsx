@@ -8,6 +8,7 @@ import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 import { exportToCSV } from "@/lib/asset-export-utils";
 import {
@@ -317,8 +318,8 @@ export default function AttendanceRegisterPage() {
         description={`Every check-in and check-out log for ${monthLabel}.`}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <Input
-              type="month"
+            <DatePicker
+              mode="month"
               value={month}
               onChange={(e) => setMonth(e.target.value)}
               className="w-auto min-w-[160px]"

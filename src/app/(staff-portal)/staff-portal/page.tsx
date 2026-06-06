@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocuments, where, orderBy } from "@/lib/firestore";
-import { LeaveRequest, Task } from "@/types";
+import { Banner, LeaveRequest, Task } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ export default function StaffPortalHome() {
   const { user } = useAuthStore();
   const [recentLeaves, setRecentLeaves] = useState<(LeaveRequest & { id: string })[]>([]);
   const [pendingTasks, setPendingTasks] = useState<(Task & { id: string })[]>([]);
+  const [banners, setBanners] = useState<(Banner & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -54,11 +55,64 @@ export default function StaffPortalHome() {
     };
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    let isMounted = true;
+    async function loadBanners() {
+      try {
+        const all = await getDocuments<Banner>("banners", [where("isActive", "==", true), orderBy("priority", "desc")]);
+        const now = Date.now();
+        const visible = all.filter((b) => {
+          if (b.audience === "department" && b.departmentId !== user!.departmentId) return false;
+          const start = (b.startDate as { seconds: number } | undefined)?.seconds;
+          const end = (b.endDate as { seconds: number } | undefined)?.seconds;
+          if (start && start * 1000 > now) return false;
+          if (end && end * 1000 + 86400000 < now) return false;
+          return true;
+        });
+        if (isMounted) setBanners(visible);
+      } catch (error) {
+        console.error("Error:", error);
+      }
+    }
+    void loadBanners();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
   const pendingLeaves = recentLeaves.filter((l) => l.status === "pending").length;
 
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold">Welcome, {user?.firstName}!</h1>
+
+      {/* Banners */}
+      {banners.length > 0 && (
+        <div className="space-y-3">
+          {banners.map((b) => {
+            const content = (
+              <Card key={b.id} className="overflow-hidden">
+                {b.imageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={b.imageUrl} alt={b.title} className="h-40 w-full object-cover" />
+                )}
+                <CardContent className="p-4">
+                  <p className="font-semibold">{b.title}</p>
+                  {b.message && <p className="mt-1 text-sm text-gray-600">{b.message}</p>}
+                </CardContent>
+              </Card>
+            );
+            return b.link ? (
+              <a key={b.id} href={b.link} target="_blank" rel="noreferrer" className="block">
+                {content}
+              </a>
+            ) : (
+              <div key={b.id}>{content}</div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-3">

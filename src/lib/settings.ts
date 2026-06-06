@@ -1,5 +1,6 @@
 import { getDocuments } from "@/lib/firestore";
 import type { Shift } from "@/types";
+import { DEFAULT_LETTER_BODIES } from "@/lib/letter-templates";
 
 // ==================== Work Schedule ====================
 
@@ -55,6 +56,28 @@ export interface LeavePolicy {
   earnedLeave: number;
 }
 
+/** Branding assets used when generating HR letters / certificates. */
+export interface LetterSettings {
+  /** Public URL of the authorized signatory's signature image. */
+  signatureUrl: string;
+  /** Public URL of the company seal / stamp image. */
+  sealUrl: string;
+  /** Optional full-letterhead background image URL. */
+  letterheadUrl: string;
+  /** Name printed under the signature. */
+  authorizedSignatory: string;
+  /** Designation printed under the signatory name. */
+  signatoryDesignation: string;
+  /** Optional footer line shown at the bottom of every letter. */
+  footerText: string;
+  /** Editable template body for the experience certificate. */
+  experienceBody: string;
+  /** Editable template body for the appointment letter. */
+  appointmentBody: string;
+  /** Editable template body for the relieving letter. */
+  relievingBody: string;
+}
+
 /**
  * Number-format templates for auto-generated document numbers.
  * Supported tokens: {COMP} company code, {YYYY} FY start year, {YY} 2-digit
@@ -77,6 +100,8 @@ export interface AppSettings {
   timezone: string;
   companyProfile: CompanyProfile;
   leavePolicy: LeavePolicy;
+  /** Branding / signatory details used by the HR letter generator. */
+  letterSettings: LetterSettings;
   /** Default times used by the "apply to all days" helper. */
   workingHours: { start: string; end: string };
   /** Per-day work schedule. Drives attendance late / early / off-day logic. */
@@ -140,6 +165,17 @@ export const DEFAULT_SETTINGS: AppSettings = {
   timezone: "Asia/Kolkata",
   companyProfile: { address: "", phone: "", email: "", website: "", logoUrl: "" },
   leavePolicy: { casualLeave: 12, sickLeave: 12, earnedLeave: 15 },
+  letterSettings: {
+    signatureUrl: "",
+    sealUrl: "",
+    letterheadUrl: "",
+    authorizedSignatory: "",
+    signatoryDesignation: "",
+    footerText: "",
+    experienceBody: DEFAULT_LETTER_BODIES.experience,
+    appointmentBody: DEFAULT_LETTER_BODIES.appointment,
+    relievingBody: DEFAULT_LETTER_BODIES.relieving,
+  },
   workingHours: { start: DEFAULT_START, end: DEFAULT_END },
   weeklySchedule: cloneWeeklySchedule(DEFAULT_WEEKLY_SCHEDULE),
   holidays: [],
@@ -199,6 +235,7 @@ export function normalizeSettings(raw?: Partial<AppSettings> | null): AppSetting
     ...raw,
     companyProfile: { ...DEFAULT_SETTINGS.companyProfile, ...(raw.companyProfile ?? {}) },
     leavePolicy: { ...DEFAULT_SETTINGS.leavePolicy, ...(raw.leavePolicy ?? {}) },
+    letterSettings: { ...DEFAULT_SETTINGS.letterSettings, ...(raw.letterSettings ?? {}) },
     workingHours: { ...DEFAULT_SETTINGS.workingHours, ...(raw.workingHours ?? {}) },
     attendanceRules: { ...DEFAULT_SETTINGS.attendanceRules, ...(raw.attendanceRules ?? {}) },
     numberFormats: { ...DEFAULT_SETTINGS.numberFormats, ...(raw.numberFormats ?? {}) },

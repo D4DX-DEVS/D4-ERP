@@ -67,6 +67,8 @@ export interface Staff extends BaseDocument {
   role: StaffRole;
   isActive: boolean;
   shiftId?: string;
+  /** Extra feature keys granted to this employee beyond their role defaults. */
+  grantedFeatures?: string[];
   bankDetails?: {
     bankName: string;
     accountNo: string;
@@ -90,6 +92,30 @@ export interface StatusHistory extends BaseDocument {
   startDate: Timestamp;
   endDate?: Timestamp;
   approvedBy: string;
+}
+
+// ==================== Employee Documents ====================
+export type EmployeeDocumentCategory =
+  | "cv"
+  | "id-proof"
+  | "certificate"
+  | "contract"
+  | "appointment-letter"
+  | "experience-letter"
+  | "relieving-letter"
+  | "payslip"
+  | "other";
+
+export interface EmployeeDocument extends BaseDocument {
+  staffId: string;
+  name: string;
+  category: EmployeeDocumentCategory;
+  /** DigitalOcean Spaces URL of the stored file. */
+  fileUrl: string;
+  fileName?: string;
+  fileSize?: number;
+  notes?: string;
+  uploadedBy: string;
 }
 
 // ==================== Leave Management ====================
@@ -301,7 +327,8 @@ export type EventType =
   | "training"
   | "payroll"
   | "personal"
-  | "announcement";
+  | "announcement"
+  | "studio";
 export type EventStatus = "scheduled" | "in-progress" | "completed" | "cancelled";
 export type EventPriority = "low" | "medium" | "high" | "urgent";
 /** Visibility scope of a calendar event. */
@@ -374,6 +401,41 @@ export interface TaskComment extends BaseDocument {
   message: string;
   authorId: string;
   authorName: string;
+}
+
+// ==================== Studio Booking ====================
+export type StudioBookingStatus = "pending" | "approved" | "rejected" | "cancelled";
+
+export interface Studio extends BaseDocument {
+  name: string;
+  location?: string;
+  capacity?: number;
+  description?: string;
+  /** Optional comma-free list of facilities for display. */
+  facilities?: string[];
+  isActive: boolean;
+}
+
+export interface StudioBooking extends BaseDocument {
+  studioId: string;
+  studioName?: string;
+  /** Local date key "YYYY-MM-DD" for the booking. */
+  date: string;
+  /** 24h "HH:mm" start/end times. */
+  startTime: string;
+  endTime: string;
+  purpose: string;
+  notes?: string;
+  clientId?: string;
+  clientName?: string;
+  status: StudioBookingStatus;
+  /** Staff id who requested the booking. */
+  requestedBy: string;
+  requestedByName?: string;
+  approvedBy?: string;
+  approvedByName?: string;
+  approvalDate?: Timestamp;
+  rejectionReason?: string;
 }
 
 // ==================== Asset ====================
@@ -632,13 +694,36 @@ export interface Payroll extends BaseDocument {
 // ==================== Notification ====================
 export interface AppNotification extends BaseDocument {
   recipientId: string;
-  type: "leave" | "invoice" | "event" | "task" | "system" | "payroll";
+  type: "leave" | "invoice" | "event" | "task" | "system" | "payroll" | "announcement";
   title: string;
   message: string;
   link?: string;
+  /** Optional image (DigitalOcean Spaces URL) shown in the notification pane. */
+  imageUrl?: string;
+  /** Display name of the admin/user who sent a manual announcement. */
+  senderName?: string;
   isRead: boolean;
   metadata?: { entityId: string; entityType: string };
   readAt?: Timestamp;
+}
+
+// ==================== Banner ====================
+export interface Banner extends BaseDocument {
+  title: string;
+  message?: string;
+  /** DigitalOcean Spaces URL of the banner image. */
+  imageUrl?: string;
+  link?: string;
+  /** Optional visibility window (YYYY-MM-DD); empty = always active. */
+  startDate?: Timestamp;
+  endDate?: Timestamp;
+  /** Higher numbers show first. */
+  priority: number;
+  /** "all" = every staff member, or a specific departmentId. */
+  audience: "all" | "department";
+  departmentId?: string;
+  isActive: boolean;
+  createdBy: string;
 }
 
 // ==================== Audit Log ====================
@@ -667,4 +752,6 @@ export interface AuthUser {
   lastName: string;
   companyId: string;
   departmentId: string;
+  /** Extra feature keys granted to this employee beyond their role defaults. */
+  grantedFeatures?: string[];
 }

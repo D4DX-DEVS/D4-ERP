@@ -88,6 +88,7 @@ export default function AttendanceCorrectionsPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (authorized) loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authorized, filter]);

@@ -1,12 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { countDocuments, updateDocument, deleteDocument, where, Timestamp } from "@/lib/firestore";
-import { AppNotification } from "@/types";
+import { countDocuments, createDocument, getDocuments, updateDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
+import { AppNotification, Department, Staff } from "@/types";
+import { useAuthStore } from "@/store/auth-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Bell, CheckCheck, Trash2, AlertTriangle, Info, CheckCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
+import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FileUpload } from "@/components/ui/file-upload";
+import { Bell, CheckCheck, Trash2, AlertTriangle, Info, CheckCircle, Send, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
@@ -19,10 +26,105 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   reminder: <Bell className="h-5 w-5 text-purple-500" />,
 };
 
+type Audience = "all" | "department" | "specific";
+
 export default function NotificationsPage() {
+  const { user } = useAuthStore();
   const [filter, setFilter] = useState<"all" | "unread" | "read">("all");
   const [unreadCount, setUnreadCount] = useState(0);
   const { toast } = useToast();
+
+  // Compose state
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
+  const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
+  const [compose, setCompose] = useState({
+    title: "",
+    message: "",
+    type: "announcement" as AppNotification["type"],
+    imageUrl: "",
+    link: "",
+    audience: "all" as Audience,
+    departmentId: "",
+    staffIds: [] as string[],
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadTargets() {
+      try {
+        const [staff, depts] = await Promise.all([
+          getDocuments<Staff>("staff", [where("isActive", "==", true), orderBy("firstName", "asc")]),
+          getDocuments<Department>("departments", [orderBy("name", "asc")]),
+        ]);
+        if (!isMounted) return;
+        setStaffList(staff);
+        setDepartments(depts);
+      } catch (error) {
+        console.error("Error:", error);
+      }
+    }
+    void loadTargets();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const resetCompose = () =>
+    setCompose({ title: "", message: "", type: "announcement", imageUrl: "", link: "", audience: "all", departmentId: "", staffIds: [] });
+
+  const resolveRecipients = (): (Staff & { id: string })[] => {
+    if (compose.audience === "all") return staffList;
+    if (compose.audience === "department") return staffList.filter((s) => s.departmentId === compose.departmentId);
+    return staffList.filter((s) => compose.staffIds.includes(s.id));
+  };
+
+  const handleSend = async () => {
+    if (!compose.title.trim() || !compose.message.trim()) {
+      toast("error", "Title and message are required");
+      return;
+    }
+    const recipients = resolveRecipients();
+    if (recipients.length === 0) {
+      toast("error", "No recipients match the selected audience");
+      return;
+    }
+    setSending(true);
+    try {
+      const senderName = user ? `${user.firstName} ${user.lastName}` : "Admin";
+      await Promise.all(
+        recipients.map((s) =>
+          createDocument("notifications", {
+            recipientId: s.id,
+            type: compose.type,
+            title: compose.title.trim(),
+            message: compose.message.trim(),
+            imageUrl: compose.imageUrl || null,
+            link: compose.link.trim() || null,
+            senderName,
+            isRead: false,
+            createdAt: Timestamp.now(),
+          })
+        )
+      );
+      toast("success", `Notification sent to ${recipients.length} staff`);
+      setComposeOpen(false);
+      resetCompose();
+      await refreshNotifications();
+    } catch (error) {
+      console.error("Error:", error);
+      toast("error", "Failed to send notification");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const toggleStaff = (id: string) =>
+    setCompose((prev) => ({
+      ...prev,
+      staffIds: prev.staffIds.includes(id) ? prev.staffIds.filter((s) => s !== id) : [...prev.staffIds, id],
+    }));
   const {
     data: notifications,
     loading,
@@ -126,15 +228,16 @@ export default function NotificationsPage() {
             <Badge variant="bg-red-100 text-red-700">{unreadCount} unread</Badge>
           )}
         </div>
-        {unreadCount > 0 && (
-          <Button variant="outline" size="sm" onClick={markAllRead}>
-            <CheckCheck className="h-4 w-4 mr-2" /> Mark All Read
+        <div className="flex items-center gap-2">
+          {unreadCount > 0 && (
+            <Button variant="outline" size="sm" onClick={markAllRead}>
+              <CheckCheck className="h-4 w-4 mr-2" /> Mark All Read
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setComposeOpen(true)}>
+            <Send className="h-4 w-4 mr-2" /> Send Notification
           </Button>
-        )}
-      </div>
-
-      {/* Filter Tabs */}
-      <div className="flex gap-2">
+        </div>
         {(["all", "unread", "read"] as const).map((f) => (
           <Button
             key={f}
@@ -173,6 +276,11 @@ export default function NotificationsPage() {
                       </div>
                       <span className="text-xs text-gray-400 whitespace-nowrap ml-2">{timeAgo(n.createdAt as { seconds: number })}</span>
                     </div>
+                    {n.imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={n.imageUrl} alt={n.title} className="mt-2 max-h-48 rounded-xl border border-slate-200 object-contain" />
+                    )}
+                    {n.senderName && <p className="mt-1 text-[11px] text-gray-400">From {n.senderName}</p>}
                     <div className="flex gap-2 mt-2">
                       {!n.isRead && (
                         <Button variant="ghost" size="sm" onClick={() => markAsRead(n.id)}>
@@ -191,6 +299,93 @@ export default function NotificationsPage() {
           <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={10} />
         </div>
       )}
+
+      <Dialog open={composeOpen} onClose={() => setComposeOpen(false)} className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Send Notification</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div className="space-y-2">
+            <Label>Title *</Label>
+            <Input value={compose.title} onChange={(e) => setCompose({ ...compose, title: e.target.value })} placeholder="e.g. Office closed on Friday" />
+          </div>
+          <div className="space-y-2">
+            <Label>Message *</Label>
+            <Textarea value={compose.message} onChange={(e) => setCompose({ ...compose, message: e.target.value })} rows={3} placeholder="Write the notification details..." />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select
+                value={compose.type}
+                onChange={(e) => setCompose({ ...compose, type: e.target.value as AppNotification["type"] })}
+                options={[
+                  { value: "announcement", label: "Announcement" },
+                  { value: "system", label: "System" },
+                  { value: "event", label: "Event" },
+                  { value: "payroll", label: "Payroll" },
+                ]}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Audience</Label>
+              <Select
+                value={compose.audience}
+                onChange={(e) => setCompose({ ...compose, audience: e.target.value as Audience })}
+                options={[
+                  { value: "all", label: "All active staff" },
+                  { value: "department", label: "By department" },
+                  { value: "specific", label: "Specific staff" },
+                ]}
+              />
+            </div>
+          </div>
+
+          {compose.audience === "department" && (
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select
+                value={compose.departmentId}
+                onChange={(e) => setCompose({ ...compose, departmentId: e.target.value })}
+                placeholder="Select department"
+                options={departments.map((d) => ({ value: d.id, label: d.name }))}
+              />
+            </div>
+          )}
+
+          {compose.audience === "specific" && (
+            <div className="space-y-2">
+              <Label>Select staff ({compose.staffIds.length} selected)</Label>
+              <div className="max-h-44 overflow-y-auto rounded-xl border border-slate-200 p-2">
+                {staffList.map((s) => (
+                  <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50">
+                    <input type="checkbox" checked={compose.staffIds.includes(s.id)} onChange={() => toggleStaff(s.id)} />
+                    <span>{s.firstName} {s.lastName}</span>
+                    <span className="text-xs text-gray-400">{s.employeeCode}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label>Image (optional)</Label>
+            <FileUpload value={compose.imageUrl} onChange={(url) => setCompose({ ...compose, imageUrl: url })} folder="notifications" accept="image/*" preview="image" />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Link (optional)</Label>
+            <Input value={compose.link} onChange={(e) => setCompose({ ...compose, link: e.target.value })} placeholder="/dashboard/calendar" />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setComposeOpen(false)} disabled={sending}>Cancel</Button>
+            <Button onClick={handleSend} disabled={sending}>
+              {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Send
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

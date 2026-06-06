@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/ui/loading";
@@ -886,7 +887,7 @@ export default function InvoiceDetailPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Date *</Label>
-              <Input type="date" value={payForm.date} onChange={(e) => setPayForm({ ...payForm, date: e.target.value })} required />
+              <DatePicker value={payForm.date} onChange={(e) => setPayForm({ ...payForm, date: e.target.value })} required />
             </div>
             <div className="space-y-2">
               <Label>Payment Mode</Label>
@@ -954,7 +955,7 @@ export default function InvoiceDetailPage() {
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-1">
               <Label>{invoice.type === "quotation" ? "Valid Until" : "Due Date"}</Label>
-              <Input type="date" value={editForm.dueDate} onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })} />
+              <DatePicker value={editForm.dueDate} onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })} />
             </div>
             <div className="space-y-1">
               <Label>Tax Type</Label>

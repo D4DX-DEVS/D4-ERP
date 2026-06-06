@@ -103,6 +103,7 @@ export default function EventDetailPage() {
     setLoading(false);
   }, [id, toast]);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // ── Row helper ────────────────────────────────────────────────────────

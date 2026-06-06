@@ -115,7 +115,8 @@ export default function AttendanceReportsPage() {
   }, [departments]);
 
   // Staff visible to the current report (department + search scoping).
-  const scopedStaff = useMemo(() => {
+  // Computed inline (React Compiler memoizes) to avoid manual-memoization bail-out.
+  const scopedStaff = (() => {
     let list = staffList;
     if (isDeptHead && user?.departmentId) list = list.filter((s) => s.departmentId === user.departmentId);
     else if (departmentFilter) list = list.filter((s) => s.departmentId === departmentFilter);
@@ -128,7 +129,7 @@ export default function AttendanceReportsPage() {
       );
     }
     return list;
-  }, [staffList, isDeptHead, user?.departmentId, departmentFilter, search]);
+  })();
 
   const scopedStaffIds = useMemo(() => new Set(scopedStaff.map((s) => s.id)), [scopedStaff]);
   const scopedRecords = useMemo(() => {

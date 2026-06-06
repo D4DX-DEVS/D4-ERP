@@ -134,6 +134,7 @@ export default function AssetEventsPage() {
 
   useEffect(() => {
     if (events.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchMovementCounts(events.map(e => e.id));
     }
   }, [events, fetchMovementCounts]);

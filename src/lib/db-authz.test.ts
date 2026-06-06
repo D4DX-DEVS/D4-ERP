@@ -63,6 +63,42 @@ describe("role authorization (/api/db permissions)", () => {
     });
   });
 
+  describe("studios are admin-only", () => {
+    it("allows admin to write", () => {
+      expect(authorize(admin, "create", "studios")).toBeNull();
+    });
+    it("blocks other roles", () => {
+      expect(authorize(deptHead, "create", "studios")).toMatch(/permission/i);
+      expect(authorize(accounts, "update", "studios")).toMatch(/permission/i);
+      expect(authorize(staff, "delete", "studios")).toMatch(/permission/i);
+    });
+  });
+
+  describe("studio_bookings writes (role default OR granted feature)", () => {
+    const staffWithFeature: TokenPayload = {
+      uid: "u9",
+      email: "u9@d4.in",
+      role: "staff",
+      name: "Granted Staff",
+      features: ["studio-booking"],
+    };
+    it("allows admin and department-head by role", () => {
+      expect(authorize(admin, "create", "studio_bookings")).toBeNull();
+      expect(authorize(deptHead, "create", "studio_bookings")).toBeNull();
+    });
+    it("allows a staff member granted the studio-booking feature", () => {
+      expect(authorize(staffWithFeature, "create", "studio_bookings")).toBeNull();
+      expect(authorize(staffWithFeature, "update", "studio_bookings")).toBeNull();
+    });
+    it("blocks staff without the feature", () => {
+      expect(authorize(staff, "create", "studio_bookings")).toMatch(/permission/i);
+      expect(authorize(accounts, "create", "studio_bookings")).toMatch(/permission/i);
+    });
+    it("allows reads for anyone", () => {
+      expect(authorize(staff, "find", "studio_bookings")).toBeNull();
+    });
+  });
+
   describe("audit_logs are append-only", () => {
     it("allows create from any role", () => {
       expect(authorize(staff, "create", "audit_logs")).toBeNull();

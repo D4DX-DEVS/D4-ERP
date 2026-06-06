@@ -73,6 +73,7 @@ export default function AccountingPage() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchData(); }, []);
 
   const handleSave = async (e: React.FormEvent) => {

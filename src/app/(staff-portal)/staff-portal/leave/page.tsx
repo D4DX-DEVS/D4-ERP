@@ -6,6 +6,7 @@ import { createDocument, Timestamp } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -116,11 +117,11 @@ export default function ApplyLeavePage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Start Time</Label>
-                  <Input type="time" value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
+                  <TimePicker value={form.startTime} onChange={(e) => setForm({ ...form, startTime: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label>End Time</Label>
-                  <Input type="time" value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
+                  <TimePicker value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
                 </div>
               </div>
             )}

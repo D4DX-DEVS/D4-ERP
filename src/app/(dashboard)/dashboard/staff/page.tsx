@@ -66,6 +66,7 @@ export default function StaffPage() {
     constraints,
   });
 
+  const [formStep, setFormStep] = useState(1);
   const [form, setForm] = useState({
     employeeCode: "",
     firstName: "",
@@ -164,6 +165,7 @@ export default function StaffPage() {
         isActive: true,
       });
     }
+    setFormStep(1);
     setDialogOpen(true);
   };
 
@@ -364,151 +366,178 @@ export default function StaffPage() {
         <DialogHeader>
           <DialogTitle>{editingId ? "Edit Staff" : "Add Staff"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSave} className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Employee Code</Label>
-              <Input value={form.employeeCode} disabled className="bg-gray-50 font-mono" />
-            </div>
-            <div className="space-y-2">
-              <Label>Role *</Label>
-              <Select
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value as Staff["role"] })}
-                options={[
-                  { value: "staff", label: "Staff" },
-                  { value: "department-head", label: "Department Head" },
-                  { value: "accounts", label: "Accounts" },
-                  { value: "admin", label: "Admin" },
-                ]}
-                required
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>First Name *</Label>
-              <Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />
-            </div>
-            <div className="space-y-2">
-              <Label>Last Name *</Label>
-              <Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required />
-            </div>
-          </div>
+        {/* Step Tabs */}
+        <div className="flex border-b mb-4">
+          <button
+            type="button"
+            onClick={() => setFormStep(1)}
+            className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-colors ${formStep === 1 ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+          >
+            1. Personal Info
+          </button>
+          <button
+            type="button"
+            onClick={() => setFormStep(2)}
+            className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-colors ${formStep === 2 ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+          >
+            2. Work & Address
+          </button>
+        </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Email *</Label>
-              <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
-            </div>
-            <div className="space-y-2">
-              <Label>Mobile *</Label>
-              <Input value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} required />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Date of Birth *</Label>
-              <DatePicker value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} required />
-            </div>
-            <div className="space-y-2">
-              <Label>Gender *</Label>
-              <Select
-                value={form.gender}
-                onChange={(e) => setForm({ ...form, gender: e.target.value as Staff["gender"] })}
-                options={[
-                  { value: "Male", label: "Male" },
-                  { value: "Female", label: "Female" },
-                  { value: "Other", label: "Other" },
-                ]}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Date of Joining *</Label>
-              <DatePicker value={form.dateOfJoining} onChange={(e) => setForm({ ...form, dateOfJoining: e.target.value })} required />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Company *</Label>
-              <Select
-                value={form.companyId}
-                onChange={(e) => setForm({ ...form, companyId: e.target.value })}
-                options={companies.map((c) => ({ value: c.id, label: c.name }))}
-                placeholder="Select company"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Department *</Label>
-              <Select
-                value={form.departmentId}
-                onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
-                options={departments.map((d) => ({ value: d.id, label: d.name }))}
-                placeholder="Select department"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Designation *</Label>
-              <Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} required />
-            </div>
-            <div className="space-y-2">
-              <Label>Base Salary *</Label>
-              <Input type="number" value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value), currentSalary: Number(e.target.value) })} required />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Shift</Label>
-              <Select
-                value={form.shiftId}
-                onChange={(e) => setForm({ ...form, shiftId: e.target.value })}
-                options={[
-                  { value: "", label: "Default schedule" },
-                  ...shifts.map((s) => ({ value: s.id, label: `${s.name} (${s.startTime}–${s.endTime})` })),
-                ]}
-              />
-            </div>
-          </div>
-
-          <div className="border-t pt-4">
-            <h4 className="text-sm font-semibold mb-3">Address</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2 col-span-2">
-                <Label>Street</Label>
-                <Input value={form.address.street} onChange={(e) => setForm({ ...form, address: { ...form.address, street: e.target.value } })} />
+        <form onSubmit={handleSave} className="space-y-4">
+          {/* Step 1: Personal Info */}
+          {formStep === 1 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Employee Code</Label>
+                  <Input value={form.employeeCode} disabled className="bg-gray-50 font-mono" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Role *</Label>
+                  <Select
+                    value={form.role}
+                    onChange={(e) => setForm({ ...form, role: e.target.value as Staff["role"] })}
+                    options={[
+                      { value: "staff", label: "Staff" },
+                      { value: "department-head", label: "Department Head" },
+                      { value: "accounts", label: "Accounts" },
+                      { value: "admin", label: "Admin" },
+                    ]}
+                    required
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>City</Label>
-                <Input value={form.address.city} onChange={(e) => setForm({ ...form, address: { ...form.address, city: e.target.value } })} />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>First Name *</Label>
+                  <Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Last Name *</Label>
+                  <Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>State</Label>
-                <Input value={form.address.state} onChange={(e) => setForm({ ...form, address: { ...form.address, state: e.target.value } })} />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Email *</Label>
+                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Mobile *</Label>
+                  <Input value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} required />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Pincode</Label>
-                <Input value={form.address.pincode} onChange={(e) => setForm({ ...form, address: { ...form.address, pincode: e.target.value } })} />
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Date of Birth *</Label>
+                  <DatePicker value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Gender *</Label>
+                  <Select
+                    value={form.gender}
+                    onChange={(e) => setForm({ ...form, gender: e.target.value as Staff["gender"] })}
+                    options={[
+                      { value: "Male", label: "Male" },
+                      { value: "Female", label: "Female" },
+                      { value: "Other", label: "Other" },
+                    ]}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Date of Joining *</Label>
+                  <DatePicker value={form.dateOfJoining} onChange={(e) => setForm({ ...form, dateOfJoining: e.target.value })} required />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4 border-t">
+                <Button type="button" onClick={() => setFormStep(2)}>
+                  Next
+                </Button>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              {editingId ? "Update" : "Add"} Staff
-            </Button>
-          </div>
+          {/* Step 2: Work & Address */}
+          {formStep === 2 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Company *</Label>
+                  <Select
+                    value={form.companyId}
+                    onChange={(e) => setForm({ ...form, companyId: e.target.value })}
+                    options={companies.map((c) => ({ value: c.id, label: c.name }))}
+                    placeholder="Select company"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Department *</Label>
+                  <Select
+                    value={form.departmentId}
+                    onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
+                    options={departments.map((d) => ({ value: d.id, label: d.name }))}
+                    placeholder="Select department"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Designation *</Label>
+                  <Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Base Salary *</Label>
+                  <Input type="number" value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value), currentSalary: Number(e.target.value) })} required />
+                </div>
+              </div>
+
+
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-semibold mb-3">Address</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2 col-span-2">
+                    <Label>Street</Label>
+                    <Input value={form.address.street} onChange={(e) => setForm({ ...form, address: { ...form.address, street: e.target.value } })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>City</Label>
+                    <Input value={form.address.city} onChange={(e) => setForm({ ...form, address: { ...form.address, city: e.target.value } })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>State</Label>
+                    <Input value={form.address.state} onChange={(e) => setForm({ ...form, address: { ...form.address, state: e.target.value } })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Pincode</Label>
+                    <Input value={form.address.pincode} onChange={(e) => setForm({ ...form, address: { ...form.address, pincode: e.target.value } })} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-between pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => setFormStep(1)}>
+                  Back
+                </Button>
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={saving}>
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    {editingId ? "Update" : "Add"} Staff
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </form>
       </Dialog>
 

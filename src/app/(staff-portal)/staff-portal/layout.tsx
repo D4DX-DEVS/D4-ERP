@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
+import { countDocuments, where } from "@/lib/firestore";
 import Link from "next/link";
 import {
   ArrowUpRight,
+  Bell,
   CalendarDays,
+  CalendarRange,
   ClipboardList,
   Clock,
   FileText,
@@ -24,6 +27,8 @@ const navItems = [
   { href: "/staff-portal/my-leaves", label: "My Leaves", icon: FileText },
   { href: "/staff-portal/my-tasks", label: "My Tasks", icon: ClipboardList },
   { href: "/staff-portal/attendance", label: "Attendance", icon: Clock },
+  { href: "/staff-portal/calendar", label: "Calendar", icon: CalendarRange },
+  { href: "/staff-portal/notifications", label: "Alerts", icon: Bell },
   { href: "/staff-portal/profile", label: "Profile", icon: User },
 ];
 
@@ -31,6 +36,7 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
   const { user, isLoading } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
+  const [unread, setUnread] = useState(0);
 
   const currentItem = navItems.find((item) => pathname === item.href) ?? navItems[0];
 
@@ -39,6 +45,13 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
       router.push("/staff-login");
     }
   }, [user, isLoading, router]);
+
+  useEffect(() => {
+    if (!user) return;
+    countDocuments("notifications", [where("recipientId", "==", user.staffId), where("isRead", "==", false)])
+      .then(setUnread)
+      .catch((error) => console.error("Error:", error));
+  }, [user, pathname]);
 
   if (isLoading || !user) {
     return (
@@ -96,6 +109,9 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
                   <item.icon className="h-4.5 w-4.5" />
                 </span>
                 <span className="flex-1">{item.label}</span>
+                {item.href === "/staff-portal/notifications" && unread > 0 && (
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-bold text-white">{unread}</span>
+                )}
                 {isActive && <ArrowUpRight className="h-4 w-4 text-white/70" />}
               </Link>
             );
@@ -160,7 +176,12 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
                   isActive ? "bg-slate-950 text-white" : "text-slate-500"
                 )}
               >
-                <item.icon className={cn("h-4.5 w-4.5", isActive ? "text-white" : "text-slate-400")} />
+                <span className="relative">
+                  <item.icon className={cn("h-4.5 w-4.5", isActive ? "text-white" : "text-slate-400")} />
+                  {item.href === "/staff-portal/notifications" && unread > 0 && (
+                    <span className="absolute -right-2 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{unread}</span>
+                  )}
+                </span>
                 <span>{item.label}</span>
               </Link>
             );

@@ -27,6 +27,8 @@ export interface TokenPayload {
   email: string;
   role: string;
   name: string;
+  /** Extra feature keys granted to this employee beyond their role defaults. */
+  features?: string[];
 }
 
 export function signToken(payload: TokenPayload): string {
@@ -46,6 +48,9 @@ export function verifyTokenString(token: string | undefined | null): TokenPayloa
       email: typeof decoded.email === "string" ? decoded.email : "",
       role: decoded.role,
       name: typeof decoded.name === "string" ? decoded.name : "",
+      features: Array.isArray(decoded.features)
+        ? decoded.features.filter((f): f is string => typeof f === "string")
+        : [],
     };
   } catch {
     return null;

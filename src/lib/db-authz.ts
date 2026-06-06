@@ -17,6 +17,20 @@ export const WRITE_ROLES: Record<string, string[]> = {
   departments: ["admin"],
   staff: ["admin", "department-head"],
   payroll: ["admin", "accounts"],
+  banners: ["admin"],
+  employee_documents: ["admin", "department-head"],
+  letterTemplates: ["admin"],
+  issuedLetters: ["admin"],
+  studios: ["admin"],
+};
+
+/**
+ * Collections whose write access is gated by a granted feature (carried in the
+ * JWT) in addition to default roles. A user may write if their role is in the
+ * default list OR they have been granted the feature.
+ */
+export const FEATURE_WRITE: Record<string, { roles: string[]; feature: string }> = {
+  studio_bookings: { roles: ["admin", "department-head"], feature: "studio-booking" },
 };
 
 /** Collections that are append-only from the client (no update/delete). */
@@ -45,6 +59,15 @@ export function authorize(
     return "This resource is append-only and cannot be modified.";
   }
   if (isWriteAction(action)) {
+    const featureRule = FEATURE_WRITE[collectionName];
+    if (featureRule) {
+      const allowedByRole = featureRule.roles.includes(user.role);
+      const allowedByFeature =
+        Array.isArray(user.features) && user.features.includes(featureRule.feature);
+      if (!allowedByRole && !allowedByFeature) {
+        return "You do not have permission to modify this resource.";
+      }
+    }
     const allowed = WRITE_ROLES[collectionName];
     if (allowed && !allowed.includes(user.role)) {
       return "You do not have permission to modify this resource.";

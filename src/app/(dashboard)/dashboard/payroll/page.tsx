@@ -42,6 +42,7 @@ export default function PayrollPage() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchData(); }, []);
 
   const staffMap = Object.fromEntries(staffList.map((s) => [s.id, s]));

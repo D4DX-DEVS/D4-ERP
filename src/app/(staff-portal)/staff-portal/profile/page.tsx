@@ -7,6 +7,7 @@ import { Staff } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { EmployeeDocuments } from "@/components/staff/employee-documents";
 import { User, Phone, Mail, Briefcase, Building, Calendar, IndianRupee } from "lucide-react";
 
 export default function StaffProfilePage() {
@@ -16,23 +17,26 @@ export default function StaffProfilePage() {
 
   useEffect(() => {
     const staffId = user?.staffId;
+    let isMounted = true;
 
-    if (!staffId) {
-      setLoading(false);
-      return;
-    }
-
-    const fetch = async () => {
+    async function load() {
+      if (!staffId) {
+        if (isMounted) setLoading(false);
+        return;
+      }
       try {
         const data = await getDocument<Staff>("staff", staffId);
-        setStaff(data);
+        if (isMounted) setStaff(data);
       } catch (error) {
         console.error("Error:", error);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
+    }
+    void load();
+    return () => {
+      isMounted = false;
     };
-    fetch();
   }, [user]);
 
   if (loading) {
@@ -99,6 +103,8 @@ export default function StaffProfilePage() {
           </CardContent>
         </Card>
       )}
+
+      {user?.staffId && <EmployeeDocuments staffId={user.staffId} canManage={false} />}
     </div>
   );
 }

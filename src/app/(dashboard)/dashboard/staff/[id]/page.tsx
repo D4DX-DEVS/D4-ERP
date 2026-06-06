@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Staff, Department, Company, SalaryHistory, StatusHistory } from "@/types";
 import { getDocument, getSubDocuments, createSubDocument, updateDocument, orderBy, Timestamp } from "@/lib/firestore";
-import { getDocuments, where } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -15,22 +14,32 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/ui/loading";
-import { getStatusColor, formatCurrency, formatDate } from "@/lib/utils";
+import { getStatusColor, formatCurrency, formatDate, getInitials } from "@/lib/utils";
+import { FEATURES, roleHasFeature } from "@/lib/permissions";
+import { useAuthStore } from "@/store/auth-store";
+import { LetterGenerator } from "@/components/staff/letter-generator";
+import { EmployeeDocuments } from "@/components/staff/employee-documents";
 import {
   ArrowLeft,
   Mail,
   Phone,
   MapPin,
   Calendar,
-  DollarSign,
   TrendingUp,
   AlertTriangle,
-  Ban,
-  UserCheck,
   Loader2,
+  Building2,
+  Briefcase,
+  CreditCard,
+  Shield,
+  FileText,
+  History,
+  User,
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
+
+type TabKey = "overview" | "salary" | "access" | "documents";
 
 export default function StaffProfilePage() {
   const params = useParams();
@@ -43,6 +52,10 @@ export default function StaffProfilePage() {
   const [salaryHistory, setSalaryHistory] = useState<(SalaryHistory & { id: string })[]>([]);
   const [statusHistory, setStatusHistory] = useState<(StatusHistory & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user: currentUser } = useAuthStore();
+  const [grantedFeatures, setGrantedFeatures] = useState<string[]>([]);
+  const [savingFeatures, setSavingFeatures] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
   // Modals
   const [incrementOpen, setIncrementOpen] = useState(false);
@@ -72,6 +85,9 @@ export default function StaffProfilePage() {
         return;
       }
       setStaff(staffData);
+      setGrantedFeatures(
+        Array.isArray(staffData.grantedFeatures) ? staffData.grantedFeatures : []
+      );
 
       const [dept, comp, salHist, statHist] = await Promise.all([
         staffData.departmentId ? getDocument<Department>("departments", staffData.departmentId) : null,
@@ -94,6 +110,7 @@ export default function StaffProfilePage() {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffId]);
 
   const handleIncrement = async (e: React.FormEvent) => {
@@ -157,184 +174,347 @@ export default function StaffProfilePage() {
     }
   };
 
+  const toggleFeature = (key: string) => {
+    setGrantedFeatures((prev) =>
+      prev.includes(key) ? prev.filter((f) => f !== key) : [...prev, key]
+    );
+  };
+
+  const handleSaveFeatures = async () => {
+    setSavingFeatures(true);
+    try {
+      await updateDocument("staff", staffId, { grantedFeatures });
+      toast("success", "Access updated");
+      fetchData();
+    } catch (error) {
+      console.error("Error:", error);
+      toast("error", "Failed to update access");
+    } finally {
+      setSavingFeatures(false);
+    }
+  };
+
   if (loading) return <PageLoader />;
   if (!staff) return null;
 
+  const canEditFeatures = currentUser?.role === "admin";
+
+  const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+    { key: "overview", label: "Overview", icon: <User className="h-4 w-4" /> },
+    { key: "salary", label: "Salary & Status", icon: <History className="h-4 w-4" /> },
+    { key: "access", label: "Access & Features", icon: <Shield className="h-4 w-4" /> },
+    { key: "documents", label: "Documents", icon: <FileText className="h-4 w-4" /> },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      {/* Header with profile summary */}
+      <div className="flex items-start gap-4">
         <Link href="/dashboard/staff">
-          <Button variant="ghost" size="icon">
+          <Button variant="ghost" size="icon" className="mt-1">
             <ArrowLeft className="h-5 w-5" />
           </Button>
         </Link>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">
-            {staff.firstName} {staff.lastName}
-          </h1>
-          <p className="text-sm text-gray-500">
-            {staff.designation} · {department?.name} · {company?.name}
-          </p>
+
+        <div className="flex-1 flex items-center gap-4">
+          {/* Avatar */}
+          <div className="h-16 w-16 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0">
+            {getInitials(staff.firstName, staff.lastName)}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900 truncate">
+                {staff.firstName} {staff.lastName}
+              </h1>
+              <Badge variant={getStatusColor(staff.status)}>{staff.status}</Badge>
+            </div>
+            <div className="flex items-center gap-4 mt-1 text-sm text-gray-500 flex-wrap">
+              <span className="flex items-center gap-1">
+                <Briefcase className="h-3.5 w-3.5" />
+                {staff.designation}
+              </span>
+              {department && (
+                <span className="flex items-center gap-1">
+                  <Building2 className="h-3.5 w-3.5" />
+                  {department.name}
+                </span>
+              )}
+              <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">
+                {staff.employeeCode}
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => {
+
+        <div className="flex gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={() => {
             setIncrementForm({ ...incrementForm, newSalary: staff.currentSalary });
             setIncrementOpen(true);
           }}>
-            <TrendingUp className="h-4 w-4 mr-2" />
-            Salary Change
+            <TrendingUp className="h-4 w-4 mr-1.5" />
+            Salary
           </Button>
-          <Button variant="outline" onClick={() => setStatusDialogOpen(true)}>
-            <AlertTriangle className="h-4 w-4 mr-2" />
-            Status Change
+          <Button variant="outline" size="sm" onClick={() => setStatusDialogOpen(true)}>
+            <AlertTriangle className="h-4 w-4 mr-1.5" />
+            Status
           </Button>
+          {canEditFeatures && (
+            <LetterGenerator
+              staff={staff}
+              staffId={staffId}
+              departmentName={department?.name}
+              companyName={company?.name}
+              companyAddress={company?.address || ""}
+              uploadedBy={currentUser?.uid}
+            />
+          )}
         </div>
       </div>
 
-      {/* Profile Info */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Personal Information</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-2 gap-4">
-            <div className="flex items-center gap-3">
-              <Mail className="h-4 w-4 text-gray-400" />
-              <div>
-                <p className="text-xs text-gray-500">Email</p>
-                <p className="text-sm font-medium">{staff.email}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Phone className="h-4 w-4 text-gray-400" />
-              <div>
-                <p className="text-xs text-gray-500">Mobile</p>
-                <p className="text-sm font-medium">{staff.mobile}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Calendar className="h-4 w-4 text-gray-400" />
-              <div>
-                <p className="text-xs text-gray-500">Date of Birth</p>
-                <p className="text-sm font-medium">
-                  {staff.dateOfBirth ? formatDate(new Date(staff.dateOfBirth.seconds * 1000)) : "—"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Calendar className="h-4 w-4 text-gray-400" />
-              <div>
-                <p className="text-xs text-gray-500">Date of Joining</p>
-                <p className="text-sm font-medium">
-                  {staff.dateOfJoining ? formatDate(new Date(staff.dateOfJoining.seconds * 1000)) : "—"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <MapPin className="h-4 w-4 text-gray-400" />
-              <div>
-                <p className="text-xs text-gray-500">Address</p>
-                <p className="text-sm font-medium">
-                  {staff.address ? `${staff.address.street}, ${staff.address.city}, ${staff.address.state} - ${staff.address.pincode}` : "—"}
-                </p>
-              </div>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Gender</p>
-              <p className="text-sm font-medium">{staff.gender}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Employment Details</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-500">Employee Code</span>
-              <span className="font-mono font-semibold">{staff.employeeCode}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-500">Role</span>
-              <Badge>{staff.role}</Badge>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-500">Status</span>
-              <Badge variant={getStatusColor(staff.status)}>{staff.status}</Badge>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-500">Base Salary</span>
-              <span className="font-semibold">{formatCurrency(staff.baseSalary)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-500">Current Salary</span>
-              <span className="font-semibold text-green-600">{formatCurrency(staff.currentSalary)}</span>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Tab navigation */}
+      <div className="border-b">
+        <nav className="flex gap-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === tab.key
+                  ? "border-teal-600 text-teal-700"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </nav>
       </div>
 
-      {/* Salary History */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Salary History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {salaryHistory.length === 0 ? (
-            <p className="text-sm text-gray-500 py-4 text-center">No salary changes recorded</p>
-          ) : (
-            <div className="space-y-3">
-              {salaryHistory.map((h) => (
-                <div key={h.id} className="flex items-center justify-between border-b pb-3 last:border-0">
-                  <div>
-                    <p className="text-sm font-medium capitalize">{h.type}</p>
-                    <p className="text-xs text-gray-500">{h.reason}</p>
-                    <p className="text-xs text-gray-400">
-                      {h.effectiveDate ? formatDate(new Date(h.effectiveDate.seconds * 1000)) : ""}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm text-gray-500 line-through">{formatCurrency(h.previousSalary)}</p>
-                    <p className="text-sm font-semibold text-green-600">{formatCurrency(h.newSalary)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* ───── Tab: Overview ───── */}
+      {activeTab === "overview" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-base">Personal Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <InfoItem icon={<Mail className="h-4 w-4" />} label="Email" value={staff.email} />
+                <InfoItem icon={<Phone className="h-4 w-4" />} label="Mobile" value={staff.mobile} />
+                <InfoItem
+                  icon={<Calendar className="h-4 w-4" />}
+                  label="Date of Birth"
+                  value={staff.dateOfBirth ? formatDate(new Date(staff.dateOfBirth.seconds * 1000)) : "—"}
+                />
+                <InfoItem
+                  icon={<Calendar className="h-4 w-4" />}
+                  label="Date of Joining"
+                  value={staff.dateOfJoining ? formatDate(new Date(staff.dateOfJoining.seconds * 1000)) : "—"}
+                />
+                <InfoItem
+                  icon={<MapPin className="h-4 w-4" />}
+                  label="Address"
+                  value={staff.address ? `${staff.address.street}, ${staff.address.city}, ${staff.address.state} - ${staff.address.pincode}` : "—"}
+                />
+                <InfoItem icon={<User className="h-4 w-4" />} label="Gender" value={staff.gender} />
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Status History */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Status History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {statusHistory.length === 0 ? (
-            <p className="text-sm text-gray-500 py-4 text-center">No status changes recorded</p>
-          ) : (
-            <div className="space-y-3">
-              {statusHistory.map((h) => (
-                <div key={h.id} className="flex items-center justify-between border-b pb-3 last:border-0">
-                  <div>
-                    <Badge variant={getStatusColor(h.type === "termination" ? "terminated" : h.type === "suspension" ? "suspended" : "active")}>
-                      {h.type}
-                    </Badge>
-                    <p className="text-xs text-gray-500 mt-1">{h.reason}</p>
-                  </div>
-                  <div className="text-right text-xs text-gray-500">
-                    <p>{h.startDate ? formatDate(new Date(h.startDate.seconds * 1000)) : ""}</p>
-                    {h.endDate && <p>to {formatDate(new Date(h.endDate.seconds * 1000))}</p>}
-                  </div>
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">Current Salary</p>
+                  <p className="text-2xl font-bold text-green-600">{formatCurrency(staff.currentSalary)}</p>
+                  <p className="text-xs text-gray-400 mt-1">Base: {formatCurrency(staff.baseSalary)}</p>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-500">Role</span>
+                  <Badge>{staff.role}</Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-500">Company</span>
+                  <span className="text-sm font-medium">{company?.name || "—"}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-500">Department</span>
+                  <span className="text-sm font-medium">{department?.name || "—"}</span>
+                </div>
+                {staff.bankDetails && (
+                  <div className="pt-2 border-t">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CreditCard className="h-3.5 w-3.5 text-gray-400" />
+                      <span className="text-xs font-medium text-gray-500 uppercase">Bank Details</span>
+                    </div>
+                    <p className="text-sm">{staff.bankDetails.bankName}</p>
+                    <p className="text-xs text-gray-500 font-mono">{staff.bankDetails.accountNo}</p>
+                    <p className="text-xs text-gray-500">IFSC: {staff.bankDetails.ifscCode}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
 
-      {/* Increment Dialog */}
+      {/* ───── Tab: Salary & Status ───── */}
+      {activeTab === "salary" && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Salary History</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => {
+                setIncrementForm({ ...incrementForm, newSalary: staff.currentSalary });
+                setIncrementOpen(true);
+              }}>
+                <TrendingUp className="h-4 w-4 mr-1.5" />
+                Add Change
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {salaryHistory.length === 0 ? (
+                <div className="text-center py-8">
+                  <TrendingUp className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No salary changes recorded</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {salaryHistory.map((h) => (
+                    <div key={h.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                      <div>
+                        <p className="text-sm font-medium capitalize">{h.type}</p>
+                        <p className="text-xs text-gray-500">{h.reason}</p>
+                        <p className="text-xs text-gray-400">
+                          {h.effectiveDate ? formatDate(new Date(h.effectiveDate.seconds * 1000)) : ""}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-gray-500 line-through">{formatCurrency(h.previousSalary)}</p>
+                        <p className="text-sm font-semibold text-green-600">{formatCurrency(h.newSalary)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Status History</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => setStatusDialogOpen(true)}>
+                <AlertTriangle className="h-4 w-4 mr-1.5" />
+                Change Status
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {statusHistory.length === 0 ? (
+                <div className="text-center py-8">
+                  <History className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No status changes recorded</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {statusHistory.map((h) => (
+                    <div key={h.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                      <div>
+                        <Badge variant={getStatusColor(h.type === "termination" ? "terminated" : h.type === "suspension" ? "suspended" : "active")}>
+                          {h.type}
+                        </Badge>
+                        <p className="text-xs text-gray-500 mt-1">{h.reason}</p>
+                      </div>
+                      <div className="text-right text-xs text-gray-500">
+                        <p>{h.startDate ? formatDate(new Date(h.startDate.seconds * 1000)) : ""}</p>
+                        {h.endDate && <p>to {formatDate(new Date(h.endDate.seconds * 1000))}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ───── Tab: Access & Features ───── */}
+      {activeTab === "access" && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Access &amp; Features</CardTitle>
+              <p className="text-sm text-gray-500 mt-1">
+                Features granted by the <span className="font-semibold">{staff.role}</span> role are enabled automatically. Grant extra features below.
+              </p>
+            </div>
+            {canEditFeatures && staff.role !== "admin" && (
+              <Button onClick={handleSaveFeatures} disabled={savingFeatures} size="sm">
+                {savingFeatures ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Save Access
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent>
+            {staff.role === "admin" ? (
+              <div className="text-center py-8">
+                <Shield className="h-8 w-8 text-teal-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-600 font-medium">Admins have access to all features</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {FEATURES.map((f) => {
+                  const auto = roleHasFeature(staff.role as Parameters<typeof roleHasFeature>[0], f.key);
+                  const granted = grantedFeatures.includes(f.key);
+                  return (
+                    <label
+                      key={f.key}
+                      className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                        auto
+                          ? "bg-teal-50/50 border-teal-200"
+                          : granted
+                          ? "border-teal-500 bg-teal-50/30"
+                          : "hover:bg-gray-50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={auto || granted}
+                        disabled={auto || !canEditFeatures}
+                        onChange={() => toggleFeature(f.key)}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                      />
+                      <div>
+                        <p className="text-sm font-medium">
+                          {f.label}
+                          {auto && (
+                            <span className="ml-2 text-[10px] uppercase tracking-wider text-teal-600 bg-teal-100 px-1.5 py-0.5 rounded">
+                              Role default
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500">{f.description}</p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ───── Tab: Documents ───── */}
+      {activeTab === "documents" && (
+        <EmployeeDocuments staffId={staffId} canManage={canEditFeatures} uploadedBy={currentUser?.uid} />
+      )}
+
+      {/* ───── Salary Change Dialog ───── */}
       <Dialog open={incrementOpen} onClose={() => setIncrementOpen(false)}>
         <DialogHeader>
           <DialogTitle>Salary Change</DialogTitle>
@@ -391,7 +571,7 @@ export default function StaffProfilePage() {
         </form>
       </Dialog>
 
-      {/* Status Change Dialog */}
+      {/* ───── Status Change Dialog ───── */}
       <Dialog open={statusDialogOpen} onClose={() => setStatusDialogOpen(false)}>
         <DialogHeader>
           <DialogTitle>Change Staff Status</DialogTitle>
@@ -443,6 +623,18 @@ export default function StaffProfilePage() {
           </div>
         </form>
       </Dialog>
+    </div>
+  );
+}
+
+function InfoItem({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="text-gray-400 mt-0.5">{icon}</span>
+      <div>
+        <p className="text-xs text-gray-500">{label}</p>
+        <p className="text-sm font-medium text-gray-900">{value}</p>
+      </div>
     </div>
   );
 }

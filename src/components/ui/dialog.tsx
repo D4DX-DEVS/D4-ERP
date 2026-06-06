@@ -45,7 +45,7 @@ export function Dialog({ children, open: controlledOpen, onOpenChange, onClose, 
           <div className="fixed inset-0 bg-slate-950/38 backdrop-blur-[3px]" onClick={() => setOpen(false)} />
           <div
             className={cn(
-              "erp-dialog-panel relative z-50 w-full max-w-lg max-h-[min(88vh,900px)] overflow-y-auto rounded-[30px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,251,250,0.985))] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.18)] animate-slide-up sm:p-6",
+              "erp-dialog-panel relative z-50 w-full max-w-lg max-h-[min(88vh,900px)] overflow-y-auto scrollbar-hide rounded-[30px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,251,250,0.985))] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.18)] animate-slide-up sm:p-6",
               className
             )}
           >
@@ -116,7 +116,7 @@ export function DialogContent({
       <div className="fixed inset-0 bg-slate-950/38 backdrop-blur-[3px]" onClick={() => setOpen(false)} />
       <div
         className={cn(
-          "erp-dialog-panel relative z-50 w-full max-w-lg max-h-[min(88vh,900px)] overflow-y-auto rounded-[30px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,251,250,0.985))] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.18)] animate-slide-up sm:p-6",
+          "erp-dialog-panel relative z-50 w-full max-w-lg max-h-[min(88vh,900px)] overflow-y-auto scrollbar-hide rounded-[30px] border border-slate-200/90 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,251,250,0.985))] p-5 shadow-[0_28px_80px_rgba(15,23,42,0.18)] animate-slide-up sm:p-6",
           className
         )}
       >

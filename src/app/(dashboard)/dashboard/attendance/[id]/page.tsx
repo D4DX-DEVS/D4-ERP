@@ -23,6 +23,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TimePicker } from "@/components/ui/time-picker";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -119,6 +120,7 @@ export default function AttendanceDetailPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDetail();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, staffId]);
@@ -287,11 +289,11 @@ export default function AttendanceDetailPage() {
           <div className="grid gap-5 md:grid-cols-2">
             <div>
               <Label>Check In</Label>
-              <Input type="time" value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} />
+              <TimePicker value={form.checkIn} onChange={(e) => setForm({ ...form, checkIn: e.target.value })} />
             </div>
             <div>
               <Label>Check Out</Label>
-              <Input type="time" value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} />
+              <TimePicker value={form.checkOut} onChange={(e) => setForm({ ...form, checkOut: e.target.value })} />
             </div>
             <div>
               <Label>Status</Label>
