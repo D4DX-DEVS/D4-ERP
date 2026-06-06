@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { createDocument, Timestamp } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -101,12 +102,12 @@ export default function ApplyLeavePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{form.type === "overtime" ? "Date *" : "From Date *"}</Label>
-                <Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} required />
+                <DatePicker value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} required />
               </div>
               {form.type !== "overtime" && (
                 <div className="space-y-2">
                   <Label>To Date *</Label>
-                  <Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
+                  <DatePicker value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
                 </div>
               )}
             </div>

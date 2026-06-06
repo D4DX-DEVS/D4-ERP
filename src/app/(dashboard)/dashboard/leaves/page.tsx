@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { LeaveRequest, Staff } from "@/types";
-import { countDocuments, getDocuments, updateDocument, where, Timestamp } from "@/lib/firestore";
+import { LeaveRequest, Staff, AttendanceStatus } from "@/types";
+import { countDocuments, createDocument, getDocuments, updateDocument, where, Timestamp } from "@/lib/firestore";
+import { getAppSettings, isNonWorkingDay } from "@/lib/settings";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -98,11 +99,87 @@ export default function LeavesPage() {
         approvedBy: user?.staffId,
         approvalDate: Timestamp.now(),
       });
+      const request = requests.find((r) => r.id === id);
+      if (request) {
+        await syncLeaveToAttendance(request, status);
+      }
       toast("success", `Request ${status} successfully`);
       await refreshLeaves();
     } catch (error) {
       console.error("Error:", error);
       toast("error", `Failed to ${status} request`);
+    }
+  };
+
+  // Map a leave-type request onto attendance status. Overtime requests do not
+  // generate attendance days.
+  const leaveStatusFor = (type: string): AttendanceStatus | null => {
+    switch (type) {
+      case "leave":
+        return "leave";
+      case "wfh":
+        return "wfh";
+      case "on-duty":
+        return "on-duty";
+      default:
+        return null;
+    }
+  };
+
+  // On approval, mark each working day in the range with the leave status.
+  // On rejection of a request, remove any leave-sourced attendance it created.
+  const syncLeaveToAttendance = async (leave: LeaveRequest, status: "approved" | "rejected") => {
+    const baseStatus = leaveStatusFor(leave.type);
+    if (!baseStatus || !leave.startDate || !leave.endDate) return;
+
+    const settings = await getAppSettings();
+    const start = new Date(leave.startDate.seconds * 1000);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(leave.endDate.seconds * 1000);
+    end.setHours(0, 0, 0, 0);
+
+    const sameDay = start.getTime() === end.getTime();
+    const isHalfDay = sameDay && !!leave.startTime && !!leave.endTime;
+    const dayStatus: AttendanceStatus = isHalfDay ? "half-day" : baseStatus;
+
+    for (let d = new Date(start); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
+      const day = new Date(d);
+      day.setHours(0, 0, 0, 0);
+
+      // Leave should not consume scheduled off days or holidays.
+      if (isNonWorkingDay(settings, day)) continue;
+
+      const existing = await getDocuments<{ id: string; source?: string }>("attendance", [
+        where("staffId", "==", leave.staffId),
+        where("date", "==", Timestamp.fromDate(day)),
+      ]);
+
+      if (status === "approved") {
+        const data: Record<string, unknown> = {
+          staffId: leave.staffId,
+          date: Timestamp.fromDate(day),
+          status: dayStatus,
+          source: "leave",
+          leaveId: leave.id,
+          notes: `${leave.type === "leave" ? "Leave" : leave.type === "wfh" ? "WFH" : "On duty"} approved`,
+          isDeleted: false,
+        };
+        if (existing[0]) {
+          await updateDocument("attendance", existing[0].id, data);
+        } else {
+          await createDocument("attendance", data);
+        }
+      } else {
+        // Reverse: only remove records this leave created.
+        const created = existing.find((rec) => rec.source === "leave");
+        if (created) {
+          await updateDocument("attendance", created.id, {
+            isDeleted: true,
+            deletedBy: "Leave rejected",
+            deletedAt: Timestamp.now(),
+          });
+        }
+      }
     }
   };
 

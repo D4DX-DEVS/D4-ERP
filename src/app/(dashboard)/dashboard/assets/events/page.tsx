@@ -6,6 +6,7 @@ import { AssetEvent, AssetPerson } from "@/types";
 import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
@@ -522,8 +523,8 @@ export default function AssetEventsPage() {
             <div className="space-y-2"><Label>Location *</Label><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. Main Hall" required /></div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>From Date *</Label><Input type="date" value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value })} required /></div>
-            <div className="space-y-2"><Label>To Date *</Label><Input type="date" value={form.toDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} required /></div>
+            <div className="space-y-2"><Label>From Date *</Label><DatePicker value={form.fromDate} onChange={(e) => setForm({ ...form, fromDate: e.target.value })} required /></div>
+            <div className="space-y-2"><Label>To Date *</Label><DatePicker value={form.toDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} required /></div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

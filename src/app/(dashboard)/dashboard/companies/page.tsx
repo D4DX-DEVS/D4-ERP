@@ -22,6 +22,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const emptyCompany: Omit<Company, "id" | "createdAt" | "updatedAt"> = {
   name: "",
+  code: "",
   address: "",
   gstNumber: "",
   panNumber: "",
@@ -64,6 +65,7 @@ export default function CompaniesPage() {
       setEditingId(company.id);
       setForm({
         name: company.name,
+        code: company.code || "",
         address: company.address,
         gstNumber: company.gstNumber || "",
         panNumber: company.panNumber,
@@ -239,6 +241,17 @@ export default function CompaniesPage() {
                 onChange={(e) => setForm({ ...form, invoicePrefix: e.target.value })}
                 placeholder="e.g., D4M"
                 required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Company Code</Label>
+              <Input
+                value={form.code || ""}
+                onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                placeholder="e.g., DM (used in document numbers)"
               />
             </div>
           </div>

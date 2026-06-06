@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Invoice, Client, Company } from "@/types";
+import { Invoice, Client, Company, Item } from "@/types";
 import { getDocuments, createDocument, updateDocument, where, Timestamp, search as searchConstraint } from "@/lib/firestore";
+import { getAppSettings, type AppSettings } from "@/lib/settings";
+import { generateDocNumber } from "@/lib/numbering";
+import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,12 +24,18 @@ import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { ItemPicker } from "@/components/ui/item-picker";
+import { QuickAddClient } from "@/components/clients/quick-add-client";
 
 export default function QuotationsPage() {
+  const { user } = useAuthStore();
   const [clients, setClients] = useState<(Client & { id: string })[]>([]);
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [lookupsLoading, setLookupsLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [docType, setDocType] = useState<"quotation" | "estimate">("quotation");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmConvert, setConfirmConvert] = useState<(Invoice & { id: string }) | null>(null);
   const [saving, setSaving] = useState(false);
@@ -34,7 +43,7 @@ export default function QuotationsPage() {
   const [filterStatus, setFilterStatus] = useState("");
   const { toast } = useToast();
   const constraints = useMemo(() => {
-    const nextConstraints: Array<ReturnType<typeof where> | ReturnType<typeof searchConstraint>> = [where("type", "==", "quotation")];
+    const nextConstraints: Array<ReturnType<typeof where> | ReturnType<typeof searchConstraint>> = [where("type", "in", ["quotation", "estimate"])];
     if (filterStatus) {
       nextConstraints.push(where("status", "==", filterStatus));
     }
@@ -79,13 +88,16 @@ export default function QuotationsPage() {
 
     async function loadLookups() {
       try {
-        const [c, co] = await Promise.all([
+        const [c, co, settings] = await Promise.all([
           getDocuments<Client>("clients"),
           getDocuments<Company>("companies"),
+          getAppSettings(),
         ]);
         if (!isMounted) return;
         setClients(c);
         setCompanies(co);
+        setSettings(settings);
+        setForm((prev) => ({ ...prev, gstRate: settings.defaultGstRate }));
       } catch (error) {
         console.error("Error:", error);
       } finally {
@@ -116,6 +128,32 @@ export default function QuotationsPage() {
 
   const addItem = () => {
     setForm({ ...form, items: [...form.items, { description: "", quantity: 1, rate: 0, amount: 0, sacCode: "", subDescription: "" }] });
+  };
+
+  const addFromMaster = (item: Item & { id: string }) => {
+    const line = {
+      description: item.name,
+      subDescription: item.description || "",
+      quantity: 1,
+      rate: item.rate,
+      amount: item.rate,
+      sacCode: item.sacCode || item.hsnCode || "",
+      itemId: item.id,
+    };
+    setForm((f) => {
+      const items = [...f.items];
+      const lastIdx = items.length - 1;
+      const last = items[lastIdx];
+      // Fill a trailing empty row, otherwise append a new one.
+      if (last && !last.description && !last.rate) items[lastIdx] = line;
+      else items.push(line);
+      return { ...f, items };
+    });
+  };
+
+  const handleClientCreated = (client: Client & { id: string }) => {
+    setClients((prev) => [client, ...prev.filter((c) => c.id !== client.id)]);
+    setForm((f) => ({ ...f, clientId: client.id }));
   };
 
   const removeItem = (idx: number) => {
@@ -149,6 +187,7 @@ export default function QuotationsPage() {
 
   const handleEdit = (quotation: Invoice & { id: string }) => {
     setEditingId(quotation.id);
+    setDocType(quotation.type === "estimate" ? "estimate" : "quotation");
     setForm({
       companyId: quotation.companyId,
       clientId: quotation.clientId,
@@ -206,12 +245,14 @@ export default function QuotationsPage() {
         setEditingId(null);
         toast("success", "Quotation updated successfully");
       } else {
-        const prefix = "QTN";
-        const number = `${prefix}-${Timestamp.now().seconds.toString(36).toUpperCase()}`;
+        const company = companies.find((c) => c.id === form.companyId);
+        const number = await generateDocNumber({ series: docType, company, settings: settings ?? undefined });
         await createDocument("invoices", {
-          type: "quotation",
+          type: docType,
           invoiceNumber: number,
           ...payload,
+          clientName: clientMap[form.clientId]?.companyName || "",
+          createdBy: user?.staffId || "",
           paidAmount: 0,
           balanceAmount: total,
           status: "draft",
@@ -219,7 +260,7 @@ export default function QuotationsPage() {
           createdAt: Timestamp.now(),
         });
         setShowAdd(false);
-        toast("success", "Quotation created successfully");
+        toast("success", `${docType === "estimate" ? "Estimate" : "Quotation"} created successfully`);
       }
 
       setForm({
@@ -229,6 +270,7 @@ export default function QuotationsPage() {
         discount: { type: "fixed", value: 0 }, notes: "",
         terms: "This quotation is valid for 30 days from the date of issue.",
       });
+      setDocType("quotation");
       refresh();
     } catch (error) {
       console.error("Error:", error);
@@ -244,17 +286,37 @@ export default function QuotationsPage() {
 
   const executeConvertToInvoice = async (quotation: Invoice & { id: string }) => {
     setConfirmConvert(null);
-    const invNumber = `INV-${Timestamp.now().seconds.toString(36).toUpperCase()}`;
-    await createDocument("invoices", {
-      ...quotation,
-      type: "invoice",
-      invoiceNumber: invNumber,
-      status: "sent",
-      createdAt: Timestamp.now(),
-    });
-    await updateDocument("invoices", quotation.id, { status: "accepted" });
-    toast("success", "Quotation converted to invoice");
-    refresh();
+    if (quotation.convertedToInvoiceId) {
+      toast("error", "This quotation has already been converted to an invoice");
+      return;
+    }
+    try {
+      const company = companies.find((c) => c.id === quotation.companyId);
+      const invNumber = await generateDocNumber({ series: "invoice", company, settings: settings ?? undefined });
+      // Copy customer, line items, taxes and totals; drop fields that must be fresh.
+      const rest: Record<string, unknown> = { ...quotation };
+      for (const key of ["id", "status", "invoiceNumber", "createdAt", "updatedAt", "convertedFrom", "convertedToInvoiceId", "paidAmount", "balanceAmount"]) {
+        delete rest[key];
+      }
+      const invoiceId = await createDocument("invoices", {
+        ...rest,
+        type: "invoice",
+        invoiceNumber: invNumber,
+        status: "sent",
+        paidAmount: 0,
+        balanceAmount: quotation.totalAmount,
+        convertedFrom: quotation.id,
+        createdBy: user?.staffId || quotation.createdBy || "",
+        date: Timestamp.now(),
+        createdAt: Timestamp.now(),
+      });
+      await updateDocument("invoices", quotation.id, { status: "converted", convertedToInvoiceId: invoiceId });
+      toast("success", "Quotation converted to invoice");
+      refresh();
+    } catch (error) {
+      console.error("Error:", error);
+      toast("error", "Failed to convert quotation");
+    }
   };
 
   if (loading || lookupsLoading) return <PageLoader />;
@@ -272,9 +334,23 @@ export default function QuotationsPage() {
           </DialogTrigger>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto dialog-scroll">
             <DialogHeader>
-              <DialogTitle>{editingId ? "Edit Quotation" : "Create Quotation"}</DialogTitle>
+              <DialogTitle>{editingId ? "Edit " : "Create "}{docType === "estimate" ? "Estimate" : "Quotation"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              {!editingId && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Document Type</Label>
+                    <SelectRoot value={docType} onValueChange={(v) => setDocType(v as "quotation" | "estimate")}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="quotation">Quotation</SelectItem>
+                        <SelectItem value="estimate">Estimate</SelectItem>
+                      </SelectContent>
+                    </SelectRoot>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Company</Label>
@@ -286,7 +362,10 @@ export default function QuotationsPage() {
                   </SelectRoot>
                 </div>
                 <div>
-                  <Label>Client</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>Client</Label>
+                    <button type="button" onClick={() => setShowAddClient(true)} className="text-xs font-medium text-blue-600 hover:underline">+ Add New</button>
+                  </div>
                   <SelectRoot value={form.clientId} onValueChange={(v) => setForm({ ...form, clientId: v })}>
                     <SelectTrigger><SelectValue placeholder="Select Client">{clientMap[form.clientId]?.companyName}</SelectValue></SelectTrigger>
                     <SelectContent>
@@ -343,6 +422,7 @@ export default function QuotationsPage() {
                     </div>
                   ))}
                   <Button variant="outline" size="sm" onClick={addItem}><Plus className="mr-1 h-3 w-3" /> Add Item</Button>
+                  <ItemPicker onSelect={addFromMaster} className="inline-block" />
                 </div>
               </div>
 
@@ -468,13 +548,13 @@ export default function QuotationsPage() {
                     <TableCell className="text-right font-semibold">{formatCurrency(q.totalAmount)}</TableCell>
                     <TableCell><Badge variant={getStatusColor(q.status)}>{q.status}</Badge></TableCell>
                     <TableCell className="text-right">
-                      <Link href={`/dashboard/invoices/${q.id}`}>
+                      <Link href={`/dashboard/quotations/${q.id}`}>
                         <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
                       </Link>
                       <Button variant="ghost" size="icon" title="Edit" onClick={() => handleEdit(q)}>
                         <Pencil className="h-4 w-4 text-blue-500" />
                       </Button>
-                      {q.status === "draft" && (
+                      {q.status !== "converted" && !q.convertedToInvoiceId && q.status !== "rejected" && q.status !== "expired" && (
                         <Button variant="ghost" size="icon" title="Convert to Invoice" onClick={() => handleConvertToInvoice(q)}>
                           <Copy className="h-4 w-4 text-green-600" />
                         </Button>
@@ -499,6 +579,8 @@ export default function QuotationsPage() {
         onConfirm={() => confirmConvert && executeConvertToInvoice(confirmConvert)}
         onCancel={() => setConfirmConvert(null)}
       />
+
+      <QuickAddClient open={showAddClient} onClose={() => setShowAddClient(false)} onCreated={handleClientCreated} />
     </div>
   );
 }

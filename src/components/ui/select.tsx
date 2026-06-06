@@ -1,37 +1,135 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Check } from "lucide-react";
 
-/* ===== Legacy simple Select (used by older pages) ===== */
+/* ===== Simple Select (modern dropdown, same options/value/onChange API) ===== */
 export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   options: { value: string; label: string }[];
   placeholder?: string;
 }
 
-const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className, options, placeholder, ...props }, ref) => {
+const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
+  ({ className, options, placeholder, value, onChange, disabled, id, name, required }, ref) => {
+    const [open, setOpen] = React.useState(false);
+    const [mounted, setMounted] = React.useState(false);
+    const [coords, setCoords] = React.useState({ top: 0, left: 0, width: 0 });
+    const triggerRef = React.useRef<HTMLButtonElement>(null);
+
+    React.useImperativeHandle(ref, () => triggerRef.current as HTMLButtonElement);
+    React.useEffect(() => setMounted(true), []);
+
+    const stringValue = value === undefined || value === null ? "" : String(value);
+    const selected = options.find((o) => o.value === stringValue);
+
+    const updateCoords = React.useCallback(() => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setCoords({ top: r.bottom + 6, left: r.left, width: r.width });
+    }, []);
+
+    const toggle = () => {
+      if (disabled) return;
+      if (!open) updateCoords();
+      setOpen((o) => !o);
+    };
+
+    React.useEffect(() => {
+      if (!open) return;
+      const close = () => setOpen(false);
+      const onScroll = () => setOpen(false);
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setOpen(false);
+      };
+      window.addEventListener("resize", close);
+      window.addEventListener("scroll", onScroll, true);
+      window.addEventListener("keydown", onKey);
+      return () => {
+        window.removeEventListener("resize", close);
+        window.removeEventListener("scroll", onScroll, true);
+        window.removeEventListener("keydown", onKey);
+      };
+    }, [open]);
+
+    const handleSelect = (v: string) => {
+      setOpen(false);
+      onChange?.({
+        target: { value: v, name },
+        currentTarget: { value: v, name },
+      } as unknown as React.ChangeEvent<HTMLSelectElement>);
+    };
+
     return (
-      <select
-        className={cn(
-          "flex h-12 w-full appearance-none rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] ring-offset-white/80 backdrop-blur-sm hover:border-teal-300/70 hover:bg-white focus-visible:border-teal-500 focus-visible:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/14 focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100",
-          className
-        )}
-        ref={ref}
-        {...props}
-      >
-        {placeholder && (
-          <option value="" disabled>
-            {placeholder}
-          </option>
-        )}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <>
+        <button
+          ref={triggerRef}
+          type="button"
+          id={id}
+          disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-required={required}
+          onClick={toggle}
+          data-open={open}
+          className={cn(
+            "flex h-12 w-full items-center justify-between gap-2 rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-left text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] ring-offset-white/80 backdrop-blur-sm hover:border-teal-300/70 hover:bg-white focus-visible:border-teal-500 focus-visible:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/14 focus-visible:ring-offset-0 data-[open=true]:border-teal-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100",
+            className
+          )}
+        >
+          <span className={cn("truncate", selected ? "text-slate-800" : "text-slate-400")}>
+            {selected ? selected.label : placeholder || "Select..."}
+          </span>
+          <ChevronDown
+            className={cn("h-4 w-4 shrink-0 text-slate-400 transition-transform", open && "rotate-180 text-teal-600")}
+          />
+        </button>
+
+        {mounted &&
+          open &&
+          createPortal(
+            <>
+              <div className="fixed inset-0 z-[200]" onMouseDown={() => setOpen(false)} />
+              <div
+                role="listbox"
+                style={{ position: "fixed", top: coords.top, left: coords.left, width: coords.width }}
+                className="z-[201] max-h-60 overflow-y-auto rounded-[20px] border border-slate-200/80 bg-white p-1.5 shadow-[0_8px_32px_rgba(15,23,42,0.12),0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-xl animate-in"
+              >
+                {options.length === 0 && (
+                  <div className="px-3 py-2 text-sm text-slate-400">{placeholder || "No options"}</div>
+                )}
+                {options.map((option) => {
+                  const isSelected = option.value === stringValue;
+                  return (
+                    <div
+                      key={option.value}
+                      role="option"
+                      aria-selected={isSelected}
+                      onClick={() => handleSelect(option.value)}
+                      className={cn(
+                        "group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors",
+                        isSelected
+                          ? "bg-teal-50 text-teal-700 font-medium"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      )}
+                    >
+                      <span className="flex-1">{option.label}</span>
+                      <Check
+                        className={cn(
+                          "h-3.5 w-3.5 shrink-0 transition-opacity",
+                          isSelected ? "opacity-100 text-teal-600" : "opacity-0"
+                        )}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </>,
+            document.body
+          )}
+      </>
     );
   }
 );

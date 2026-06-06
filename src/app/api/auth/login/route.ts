@@ -2,34 +2,54 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getModel } from "@/models";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET || "d4media-erp-secret-key";
+import { signToken, sessionCookieOptions, AUTH_COOKIE } from "@/lib/auth";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   try {
+    // Brute-force protection (per IP).
+    const limit = rateLimit(`login:${clientIp(req)}`, 10, 60_000);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Too many login attempts. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } }
+      );
+    }
+
     await connectDB();
-    const { email, password } = await req.json();
+    const body = await req.json();
+
+    // Coerce to strings to prevent NoSQL operator injection (e.g. { $ne: null }).
+    const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+    const password = typeof body?.password === "string" ? body.password : "";
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
     }
 
     const Staff = getModel("staff");
-    const staff = await Staff.findOne({ email, isActive: true }).lean() as Record<string, unknown> | null;
+    const staff = (await Staff.findOne({ email, isActive: true }).lean()) as Record<
+      string,
+      unknown
+    > | null;
 
     if (!staff) {
-      return NextResponse.json({ error: "No active staff account found for this email" }, { status: 401 });
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 
     if (staff.role === "staff") {
-      return NextResponse.json({ error: "Staff members should use the Staff Login portal" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Staff members should use the Staff Login portal" },
+        { status: 403 }
+      );
     }
 
-    // Verify password
-    const passwordHash = staff.password as string;
+    const passwordHash = staff.password as string | undefined;
     if (!passwordHash) {
-      return NextResponse.json({ error: "Account not set up for login. Contact admin." }, { status: 401 });
+      return NextResponse.json(
+        { error: "Account not set up for login. Contact admin." },
+        { status: 401 }
+      );
     }
 
     const isValid = await bcrypt.compare(password, passwordHash);
@@ -37,26 +57,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
     }
 
-    // Generate JWT
-    const token = jwt.sign(
-      { uid: (staff._id as object).toString(), email: staff.email, role: staff.role },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    const uid = (staff._id as object).toString();
+    const token = signToken({
+      uid,
+      email: staff.email as string,
+      role: staff.role as string,
+      name: `${staff.firstName ?? ""} ${staff.lastName ?? ""}`.trim(),
+    });
 
-    return NextResponse.json({
-      token,
+    const res = NextResponse.json({
       user: {
-        uid: (staff._id as object).toString(),
+        uid,
         email: staff.email,
         role: staff.role,
-        staffId: (staff._id as object).toString(),
+        staffId: uid,
         firstName: staff.firstName,
         lastName: staff.lastName,
         companyId: staff.companyId,
         departmentId: staff.departmentId,
       },
     });
+    res.cookies.set(AUTH_COOKIE, token, sessionCookieOptions());
+    return res;
   } catch (error: unknown) {
     console.error("Login error:", error);
     return NextResponse.json({ error: "Login failed" }, { status: 500 });

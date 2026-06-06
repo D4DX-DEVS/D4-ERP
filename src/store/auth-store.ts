@@ -25,6 +25,10 @@ export const useAuthStore = create<AuthState>()(
       setLoading: (isLoading) => set({ isLoading }),
       logout: () => {
         setAuditUser(null);
+        // Clear the httpOnly session cookie on the server (best-effort).
+        if (typeof window !== "undefined") {
+          fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+        }
         set({ user: null, isLoading: false });
       },
     }),

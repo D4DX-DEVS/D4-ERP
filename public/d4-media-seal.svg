@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="D4 Media official seal">
+  <defs>
+    <path id="d4-seal-top" d="M 100 100 m -74 0 a 74 74 0 1 1 148 0" fill="none" />
+    <path id="d4-seal-bottom" d="M 100 100 m 74 0 a 74 74 0 1 1 -148 0" fill="none" />
+  </defs>
+  <circle cx="100" cy="100" r="94" fill="none" stroke="#1d4ed8" stroke-width="3" />
+  <circle cx="100" cy="100" r="78" fill="none" stroke="#1d4ed8" stroke-width="1.5" />
+  <circle cx="100" cy="100" r="48" fill="none" stroke="#1d4ed8" stroke-width="1.5" />
+  <text fill="#1d4ed8" font-family="Georgia, 'Times New Roman', serif" font-size="13" font-weight="700" letter-spacing="3">
+    <textPath href="#d4-seal-top" startOffset="50%" text-anchor="middle">D4 MEDIA &#183; OFFICIAL</textPath>
+  </text>
+  <text fill="#1d4ed8" font-family="Georgia, 'Times New Roman', serif" font-size="11" font-weight="600" letter-spacing="4">
+    <textPath href="#d4-seal-bottom" startOffset="50%" text-anchor="middle">RECEIVED WITH THANKS</textPath>
+  </text>
+  <g fill="#1d4ed8" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif">
+    <text x="100" y="92" font-size="34" font-weight="800" letter-spacing="1">D4</text>
+    <text x="100" y="116" font-size="14" font-weight="600" letter-spacing="2">MEDIA</text>
+    <text x="100" y="134" font-size="8" letter-spacing="1">PAID</text>
+  </g>
+  <g stroke="#1d4ed8" stroke-width="1.5">
+    <line x1="100" y1="14" x2="100" y2="22" />
+    <line x1="100" y1="178" x2="100" y2="186" />
+    <line x1="14" y1="100" x2="22" y2="100" />
+    <line x1="178" y1="100" x2="186" y2="100" />
+  </g>
+</svg>

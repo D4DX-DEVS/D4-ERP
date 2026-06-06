@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Invoice, Company, Client, InvoicePayment } from "@/types";
 import { getDocument, getDocuments, updateDocument, createDocument, where, Timestamp } from "@/lib/firestore";
+import { AppSettings, getAppSettings } from "@/lib/settings";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,14 +13,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/ui/loading";
-import { formatCurrency, formatDate, getStatusColor, numberToWords } from "@/lib/utils";
-import { ArrowLeft, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, Printer, Send, Share2, Trash2 } from "lucide-react";
+import { formatCurrency, formatDate, numberToWords } from "@/lib/utils";
+import { ArrowLeft, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, Printer, Receipt, Send, Share2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { generateDocNumber } from "@/lib/numbering";
+import { generateDocumentPdfBlob, downloadPdfBlob as savePdfBlob, printPdfBlob as printPdfDoc } from "@/lib/document-pdf";
 
 export default function InvoiceDetailPage() {
   const params = useParams();
@@ -33,6 +35,7 @@ export default function InvoiceDetailPage() {
   const [client, setClient] = useState<Client | null>(null);
   const [payments, setPayments] = useState<(InvoicePayment & { id: string })[]>([]);
   const [appGstNumber, setAppGstNumber] = useState<string>("");
+  const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
   const [allCompanies, setAllCompanies] = useState<(Company & { id: string })[]>([]);
   const [allClients, setAllClients] = useState<(Client & { id: string })[]>([]);
   const [editOpen, setEditOpen] = useState(false);
@@ -61,6 +64,9 @@ export default function InvoiceDetailPage() {
     referenceNo: "",
     notes: "",
   });
+  const receiptRef = useRef<HTMLDivElement | null>(null);
+  const [receiptData, setReceiptData] = useState<(InvoicePayment & { id: string }) | null>(null);
+  const [receiptExport, setReceiptExport] = useState<null | "download" | "print">(null);
 
   const fetchData = async () => {
     try {
@@ -68,16 +74,17 @@ export default function InvoiceDetailPage() {
       if (!inv) return;
       setInvoice(inv);
 
-      const [comp, cl, pays, settingsDocs] = await Promise.all([
+      const [comp, cl, pays, settings] = await Promise.all([
         inv.companyId ? getDocument<Company>("companies", inv.companyId) : null,
         inv.clientId ? getDocument<Client>("clients", inv.clientId) : null,
         getDocuments<InvoicePayment>("invoicePayments", [where("invoiceId", "==", invoiceId)]),
-        getDocuments<{ gstNumber?: string }>("settings"),
+        getAppSettings(),
       ]);
       setCompany(comp);
       setClient(cl);
       setPayments(pays);
-      if (settingsDocs.length > 0) setAppGstNumber(settingsDocs[0].gstNumber || "");
+      setAppSettings(settings);
+      setAppGstNumber(settings.gstNumber || "");
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to load invoice details");
@@ -94,11 +101,11 @@ export default function InvoiceDetailPage() {
         const inv = await getDocument<Invoice>("invoices", invoiceId);
         if (!inv || !isMounted) return;
 
-        const [comp, cl, pays, settingsDocs, allComps, allCls] = await Promise.all([
+        const [comp, cl, pays, settings, allComps, allCls] = await Promise.all([
           inv.companyId ? getDocument<Company>("companies", inv.companyId) : null,
           inv.clientId ? getDocument<Client>("clients", inv.clientId) : null,
           getDocuments<InvoicePayment>("invoicePayments", [where("invoiceId", "==", invoiceId)]),
-          getDocuments<{ gstNumber?: string }>("settings"),
+          getAppSettings(),
           getDocuments<Company>("companies"),
           getDocuments<Client>("clients"),
         ]);
@@ -109,7 +116,8 @@ export default function InvoiceDetailPage() {
         setCompany(comp);
         setClient(cl);
         setPayments(pays);
-        if (settingsDocs.length > 0) setAppGstNumber(settingsDocs[0].gstNumber || "");
+        setAppSettings(settings);
+        setAppGstNumber(settings.gstNumber || "");
         setAllCompanies(allComps);
         setAllClients(allCls);
       } catch (error) {
@@ -136,8 +144,31 @@ export default function InvoiceDetailPage() {
     if (!invoice) return;
     setSaving(true);
     try {
-      await createDocument("invoicePayments", {
+      const receiptNumber = await generateDocNumber({
+        series: "receipt",
+        company: company ?? undefined,
+        settings: appSettings ?? undefined,
+      });
+
+      const paymentId = await createDocument("invoicePayments", {
         invoiceId,
+        amount: payForm.amount,
+        date: Timestamp.fromDate(new Date(payForm.date)),
+        paymentMode: payForm.paymentMode,
+        referenceNo: payForm.referenceNo,
+        notes: payForm.notes,
+        receiptNumber,
+        createdBy: user?.staffId || "",
+      });
+
+      await createDocument("receipts", {
+        receiptNumber,
+        invoiceId,
+        invoiceNumber: invoice.invoiceNumber,
+        paymentId,
+        companyId: invoice.companyId,
+        clientId: invoice.clientId,
+        clientName: client?.companyName || "",
         amount: payForm.amount,
         date: Timestamp.fromDate(new Date(payForm.date)),
         paymentMode: payForm.paymentMode,
@@ -157,13 +188,32 @@ export default function InvoiceDetailPage() {
       });
 
       setPaymentOpen(false);
-      toast("success", "Payment recorded successfully");
+      toast("success", `Payment recorded \u00b7 Receipt ${receiptNumber}`);
       fetchData();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to record payment");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleReceiptPdf = async (action: "download" | "print") => {
+    if (!receiptRef.current) return;
+    setReceiptExport(action);
+    try {
+      const blob = await generateDocumentPdfBlob(receiptRef.current, "Receipt");
+      if (action === "download") {
+        savePdfBlob(blob, `${receiptData?.receiptNumber || "receipt"}.pdf`);
+        toast("success", "Receipt downloaded");
+      } else {
+        printPdfDoc(blob);
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      toast("error", "Failed to generate receipt PDF");
+    } finally {
+      setReceiptExport(null);
     }
   };
 
@@ -378,20 +428,51 @@ export default function InvoiceDetailPage() {
       const margin = 24;
       const usableWidth = pageWidth - margin * 2;
       const usableHeight = pageHeight - margin * 2;
-      const imageHeight = (canvas.height * usableWidth) / canvas.width;
-      const imageData = canvas.toDataURL("image/png");
 
-      let remainingHeight = imageHeight;
-      let position = margin;
+      // Number of source-canvas pixels that fit inside one printable page.
+      // Each page gets its own sliced image so content never overlaps or
+      // repeats across the page break and the page margins stay blank.
+      const pageCanvasHeight = Math.max(1, Math.floor((canvas.width / usableWidth) * usableHeight));
 
-      pdf.addImage(imageData, "PNG", margin, position, usableWidth, imageHeight, undefined, "FAST");
-      remainingHeight -= usableHeight;
+      let renderedHeight = 0;
+      let pageIndex = 0;
 
-      while (remainingHeight > 0) {
-        position = margin - (imageHeight - remainingHeight);
-        pdf.addPage();
-        pdf.addImage(imageData, "PNG", margin, position, usableWidth, imageHeight, undefined, "FAST");
-        remainingHeight -= usableHeight;
+      while (renderedHeight < canvas.height) {
+        const sliceHeight = Math.min(pageCanvasHeight, canvas.height - renderedHeight);
+
+        const pageCanvas = document.createElement("canvas");
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeight;
+
+        const context = pageCanvas.getContext("2d");
+        if (!context) {
+          throw new Error("Failed to prepare invoice PDF page");
+        }
+
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        context.drawImage(
+          canvas,
+          0,
+          renderedHeight,
+          canvas.width,
+          sliceHeight,
+          0,
+          0,
+          canvas.width,
+          sliceHeight,
+        );
+
+        const sliceData = pageCanvas.toDataURL("image/png");
+        const sliceImageHeight = (sliceHeight * usableWidth) / canvas.width;
+
+        if (pageIndex > 0) {
+          pdf.addPage();
+        }
+        pdf.addImage(sliceData, "PNG", margin, margin, usableWidth, sliceImageHeight, undefined, "FAST");
+
+        renderedHeight += sliceHeight;
+        pageIndex += 1;
       }
 
       return pdf.output("blob");
@@ -588,9 +669,15 @@ export default function InvoiceDetailPage() {
             {/* Header */}
             <div className="mb-8 flex justify-between gap-6">
               <div>
-                <h2 className="text-2xl font-bold text-blue-600">{company?.name || "D4 Media"}</h2>
-                <p className="mt-1 text-sm text-gray-500">{company?.address}</p>
-                <p className="text-sm text-gray-500">{company?.phone} | {company?.email}</p>
+                {appSettings?.companyProfile.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={appSettings.companyProfile.logoUrl} alt="Company logo" className="mb-2 h-12 w-auto object-contain" />
+                ) : null}
+                <h2 className="text-2xl font-bold text-blue-600">{company?.name || appSettings?.companyName || "D4 Media"}</h2>
+                <p className="mt-1 text-sm text-gray-500">{company?.address || appSettings?.companyProfile.address}</p>
+                <p className="text-sm text-gray-500">
+                  {(company?.phone || appSettings?.companyProfile.phone) ?? ""} | {(company?.email || appSettings?.companyProfile.email) ?? ""}
+                </p>
                 {appGstNumber && <p className="text-sm text-gray-500">GST: {appGstNumber}</p>}
               </div>
               <div className="text-right">
@@ -598,7 +685,6 @@ export default function InvoiceDetailPage() {
                 <p className="mt-1 text-sm text-gray-600">#{invoice.invoiceNumber}</p>
                 <p className="text-sm text-gray-500">Date: {(invoice.date || invoice.createdAt) ? formatDate(new Date(((invoice.date || invoice.createdAt)!).seconds * 1000)) : "—"}</p>
                 {invoice.dueDate && <p className="text-sm text-gray-500">Due: {formatDate(new Date(invoice.dueDate.seconds * 1000))}</p>}
-                <Badge variant={getStatusColor(invoice.status)} className="mt-2">{invoice.status}</Badge>
               </div>
             </div>
 
@@ -625,14 +711,14 @@ export default function InvoiceDetailPage() {
               <tbody>
                 {invoice.items?.map((item, idx) => (
                   <tr key={idx} className="border-b border-gray-100">
-                    <td className="py-3 text-sm">{idx + 1}</td>
-                    <td className="py-3 text-sm">
-                  <div>{item.description}</div>
-                  {item.subDescription && <div className="text-xs text-gray-400 mt-0.5">{item.subDescription}</div>}
-                </td>
-                    <td className="py-3 text-sm text-right">{item.quantity}</td>
-                    <td className="py-3 text-sm text-right">{formatCurrency(item.rate)}</td>
-                    <td className="py-3 text-sm text-right font-medium">{formatCurrency(item.amount)}</td>
+                    <td className="py-3 align-top text-sm">{idx + 1}</td>
+                    <td className="py-3 align-top text-sm">
+                      <div>{item.description}</div>
+                      {item.subDescription && <div className="mt-0.5 text-xs leading-relaxed text-gray-400">{item.subDescription}</div>}
+                    </td>
+                    <td className="py-3 align-top text-sm text-right">{item.quantity}</td>
+                    <td className="py-3 align-top text-sm text-right">{formatCurrency(item.rate)}</td>
+                    <td className="py-3 align-top text-sm text-right font-medium">{formatCurrency(item.amount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -640,40 +726,40 @@ export default function InvoiceDetailPage() {
 
             {/* Totals */}
             <div className="flex justify-end">
-              <div className="w-72 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Subtotal</span><span>{formatCurrency(invoice.subtotal)}</span>
+              <div className="w-80 max-w-full space-y-2.5">
+                <div className="flex items-baseline justify-between gap-8 text-sm">
+                  <span className="whitespace-nowrap">Subtotal</span><span className="whitespace-nowrap">{formatCurrency(invoice.subtotal)}</span>
                 </div>
                 {invoice.discount?.value > 0 && (
-                  <div className="flex justify-between text-sm text-red-600">
-                    <span>Discount</span><span>-{formatCurrency(invoice.discount.value)}</span>
+                  <div className="flex items-baseline justify-between gap-8 text-sm text-red-600">
+                    <span className="whitespace-nowrap">Discount</span><span className="whitespace-nowrap">-{formatCurrency(invoice.discount.value)}</span>
                   </div>
                 )}
                 {invoice.gstDetails && !invoice.gstDetails.isInterState && (
                   <>
-                    <div className="flex justify-between text-sm"><span>CGST</span><span>{formatCurrency(invoice.gstDetails.cgst)}</span></div>
-                    <div className="flex justify-between text-sm"><span>SGST</span><span>{formatCurrency(invoice.gstDetails.sgst)}</span></div>
+                    <div className="flex items-baseline justify-between gap-8 text-sm"><span className="whitespace-nowrap">CGST</span><span className="whitespace-nowrap">{formatCurrency(invoice.gstDetails.cgst)}</span></div>
+                    <div className="flex items-baseline justify-between gap-8 text-sm"><span className="whitespace-nowrap">SGST</span><span className="whitespace-nowrap">{formatCurrency(invoice.gstDetails.sgst)}</span></div>
                   </>
                 )}
                 {invoice.gstDetails?.isInterState && (
-                  <div className="flex justify-between text-sm"><span>IGST</span><span>{formatCurrency(invoice.gstDetails.igst)}</span></div>
+                  <div className="flex items-baseline justify-between gap-8 text-sm"><span className="whitespace-nowrap">IGST</span><span className="whitespace-nowrap">{formatCurrency(invoice.gstDetails.igst)}</span></div>
                 )}
-                <div className="flex justify-between border-t pt-2 text-lg font-bold">
-                  <span>Total</span><span>{formatCurrency(invoice.totalAmount)}</span>
+                <div className="flex items-baseline justify-between gap-8 border-t pt-2.5 text-lg font-bold">
+                  <span className="whitespace-nowrap">Total</span><span className="whitespace-nowrap">{formatCurrency(invoice.totalAmount)}</span>
                 </div>
-                <div className="flex justify-between text-sm text-green-600">
-                  <span>Paid</span><span>{formatCurrency(invoice.paidAmount ?? 0)}</span>
+                <div className="flex items-baseline justify-between gap-8 text-sm text-green-600">
+                  <span className="whitespace-nowrap">Paid</span><span className="whitespace-nowrap">{formatCurrency(invoice.paidAmount ?? 0)}</span>
                 </div>
-                <div className="flex justify-between border-t pt-2 font-semibold">
-                  <span>Balance Due</span><span>{formatCurrency(invoice.balanceAmount ?? (invoice.totalAmount - (invoice.paidAmount ?? 0)))}</span>
+                <div className="flex items-baseline justify-between gap-8 border-t pt-2.5 font-semibold">
+                  <span className="whitespace-nowrap">Balance Due</span><span className="whitespace-nowrap">{formatCurrency(invoice.balanceAmount ?? (invoice.totalAmount - (invoice.paidAmount ?? 0)))}</span>
                 </div>
               </div>
             </div>
 
-            <p className="mt-4 text-sm font-semibold italic text-slate-700 border-t border-gray-100 pt-3">{numberToWords(invoice.totalAmount)}</p>
+            <p className="mt-4 border-t border-gray-100 pt-3 text-sm font-semibold italic leading-relaxed text-slate-700">{numberToWords(invoice.totalAmount)}</p>
 
-            {invoice.notes && <div className="mt-6 text-sm"><p className="mb-1 font-semibold">Notes:</p><div className="text-gray-600 rich-text-content" dangerouslySetInnerHTML={{ __html: invoice.notes.includes("<") ? invoice.notes : invoice.notes.replace(/\n/g, "<br>") }} /></div>}
-            {invoice.terms && <div className="mt-4 text-sm"><p className="mb-1 font-semibold">Terms & Conditions:</p><div className="text-gray-600 rich-text-content" dangerouslySetInnerHTML={{ __html: invoice.terms.includes("<") ? invoice.terms : invoice.terms.replace(/\n/g, "<br>") }} /></div>}
+            {invoice.notes && <div className="mt-6 text-sm"><p className="mb-1 font-semibold">Notes:</p><div className="rich-text-content leading-relaxed text-gray-600" dangerouslySetInnerHTML={{ __html: invoice.notes.includes("<") ? invoice.notes : invoice.notes.replace(/\n/g, "<br>") }} /></div>}
+            {invoice.terms && <div className="mt-4 text-sm"><p className="mb-1 font-semibold">Terms & Conditions:</p><div className="rich-text-content leading-relaxed text-gray-600" dangerouslySetInnerHTML={{ __html: invoice.terms.includes("<") ? invoice.terms : invoice.terms.replace(/\n/g, "<br>") }} /></div>}
 
             {/* Bank Details */}
             {company?.bankDetails && (
@@ -699,15 +785,91 @@ export default function InvoiceDetailPage() {
                 <div key={p.id} className="flex items-center justify-between border-b pb-3 last:border-0">
                   <div>
                     <p className="text-sm font-medium">{formatCurrency(p.amount)}</p>
-                    <p className="text-xs text-gray-500 capitalize">{p.paymentMode} {p.referenceNo && `· ${p.referenceNo}`}</p>
+                    <p className="text-xs text-gray-500 capitalize">{p.paymentMode} {p.referenceNo && `\u00b7 ${p.referenceNo}`}{p.receiptNumber && ` \u00b7 ${p.receiptNumber}`}</p>
                   </div>
-                  <p className="text-sm text-gray-500">{p.date ? formatDate(new Date(p.date.seconds * 1000)) : "—"}</p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm text-gray-500">{p.date ? formatDate(new Date(p.date.seconds * 1000)) : "\u2014"}</p>
+                    <Button variant="outline" size="sm" onClick={() => setReceiptData(p)}>
+                      <Receipt className="h-4 w-4 mr-1" /> Receipt
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Receipt Dialog */}
+      <Dialog open={!!receiptData} onClose={() => setReceiptData(null)} className="max-w-2xl">
+        <DialogHeader><DialogTitle>Payment Receipt</DialogTitle></DialogHeader>
+        {receiptData && (
+          <div className="space-y-4">
+            <div ref={receiptRef} className="mx-auto w-full max-w-[680px] rounded-2xl border border-slate-200 bg-white p-8 text-slate-900">
+              <div className="flex items-start justify-between gap-6 border-b pb-4">
+                <div>
+                  {appSettings?.companyProfile.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={appSettings.companyProfile.logoUrl} alt="Company logo" className="mb-2 h-10 w-auto object-contain" />
+                  ) : null}
+                  <h2 className="text-xl font-bold text-blue-600">{company?.name || appSettings?.companyName || "D4 Media"}</h2>
+                  <p className="mt-1 text-xs text-gray-500">{company?.address || appSettings?.companyProfile.address}</p>
+                  <p className="text-xs text-gray-500">{(company?.phone || appSettings?.companyProfile.phone) ?? ""} | {(company?.email || appSettings?.companyProfile.email) ?? ""}</p>
+                </div>
+                <div className="text-right">
+                  <h3 className="text-lg font-bold uppercase tracking-wide">Receipt</h3>
+                  <p className="mt-1 text-sm text-gray-600">#{receiptData.receiptNumber || "—"}</p>
+                  <p className="text-xs text-gray-500">Date: {receiptData.date ? formatDate(new Date(receiptData.date.seconds * 1000)) : "—"}</p>
+                </div>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs uppercase text-gray-400">Received From</p>
+                  <p className="font-semibold">{client?.companyName || "—"}</p>
+                  {client?.contactPerson && <p className="text-gray-600">{client.contactPerson}</p>}
+                </div>
+                <div className="text-right">
+                  <p className="text-xs uppercase text-gray-400">Against Invoice</p>
+                  <p className="font-semibold">{invoice.invoiceNumber}</p>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-xl bg-gray-50 p-4 text-sm">
+                <div className="flex justify-between py-1"><span className="text-gray-500">Payment Mode</span><span className="font-medium capitalize">{receiptData.paymentMode}</span></div>
+                {receiptData.referenceNo && <div className="flex justify-between py-1"><span className="text-gray-500">Reference No</span><span className="font-medium">{receiptData.referenceNo}</span></div>}
+                <div className="mt-1 flex justify-between border-t pt-2 text-base font-bold"><span>Amount Received</span><span>{formatCurrency(receiptData.amount)}</span></div>
+              </div>
+
+              <p className="mt-3 text-sm font-semibold italic text-slate-700">{numberToWords(receiptData.amount)}</p>
+
+              <div className="mt-2 grid grid-cols-2 gap-4 text-xs text-gray-500">
+                <div>
+                  <div className="flex justify-between py-0.5"><span>Invoice Total</span><span>{formatCurrency(invoice.totalAmount)}</span></div>
+                  <div className="flex justify-between py-0.5"><span>Total Paid</span><span>{formatCurrency(invoice.paidAmount ?? 0)}</span></div>
+                  <div className="flex justify-between py-0.5 font-semibold text-gray-700"><span>Balance Due</span><span>{formatCurrency(invoice.balanceAmount ?? 0)}</span></div>
+                </div>
+                <div className="flex flex-col items-end justify-end">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/d4-media-seal.svg" alt="D4 Media seal" className="h-24 w-24 object-contain opacity-90" />
+                  <p className="mt-1 text-[10px]">Authorised Signatory</p>
+                </div>
+              </div>
+
+              <p className="mt-4 border-t pt-3 text-center text-[11px] text-gray-400">This is a computer-generated receipt.</p>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t pt-4">
+              <Button variant="outline" onClick={() => handleReceiptPdf("download")} disabled={receiptExport !== null}>
+                {receiptExport === "download" ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />} Download
+              </Button>
+              <Button onClick={() => handleReceiptPdf("print")} disabled={receiptExport !== null}>
+                {receiptExport === "print" ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Printer className="h-4 w-4 mr-2" />} Print
+              </Button>
+            </div>
+          </div>
+        )}
+      </Dialog>
 
       {/* Payment Dialog */}
       <Dialog open={paymentOpen} onClose={() => setPaymentOpen(false)}>

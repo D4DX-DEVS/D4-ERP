@@ -46,6 +46,33 @@ html {
   color: var(--foreground);
 }
 
+/* Native time pickers — themed to match the UI (date/month now use the custom DatePicker) */
+input[type="time"] {
+  cursor: pointer;
+  color-scheme: light;
+  accent-color: var(--accent);
+}
+
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.55;
+  padding: 4px;
+  margin-left: 4px;
+  border-radius: 8px;
+  /* tint the default dark icon toward the teal accent */
+  filter: invert(34%) sepia(86%) saturate(540%) hue-rotate(132deg) brightness(92%) contrast(92%);
+  transition: opacity 180ms ease, background-color 180ms ease;
+}
+
+input[type="time"]:hover::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  background-color: rgba(15, 118, 110, 0.1);
+}
+
+input[type="time"]::-webkit-datetime-edit {
+  color: #1e293b;
+}
+
 a,
 button,
 input,

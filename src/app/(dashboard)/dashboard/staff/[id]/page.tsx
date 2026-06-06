@@ -7,6 +7,7 @@ import { getDocument, getSubDocuments, createSubDocument, updateDocument, orderB
 import { getDocuments, where } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -366,8 +367,7 @@ export default function StaffProfilePage() {
           </div>
           <div className="space-y-2">
             <Label>Effective Date *</Label>
-            <Input
-              type="date"
+            <DatePicker
               value={incrementForm.effectiveDate}
               onChange={(e) => setIncrementForm({ ...incrementForm, effectiveDate: e.target.value })}
               required
@@ -411,8 +411,7 @@ export default function StaffProfilePage() {
           </div>
           <div className="space-y-2">
             <Label>Start Date *</Label>
-            <Input
-              type="date"
+            <DatePicker
               value={statusForm.startDate}
               onChange={(e) => setStatusForm({ ...statusForm, startDate: e.target.value })}
               required
@@ -421,8 +420,7 @@ export default function StaffProfilePage() {
           {statusForm.type === "suspension" && (
             <div className="space-y-2">
               <Label>End Date</Label>
-              <Input
-                type="date"
+              <DatePicker
                 value={statusForm.endDate}
                 onChange={(e) => setStatusForm({ ...statusForm, endDate: e.target.value })}
               />

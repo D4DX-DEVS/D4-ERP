@@ -5,6 +5,7 @@ import { Asset, AssetCategoryItem, Staff } from "@/types";
 import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -252,7 +253,7 @@ export default function AssetsPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2"><Label>Serial Number *</Label><Input value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} required /></div>
-            <div className="space-y-2"><Label>Purchase Date</Label><Input type="date" value={form.purchaseDate} onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Purchase Date</Label><DatePicker value={form.purchaseDate} onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2"><Label>Purchase Price</Label><Input type="number" value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: Number(e.target.value) })} /></div>
@@ -282,7 +283,7 @@ export default function AssetsPage() {
             {!form.noWarranty && (
               <>
                 <div className="space-y-2"><Label>Warranty Details</Label><Input value={form.warrantyDetails} onChange={(e) => setForm({ ...form, warrantyDetails: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Warranty Expiry</Label><Input type="date" value={form.warrantyExpiryDate} onChange={(e) => setForm({ ...form, warrantyExpiryDate: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Warranty Expiry</Label><DatePicker value={form.warrantyExpiryDate} onChange={(e) => setForm({ ...form, warrantyExpiryDate: e.target.value })} /></div>
               </>
             )}
           </div>

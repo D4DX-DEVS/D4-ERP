@@ -10,6 +10,7 @@ export interface BaseDocument {
 // ==================== Company ====================
 export interface Company extends BaseDocument {
   name: string;
+  code?: string;
   address: string;
   gstNumber?: string;
   panNumber: string;
@@ -65,6 +66,7 @@ export interface Staff extends BaseDocument {
   profileImage?: string;
   role: StaffRole;
   isActive: boolean;
+  shiftId?: string;
   bankDetails?: {
     bankName: string;
     accountNo: string;
@@ -158,7 +160,17 @@ export interface Category extends BaseDocument {
 
 // ==================== Invoice ====================
 export type InvoiceType = "invoice" | "quotation" | "estimate";
-export type InvoiceStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
+export type InvoiceStatus =
+  | "draft"
+  | "sent"
+  | "paid"
+  | "partial"
+  | "overdue"
+  | "cancelled"
+  | "accepted"
+  | "rejected"
+  | "expired"
+  | "converted";
 
 export interface InvoiceItem {
   description: string;
@@ -167,6 +179,7 @@ export interface InvoiceItem {
   rate: number;
   amount: number;
   sacCode?: string;
+  itemId?: string;
 }
 
 export interface Invoice extends BaseDocument {
@@ -195,11 +208,47 @@ export interface Invoice extends BaseDocument {
   notes?: string;
   terms?: string;
   convertedFrom?: string;
+  convertedToInvoiceId?: string;
   createdBy: string;
 }
 
 export interface InvoicePayment extends BaseDocument {
   invoiceId: string;
+  amount: number;
+  date: Timestamp;
+  paymentMode: PaymentMode;
+  referenceNo?: string;
+  notes?: string;
+  receiptNumber?: string;
+  createdBy: string;
+}
+
+// ==================== Item Master ====================
+export type ItemType = "product" | "service";
+
+export interface Item extends BaseDocument {
+  name: string;
+  itemCode: string;
+  type: ItemType;
+  rate: number;
+  sacCode?: string;
+  hsnCode?: string;
+  unit?: string;
+  category?: string;
+  description?: string;
+  isActive: boolean;
+  createdBy: string;
+}
+
+// ==================== Receipt ====================
+export interface Receipt extends BaseDocument {
+  receiptNumber: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  paymentId: string;
+  companyId: string;
+  clientId: string;
+  clientName?: string;
   amount: number;
   date: Timestamp;
   paymentMode: PaymentMode;
@@ -239,8 +288,33 @@ export interface ClientActivity extends BaseDocument {
 }
 
 // ==================== Calendar ====================
-export type EventType = "shoot" | "event" | "meeting" | "deadline" | "program";
+export type EventType =
+  | "shoot"
+  | "event"
+  | "meeting"
+  | "deadline"
+  | "program"
+  | "delivery"
+  | "holiday"
+  | "reminder"
+  | "leave"
+  | "training"
+  | "payroll"
+  | "personal"
+  | "announcement";
 export type EventStatus = "scheduled" | "in-progress" | "completed" | "cancelled";
+export type EventPriority = "low" | "medium" | "high" | "urgent";
+/** Visibility scope of a calendar event. */
+export type EventScope = "personal" | "department" | "company";
+export type RecurrenceFrequency = "none" | "daily" | "weekly" | "monthly" | "yearly";
+
+export interface EventRecurrence {
+  frequency: RecurrenceFrequency;
+  /** Repeat interval, e.g. every 2 weeks. Defaults to 1. */
+  interval?: number;
+  /** Inclusive "YYYY-MM-DD" date after which the series stops. */
+  until?: string;
+}
 
 export interface CalendarEvent extends BaseDocument {
   title: string;
@@ -251,6 +325,13 @@ export interface CalendarEvent extends BaseDocument {
   startTime?: string;
   endTime?: string;
   isAllDay: boolean;
+  priority?: EventPriority;
+  scope?: EventScope;
+  recurrence?: EventRecurrence;
+  /** Lead time in minutes for an in-app reminder. 0 / undefined = no reminder. */
+  reminderMinutes?: number;
+  /** Soft-delete flag. Archived events are hidden from the calendar grid. */
+  isArchived?: boolean;
   departmentId?: string;
   companyId?: string;
   clientId?: string;
@@ -422,7 +503,15 @@ export interface AssetActivityLog extends BaseDocument {
 }
 
 // ==================== Attendance ====================
-export type AttendanceStatus = "present" | "absent" | "half-day" | "late" | "leave" | "wfh" | "on-duty";
+export type AttendanceStatus =
+  | "present"
+  | "absent"
+  | "half-day"
+  | "late"
+  | "leave"
+  | "wfh"
+  | "on-duty"
+  | "public-holiday";
 
 export interface Attendance extends BaseDocument {
   staffId: string;
@@ -433,10 +522,19 @@ export interface Attendance extends BaseDocument {
   checkOutLocation?: { lat: number; lng: number };
   status: AttendanceStatus;
   workingHours?: number;
+  overtimeHours?: number;
   isLate: boolean;
   isEarlyDeparture: boolean;
   remarks?: string;
+  notes?: string;
   leaveRequestId?: string;
+  correctionId?: string;
+  shiftId?: string;
+  /** Source of the record — manual admin entry, self check-in, leave/holiday sync. */
+  source?: "self" | "manual" | "leave" | "holiday" | "correction";
+  isDeleted?: boolean;
+  deletedAt?: Timestamp;
+  deletedBy?: string;
 }
 
 export interface AttendanceSettings extends BaseDocument {
@@ -448,6 +546,40 @@ export interface AttendanceSettings extends BaseDocument {
   fullDayHours: number;
   weeklyOff: string[];
   locationRequired: boolean;
+}
+
+// ==================== Shift ====================
+export interface Shift extends BaseDocument {
+  name: string;
+  /** "HH:mm" 24h start time. */
+  startTime: string;
+  /** "HH:mm" 24h end time. */
+  endTime: string;
+  /** Late grace period in minutes. */
+  graceMinutes: number;
+  /** Crosses midnight (e.g. night shift 22:00–06:00). */
+  isOvernight: boolean;
+  color?: string;
+  isActive: boolean;
+}
+
+// ==================== Attendance Correction ====================
+export type CorrectionStatus = "pending" | "approved" | "rejected";
+
+export interface AttendanceCorrection extends BaseDocument {
+  staffId: string;
+  staffName?: string;
+  date: Timestamp;
+  attendanceId?: string;
+  requestedCheckIn?: string;
+  requestedCheckOut?: string;
+  requestedStatus?: AttendanceStatus;
+  reason: string;
+  status: CorrectionStatus;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  reviewDate?: Timestamp;
+  reviewRemarks?: string;
 }
 
 // ==================== Payroll ====================

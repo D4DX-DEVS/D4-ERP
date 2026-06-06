@@ -1,202 +1,672 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getDocuments, where, Timestamp } from "@/lib/firestore";
-import { Attendance, Staff } from "@/types";
+import { getDocuments, orderBy, where, Timestamp } from "@/lib/firestore";
+import { Attendance, AttendanceStatus, Staff } from "@/types";
+import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { formatDate } from "@/lib/utils";
-import { Users, UserCheck, UserX, Eye, TimerReset } from "lucide-react";
+import { Select } from "@/components/ui/select";
+import { exportToCSV } from "@/lib/asset-export-utils";
+import {
+  Users,
+  UserCheck,
+  CalendarOff,
+  TimerReset,
+  Download,
+  Eye,
+  Search,
+  LogIn,
+  LogOut,
+  ListChecks,
+  Rows3,
+  Grid3x3,
+} from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { PageLoader } from "@/components/ui/loading";
 import { ListingHeader, ListingPanel, ListingStatCard, ListingStatGrid } from "@/components/ui/listing";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Pagination } from "@/components/ui/pagination";
-import { usePagination } from "@/hooks/use-pagination";
 
-export default function AttendancePage() {
-  const [records, setRecords] = useState<(Attendance & { id: string })[]>([]);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
-  const [recordsLoading, setRecordsLoading] = useState(true);
-  const { toast } = useToast();
+// ── View + status configuration ──────────────────────────────────────────────
+
+type ViewMode = "logs" | "daily" | "grid";
+
+const VIEWS: { id: ViewMode; label: string; icon: typeof Rows3 }[] = [
+  { id: "logs", label: "Log Stream", icon: ListChecks },
+  { id: "daily", label: "Daily Register", icon: Rows3 },
+  { id: "grid", label: "Monthly Grid", icon: Grid3x3 },
+];
+
+const STATUS_CONFIG: Record<AttendanceStatus, { code: string; label: string; cell: string; badge: string }> = {
+  present: { code: "P", label: "Present", cell: "bg-emerald-100 text-emerald-700", badge: "bg-emerald-100 text-emerald-700" },
+  absent: { code: "A", label: "Absent", cell: "bg-rose-100 text-rose-700", badge: "bg-rose-100 text-rose-700" },
+  "half-day": { code: "H", label: "Half Day", cell: "bg-amber-100 text-amber-700", badge: "bg-amber-100 text-amber-700" },
+  late: { code: "L", label: "Late", cell: "bg-yellow-100 text-yellow-700", badge: "bg-yellow-100 text-yellow-700" },
+  leave: { code: "LV", label: "Leave", cell: "bg-sky-100 text-sky-700", badge: "bg-sky-100 text-sky-700" },
+  wfh: { code: "W", label: "WFH", cell: "bg-indigo-100 text-indigo-700", badge: "bg-indigo-100 text-indigo-700" },
+  "on-duty": { code: "OD", label: "On Duty", cell: "bg-violet-100 text-violet-700", badge: "bg-violet-100 text-violet-700" },
+  "public-holiday": { code: "PH", label: "Public Holiday", cell: "bg-purple-100 text-purple-700", badge: "bg-purple-100 text-purple-700" },
+};
+
+const OFF_CELL = "bg-slate-100 text-slate-400";
+const HOLIDAY_CELL = "bg-rose-100 text-rose-500";
+
+const PRESENT_STATUSES: AttendanceStatus[] = ["present", "late", "half-day", "wfh", "on-duty"];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+type Rec = Attendance & { id: string };
+
+const secOf = (ts: unknown): number | undefined =>
+  ts && typeof ts === "object" && "seconds" in (ts as Record<string, unknown>)
+    ? (ts as { seconds: number }).seconds
+    : undefined;
+
+const timeStr = (ts: unknown): string => {
+  const s = secOf(ts);
+  return s ? new Date(s * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
+};
+
+const dateKeyFromSec = (s: number): string => new Date(s * 1000).toISOString().split("T")[0];
+
+const fullName = (s?: Staff) => (s ? `${s.firstName} ${s.lastName}` : "Unknown");
+
+export default function AttendanceRegisterPage() {
   const router = useRouter();
-  const {
-    data: staffList,
-    loading,
-    totalCount,
-    page,
-    totalPages,
-    hasNext,
-    hasPrev,
-    nextPage,
-    prevPage,
-  } = usePagination<Staff>("staff", {
-    pageSize: 10,
-    orderByField: "firstName",
-    orderDirection: "asc",
-    constraints: [where("status", "==", "active")],
-  });
+  const { toast } = useToast();
 
+  const now = new Date();
+  const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  const [view, setView] = useState<ViewMode>("logs");
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | AttendanceStatus>("all");
+
+  const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
+  const [records, setRecords] = useState<Rec[]>([]);
+  const [weeklyOff, setWeeklyOff] = useState<string[]>(["Sunday"]);
+  const [holidays, setHolidays] = useState<Holiday[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Load staff + attendance settings once
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadAttendance() {
-      if (isMounted) {
-        setRecordsLoading(true);
-      }
-
+    let active = true;
+    (async () => {
       try {
-        const date = new Date(selectedDate);
-        date.setHours(0, 0, 0, 0);
-
-        const att = await getDocuments<Attendance>("attendance", [
-          where("date", "==", Timestamp.fromDate(date)),
+        const [staff, settings] = await Promise.all([
+          getDocuments<Staff>("staff", [orderBy("firstName", "asc")]),
+          getAppSettings(),
         ]);
-
-        if (!isMounted) return;
-
-        setRecords(att);
+        if (!active) return;
+        setStaffList(staff);
+        setWeeklyOff(weeklyOffDayNames(settings));
+        setHolidays(settings.holidays);
       } catch (error) {
         console.error("Error:", error);
-        if (isMounted) {
-          toast("error", "Failed to load attendance data");
-        }
+        if (active) toast("error", "Failed to load staff list");
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [toast]);
+
+  // Month boundaries
+  const [year, monthNum] = useMemo(() => month.split("-").map(Number), [month]);
+  const monthStart = useMemo(() => new Date(year, monthNum - 1, 1, 0, 0, 0, 0), [year, monthNum]);
+  const monthEnd = useMemo(() => new Date(year, monthNum, 0, 23, 59, 59, 999), [year, monthNum]);
+  const daysInMonth = useMemo(() => new Date(year, monthNum, 0).getDate(), [year, monthNum]);
+
+  // Load attendance for the selected month
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const att = await getDocuments<Attendance>("attendance", [
+          where("date", ">=", Timestamp.fromDate(monthStart)),
+          where("date", "<=", Timestamp.fromDate(monthEnd)),
+          orderBy("date", "asc"),
+        ]);
+        if (!active) return;
+        setRecords(att.filter((r) => !r.isDeleted));
+      } catch (error) {
+        console.error("Error:", error);
+        if (active) toast("error", "Failed to load attendance data");
       } finally {
-        if (isMounted) {
-          setRecordsLoading(false);
-        }
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [monthStart, monthEnd, toast]);
+
+  const staffMap = useMemo(() => {
+    const map = new Map<string, Staff & { id: string }>();
+    staffList.forEach((s) => map.set(s.id, s));
+    return map;
+  }, [staffList]);
+
+  // Staff filtered by the search box
+  const filteredStaff = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return staffList;
+    return staffList.filter((s) =>
+      `${s.firstName} ${s.lastName} ${s.employeeCode ?? ""} ${s.designation ?? ""}`.toLowerCase().includes(q)
+    );
+  }, [staffList, query]);
+
+  const filteredStaffIds = useMemo(() => new Set(filteredStaff.map((s) => s.id)), [filteredStaff]);
+
+  // Records matching the current search + status filter
+  const visibleRecords = useMemo(() => {
+    return records.filter((r) => {
+      if (!filteredStaffIds.has(r.staffId)) return false;
+      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      return true;
+    });
+  }, [records, filteredStaffIds, statusFilter]);
+
+  // ── Stats ───────────────────────────────────────────────────────────────────
+  const stats = useMemo(() => {
+    const presentDays = records.filter((r) => PRESENT_STATUSES.includes(r.status)).length;
+    const leaveDays = records.filter((r) => r.status === "leave").length;
+    const lateMarks = records.filter((r) => r.isLate).length;
+    return { staff: staffList.length, presentDays, leaveDays, lateMarks };
+  }, [records, staffList.length]);
+
+  // ── Log stream events (every check-in / check-out) ───────────────────────────
+  const logEvents = useMemo(() => {
+    const events: {
+      key: string;
+      sec: number;
+      staffId: string;
+      action: "Check In" | "Check Out";
+      status: AttendanceStatus;
+      location?: { lat: number; lng: number };
+      isLate: boolean;
+      isEarly: boolean;
+    }[] = [];
+    for (const r of visibleRecords) {
+      const inSec = secOf(r.checkIn);
+      const outSec = secOf(r.checkOut);
+      if (inSec) {
+        events.push({
+          key: `${r.id}-in`,
+          sec: inSec,
+          staffId: r.staffId,
+          action: "Check In",
+          status: r.status,
+          location: r.checkInLocation,
+          isLate: r.isLate,
+          isEarly: false,
+        });
+      }
+      if (outSec) {
+        events.push({
+          key: `${r.id}-out`,
+          sec: outSec,
+          staffId: r.staffId,
+          action: "Check Out",
+          status: r.status,
+          location: r.checkOutLocation,
+          isLate: false,
+          isEarly: r.isEarlyDeparture,
+        });
       }
     }
+    return events.sort((a, b) => b.sec - a.sec);
+  }, [visibleRecords]);
 
-    void loadAttendance();
+  // ── Daily register rows (one per record, newest first) ───────────────────────
+  const dailyRows = useMemo(() => {
+    return [...visibleRecords].sort((a, b) => (secOf(b.date) ?? 0) - (secOf(a.date) ?? 0));
+  }, [visibleRecords]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedDate, toast]);
+  // ── Monthly grid lookup ──────────────────────────────────────────────────────
+  const gridLookup = useMemo(() => {
+    const map = new Map<string, Rec>();
+    for (const r of records) {
+      const s = secOf(r.date);
+      if (s) map.set(`${r.staffId}_${dateKeyFromSec(s)}`, r);
+    }
+    return map;
+  }, [records]);
 
-  const present = records.length;
-  const absent = totalCount - present;
-  const late = records.filter((r) => r.isLate).length;
-  const earlyDep = records.filter((r) => r.isEarlyDeparture).length;
+  const todayKey = new Date().toISOString().split("T")[0];
 
-  const timeStr = (ts: { seconds: number } | undefined) =>
-    ts ? new Date(ts.seconds * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
+  const dayMeta = useMemo(() => {
+    const holidayMap = new Map(holidays.map((h) => [h.date, h.name]));
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const d = new Date(year, monthNum - 1, i + 1);
+      const dayName = d.toLocaleDateString("en-IN", { weekday: "long" });
+      const key = `${year}-${String(monthNum).padStart(2, "0")}-${String(i + 1).padStart(2, "0")}`;
+      return {
+        day: i + 1,
+        key,
+        short: d.toLocaleDateString("en-IN", { weekday: "short" }),
+        isOff: weeklyOff.includes(dayName),
+        holidayName: holidayMap.get(key) ?? null,
+        isFuture: key > todayKey,
+      };
+    });
+  }, [daysInMonth, year, monthNum, weeklyOff, holidays, todayKey]);
 
-  if (loading || recordsLoading) return <PageLoader />;
+  function cellFor(staff: Staff & { id: string }, meta: (typeof dayMeta)[number]) {
+    const rec = gridLookup.get(`${staff.id}_${meta.key}`);
+    if (rec) return STATUS_CONFIG[rec.status];
+    const joinSec = secOf(staff.dateOfJoining);
+    if (joinSec && meta.key < dateKeyFromSec(joinSec)) return null; // before joining
+    if (meta.isFuture) return null;
+    if (meta.holidayName) return { code: "H", label: meta.holidayName, cell: HOLIDAY_CELL, badge: HOLIDAY_CELL };
+    if (meta.isOff) return { code: "WO", label: "Weekly Off", cell: OFF_CELL, badge: OFF_CELL };
+    return STATUS_CONFIG.absent;
+  }
+
+  // ── Export ────────────────────────────────────────────────────────────────────
+  function handleExport() {
+    const monthText = monthStart.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
+    if (view === "logs") {
+      const rows = logEvents.map((e) => ({
+        Date: dateKeyFromSec(e.sec),
+        Time: new Date(e.sec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+        Staff: fullName(staffMap.get(e.staffId)),
+        Action: e.action,
+        Status: STATUS_CONFIG[e.status]?.label ?? e.status,
+        Flag: e.isLate ? "Late" : e.isEarly ? "Early" : "",
+        Location: e.location ? `${e.location.lat}, ${e.location.lng}` : "",
+      }));
+      exportToCSV(rows, `attendance-logs-${month}`);
+    } else if (view === "daily") {
+      const rows = dailyRows.map((r) => ({
+        Date: dateKeyFromSec(secOf(r.date) ?? 0),
+        Staff: fullName(staffMap.get(r.staffId)),
+        Status: STATUS_CONFIG[r.status]?.label ?? r.status,
+        "Check In": timeStr(r.checkIn),
+        "Check Out": timeStr(r.checkOut),
+        Hours: r.workingHours ? r.workingHours.toFixed(1) : "",
+        Overtime: r.overtimeHours ? r.overtimeHours.toFixed(1) : "",
+        Late: r.isLate ? "Yes" : "",
+        Early: r.isEarlyDeparture ? "Yes" : "",
+      }));
+      exportToCSV(rows, `attendance-daily-${month}`);
+    } else {
+      const rows = filteredStaff.map((s) => {
+        const row: Record<string, string> = { Staff: fullName(s), Code: s.employeeCode ?? "" };
+        for (const meta of dayMeta) {
+          const c = cellFor(s, meta);
+          row[String(meta.day)] = c?.code ?? "";
+        }
+        return row;
+      });
+      exportToCSV(rows, `attendance-grid-${month}`);
+    }
+    toast("success", `Exported ${monthText} ${view} register`);
+  }
+
+  if (loading) return <PageLoader />;
+
+  const monthLabel = monthStart.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 
   return (
     <div className="space-y-6">
       <ListingHeader
-        title="Attendance"
-        description={`Attendance records for ${formatDate(selectedDate)} with a uniform team-wide view.`}
-        action={<Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="w-auto min-w-[170px]" />}
+        title="Attendance Register"
+        description={`Every check-in and check-out log for ${monthLabel}.`}
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="w-auto min-w-[160px]"
+            />
+            <Button variant="outline" onClick={handleExport}>
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+          </div>
+        }
       />
 
       <ListingStatGrid>
         <ListingStatCard
           icon={<Users className="h-5 w-5" />}
           label="Total Staff"
-          value={totalCount}
+          value={stats.staff}
           toneClassName="bg-sky-50 text-sky-700"
-          meta="Active team members"
+          meta="On the register"
         />
         <ListingStatCard
           icon={<UserCheck className="h-5 w-5" />}
-          label="Present"
-          value={present}
+          label="Present Days"
+          value={stats.presentDays}
           toneClassName="bg-emerald-50 text-emerald-700"
-          meta="Checked in today"
+          meta="Logged this month"
         />
         <ListingStatCard
-          icon={<UserX className="h-5 w-5" />}
-          label="Absent"
-          value={absent}
-          toneClassName="bg-rose-50 text-rose-700"
-          meta="No attendance marked"
+          icon={<CalendarOff className="h-5 w-5" />}
+          label="Leave Days"
+          value={stats.leaveDays}
+          toneClassName="bg-sky-50 text-sky-700"
+          meta="Approved leave logs"
         />
         <ListingStatCard
           icon={<TimerReset className="h-5 w-5" />}
-          label="Flags"
-          value={late + earlyDep}
+          label="Late Marks"
+          value={stats.lateMarks}
           toneClassName="bg-amber-50 text-amber-700"
-          meta={`${late} late, ${earlyDep} early departures`}
+          meta="Late arrivals logged"
         />
       </ListingStatGrid>
 
-      <ListingPanel
-        title={`Attendance Records (${totalCount})`}
-        description="Click any row to open the detailed daily view for that staff member."
-        contentClassName="p-0"
-      >
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Staff</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Check In</TableHead>
-              <TableHead>Check Out</TableHead>
-              <TableHead>Hours</TableHead>
-              <TableHead>Flags</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {staffList.map((staff) => {
-              const rec = records.find((r) => r.staffId === staff.id);
-              const detailHref = `/dashboard/attendance/${staff.id}?date=${selectedDate}`;
+      {/* View switcher + filters */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="inline-flex rounded-full border border-slate-200/90 bg-white/80 p-1 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+          {VIEWS.map((v) => {
+            const Icon = v.icon;
+            const active = view === v.id;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => setView(v.id)}
+                className={
+                  "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all " +
+                  (active
+                    ? "bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-500 text-white shadow-[0_10px_24px_rgba(15,118,110,0.24)]"
+                    : "text-slate-600 hover:text-slate-950")
+                }
+              >
+                <Icon className="h-4 w-4" />
+                {v.label}
+              </button>
+            );
+          })}
+        </div>
 
-              return (
-                <TableRow
-                  key={staff.id}
-                  className="cursor-pointer"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => router.push(detailHref)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      router.push(detailHref);
-                    }
-                  }}
-                >
-                  <TableCell>
-                    <div>
-                      <p className="font-medium text-slate-950">{staff.firstName} {staff.lastName}</p>
-                      <p className="text-xs text-slate-500">{staff.designation || staff.employeeCode}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={rec ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}>
-                      {rec ? rec.status : "absent"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{rec ? timeStr(rec.checkIn as { seconds: number }) : "—"}</TableCell>
-                  <TableCell>{rec ? timeStr(rec.checkOut as { seconds: number }) : "—"}</TableCell>
-                  <TableCell>{rec?.workingHours ? `${rec.workingHours.toFixed(1)}h` : "—"}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1.5">
-                      {rec?.isLate ? <Badge variant="bg-amber-100 text-amber-700">Late</Badge> : null}
-                      {rec?.isEarlyDeparture ? <Badge variant="bg-yellow-100 text-yellow-700">Early</Badge> : null}
-                      {!rec?.isLate && !rec?.isEarlyDeparture ? <span className="text-xs text-slate-400">None</span> : null}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2" onClick={(event) => event.stopPropagation()}>
-                      <Button variant="ghost" size="icon" onClick={() => router.push(detailHref)}>
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Search staff…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-auto min-w-[200px] pl-9"
+            />
+          </div>
+          {view !== "grid" ? (
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as "all" | AttendanceStatus)}
+              className="w-auto min-w-[170px]"
+              options={[
+                { value: "all", label: "All statuses" },
+                ...Object.entries(STATUS_CONFIG).map(([key, cfg]) => ({ value: key, label: cfg.label })),
+              ]}
+            />
+          ) : null}
+        </div>
+      </div>
+
+      {/* ── Log stream ── */}
+      {view === "logs" ? (
+        <ListingPanel
+          title={`Log Stream (${logEvents.length})`}
+          description="Every check-in and check-out punch, newest first."
+          contentClassName="p-0"
+        >
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Time</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Staff</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Flag</TableHead>
+                <TableHead>Location</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logEvents.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-10 text-center text-sm text-slate-500">
+                    No punch logs for this period.
                   </TableCell>
                 </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-        <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={10} />
-      </ListingPanel>
+              ) : (
+                logEvents.map((e) => {
+                  const cfg = STATUS_CONFIG[e.status];
+                  return (
+                    <TableRow key={e.key}>
+                      <TableCell className="font-medium text-slate-950">
+                        {new Date(e.sec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                      </TableCell>
+                      <TableCell className="text-slate-600">
+                        {new Date(e.sec * 1000).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                      </TableCell>
+                      <TableCell className="font-medium text-slate-950">{fullName(staffMap.get(e.staffId))}</TableCell>
+                      <TableCell>
+                        <span
+                          className={
+                            "inline-flex items-center gap-1.5 text-sm font-medium " +
+                            (e.action === "Check In" ? "text-emerald-600" : "text-indigo-600")
+                          }
+                        >
+                          {e.action === "Check In" ? <LogIn className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
+                          {e.action}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={cfg?.badge}>{cfg?.label ?? e.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {e.isLate ? (
+                          <Badge variant="bg-amber-100 text-amber-700">Late</Badge>
+                        ) : e.isEarly ? (
+                          <Badge variant="bg-yellow-100 text-yellow-700">Early</Badge>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-500">
+                        {e.location ? `${e.location.lat.toFixed(4)}, ${e.location.lng.toFixed(4)}` : "—"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </ListingPanel>
+      ) : null}
+
+      {/* ── Daily register ── */}
+      {view === "daily" ? (
+        <ListingPanel
+          title={`Daily Register (${dailyRows.length})`}
+          description="One row per staff per day. Click a row to open the daily detail."
+          contentClassName="p-0"
+        >
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Staff</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Check In</TableHead>
+                <TableHead>Check Out</TableHead>
+                <TableHead>Hours</TableHead>
+                <TableHead>Overtime</TableHead>
+                <TableHead>Flags</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {dailyRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-10 text-center text-sm text-slate-500">
+                    No attendance records for this period.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                dailyRows.map((r) => {
+                  const cfg = STATUS_CONFIG[r.status];
+                  const dateKey = dateKeyFromSec(secOf(r.date) ?? 0);
+                  const detailHref = `/dashboard/attendance/${r.staffId}?date=${dateKey}`;
+                  return (
+                    <TableRow
+                      key={r.id}
+                      className="cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => router.push(detailHref)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(detailHref);
+                        }
+                      }}
+                    >
+                      <TableCell className="font-medium text-slate-950">
+                        {new Date((secOf(r.date) ?? 0) * 1000).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </TableCell>
+                      <TableCell className="font-medium text-slate-950">{fullName(staffMap.get(r.staffId))}</TableCell>
+                      <TableCell>
+                        <Badge variant={cfg?.badge}>{cfg?.label ?? r.status}</Badge>
+                      </TableCell>
+                      <TableCell>{timeStr(r.checkIn)}</TableCell>
+                      <TableCell>{timeStr(r.checkOut)}</TableCell>
+                      <TableCell>{r.workingHours ? `${r.workingHours.toFixed(1)}h` : "—"}</TableCell>
+                      <TableCell>
+                        {r.overtimeHours ? (
+                          <Badge variant="bg-orange-100 text-orange-700">+{r.overtimeHours.toFixed(1)}h</Badge>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1.5">
+                          {r.isLate ? <Badge variant="bg-amber-100 text-amber-700">Late</Badge> : null}
+                          {r.isEarlyDeparture ? <Badge variant="bg-yellow-100 text-yellow-700">Early</Badge> : null}
+                          {!r.isLate && !r.isEarlyDeparture ? <span className="text-xs text-slate-400">None</span> : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end" onClick={(event) => event.stopPropagation()}>
+                          <Button variant="ghost" size="icon" onClick={() => router.push(detailHref)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </ListingPanel>
+      ) : null}
+
+      {/* ── Monthly grid ── */}
+      {view === "grid" ? (
+        <ListingPanel
+          title={`Monthly Grid — ${monthLabel}`}
+          description="Staff down the side, days across the top. Each cell is the logged status."
+          contentClassName="p-0"
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="sticky left-0 z-10 bg-white px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    Staff
+                  </th>
+                  {dayMeta.map((m) => (
+                    <th
+                      key={m.key}
+                      title={m.holidayName ?? undefined}
+                      className={
+                        "px-1.5 py-2 text-center text-[11px] font-semibold " +
+                        (m.holidayName ? "text-rose-500" : m.isOff ? "text-rose-400" : "text-slate-400")
+                      }
+                    >
+                      <div>{m.day}</div>
+                      <div className="text-[9px] font-normal">{m.holidayName ? "Holiday" : m.short}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStaff.length === 0 ? (
+                  <tr>
+                    <td colSpan={daysInMonth + 1} className="py-10 text-center text-sm text-slate-500">
+                      No staff match your search.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredStaff.map((s) => (
+                    <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50/60">
+                      <td className="sticky left-0 z-10 bg-white px-4 py-2 font-medium text-slate-950">
+                        <div className="whitespace-nowrap">{fullName(s)}</div>
+                        <div className="text-xs text-slate-400">{s.employeeCode || s.designation}</div>
+                      </td>
+                      {dayMeta.map((m) => {
+                        const c = cellFor(s, m);
+                        return (
+                          <td key={m.key} className="px-1 py-1 text-center">
+                            {c ? (
+                              <button
+                                type="button"
+                                title={`${m.day} — ${c.label}`}
+                                onClick={() => router.push(`/dashboard/attendance/${s.id}?date=${m.key}`)}
+                                className={
+                                  "mx-auto flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-semibold transition-transform hover:scale-110 " +
+                                  c.cell
+                                }
+                              >
+                                {c.code}
+                              </button>
+                            ) : (
+                              <span className="text-slate-200">·</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </ListingPanel>
+      ) : null}
+
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-3 rounded-[20px] border border-slate-100 bg-white/70 px-4 py-3 text-xs text-slate-500">
+        <span className="font-semibold uppercase tracking-[0.14em] text-slate-400">Legend</span>
+        {Object.values(STATUS_CONFIG).map((c) => (
+          <span key={c.code} className="inline-flex items-center gap-1.5">
+            <span className={"flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold " + c.cell}>
+              {c.code}
+            </span>
+            {c.label}
+          </span>
+        ))}
+        <span className="inline-flex items-center gap-1.5">
+          <span className={"flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold " + OFF_CELL}>
+            WO
+          </span>
+          Weekly Off
+        </span>
+      </div>
     </div>
   );
 }

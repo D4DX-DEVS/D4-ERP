@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Staff, Company, Department } from "@/types";
+import { Staff, Company, Department, Shift } from "@/types";
 import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint, type QueryConstraint } from "@/lib/firestore";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,6 +26,7 @@ export default function StaffPage() {
   const router = useRouter();
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
   const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
+  const [shifts, setShifts] = useState<(Shift & { id: string })[]>([]);
   const [lookupsLoading, setLookupsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{ id: string } | null>(null);
@@ -81,6 +83,7 @@ export default function StaffPage() {
     currentSalary: 0,
     role: "staff" as "admin" | "department-head" | "accounts" | "staff",
     status: "active" as "active" | "suspended" | "terminated" | "on-leave",
+    shiftId: "",
     isActive: true,
   });
 
@@ -96,6 +99,9 @@ export default function StaffPage() {
         if (!isMounted) return;
         setCompanies(comps);
         setDepartments(depts);
+        getDocuments<Shift>("shifts", [where("isActive", "==", true)])
+          .then((list) => { if (isMounted) setShifts(list); })
+          .catch((error) => console.error("Error:", error));
       } catch (error) {
         console.error("Error:", error);
       } finally {
@@ -132,6 +138,7 @@ export default function StaffPage() {
         currentSalary: staff.currentSalary,
         role: staff.role || "staff",
         status: staff.status || "active",
+        shiftId: staff.shiftId || "",
         isActive: staff.isActive,
       });
     } else {
@@ -153,6 +160,7 @@ export default function StaffPage() {
         currentSalary: 0,
         role: "staff",
         status: "active",
+        shiftId: "",
         isActive: true,
       });
     }
@@ -403,7 +411,7 @@ export default function StaffPage() {
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Date of Birth *</Label>
-              <Input type="date" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} required />
+              <DatePicker value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} required />
             </div>
             <div className="space-y-2">
               <Label>Gender *</Label>
@@ -420,7 +428,7 @@ export default function StaffPage() {
             </div>
             <div className="space-y-2">
               <Label>Date of Joining *</Label>
-              <Input type="date" value={form.dateOfJoining} onChange={(e) => setForm({ ...form, dateOfJoining: e.target.value })} required />
+              <DatePicker value={form.dateOfJoining} onChange={(e) => setForm({ ...form, dateOfJoining: e.target.value })} required />
             </div>
           </div>
 
@@ -455,6 +463,20 @@ export default function StaffPage() {
             <div className="space-y-2">
               <Label>Base Salary *</Label>
               <Input type="number" value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value), currentSalary: Number(e.target.value) })} required />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Shift</Label>
+              <Select
+                value={form.shiftId}
+                onChange={(e) => setForm({ ...form, shiftId: e.target.value })}
+                options={[
+                  { value: "", label: "Default schedule" },
+                  ...shifts.map((s) => ({ value: s.id, label: `${s.name} (${s.startTime}–${s.endTime})` })),
+                ]}
+              />
             </div>
           </div>
 

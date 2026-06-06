@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getModel } from "@/models";
+import { getAuthUser } from "@/lib/auth";
+import { authorize, sanitizeDoc, MAX_QUERY_LIMIT } from "@/lib/db-authz";
 
 // ── Timestamp helpers ─────────────────────────────────────────────────────────
 
@@ -156,9 +158,28 @@ async function writeAuditLog(
 
 export async function POST(req: NextRequest) {
   try {
+    // ── Authentication: every DB request requires a valid session ───────────
+    const user = getAuthUser(req);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await connectDB();
     const body = await req.json();
-    const { action, collection: collectionName, auditUser } = body;
+    const { action, collection: collectionName } = body;
+
+    if (typeof action !== "string" || typeof collectionName !== "string") {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
+
+    // ── Authorization: role-based collection access ─────────────────────────
+    const denied = authorize(user, action, collectionName);
+    if (denied) {
+      return NextResponse.json({ error: denied }, { status: 403 });
+    }
+
+    // Trusted audit identity derived from the verified token — never the body.
+    const auditUser = { uid: user.uid, name: user.name || user.email || "Unknown" };
 
     const Model = getModel(collectionName);
 
@@ -169,10 +190,10 @@ export async function POST(req: NextRequest) {
         const { filter, sort, limit: lim } = buildQuery(constraints);
         let q = Model.find(filter);
         if (Object.keys(sort).length) q = q.sort(sort);
-        if (lim) q = q.limit(lim);
+        q = q.limit(Math.min(lim || MAX_QUERY_LIMIT, MAX_QUERY_LIMIT));
         const docs = await q.lean();
         return NextResponse.json(
-          docs.map((d: Record<string, unknown>) => dateToTs({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined }))
+          docs.map((d: Record<string, unknown>) => dateToTs(sanitizeDoc({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined })))
         );
       }
 
@@ -182,7 +203,7 @@ export async function POST(req: NextRequest) {
         const doc = await Model.findById(id).lean();
         if (!doc) return NextResponse.json(null);
         const d = doc as Record<string, unknown>;
-        return NextResponse.json(dateToTs({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined }));
+        return NextResponse.json(dateToTs(sanitizeDoc({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined })));
       }
 
       // ── CREATE ──────────────────────────────────────────────────────────
@@ -214,6 +235,23 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true });
       }
 
+      // ── NEXT SEQUENCE (atomic counter for document numbering) ───────────
+      // Guarantees gap-free, duplicate-free numbers even with concurrent users.
+      case "nextSequence": {
+        const { key } = body;
+        if (!key || typeof key !== "string") {
+          return NextResponse.json({ error: "Sequence key is required" }, { status: 400 });
+        }
+        const SeqModel = getModel("number_sequences");
+        const doc = await SeqModel.findOneAndUpdate(
+          { key },
+          { $inc: { current: 1 }, $setOnInsert: { createdAt: new Date() }, $set: { updatedAt: new Date() } },
+          { new: true, upsert: true }
+        ).lean();
+        const value = (doc as Record<string, unknown>).current as number;
+        return NextResponse.json({ value });
+      }
+
       // ── FIND SUB (getSubDocuments) ──────────────────────────────────────
       case "findSub": {
         const { parentCollection, parentId, subCollection, constraints = [] } = body;
@@ -224,7 +262,7 @@ export async function POST(req: NextRequest) {
         if (Object.keys(sort).length) q = q.sort(sort);
         const docs = await q.lean();
         return NextResponse.json(
-          docs.map((d: Record<string, unknown>) => dateToTs({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined }))
+          docs.map((d: Record<string, unknown>) => dateToTs(sanitizeDoc({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined })))
         );
       }
 
@@ -257,10 +295,12 @@ export async function POST(req: NextRequest) {
         const total = await Model.countDocuments(filter);
         let q = Model.find(filter);
         if (Object.keys(sort).length) q = q.sort(sort);
-        q = q.skip(page * pageSize).limit(pageSize);
+        const safePageSize = Math.min(Math.max(Number(pageSize) || 25, 1), MAX_QUERY_LIMIT);
+        const safePage = Math.max(Number(page) || 0, 0);
+        q = q.skip(safePage * safePageSize).limit(safePageSize);
         const docs = await q.lean();
         return NextResponse.json({
-          data: docs.map((d: Record<string, unknown>) => dateToTs({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined })),
+          data: docs.map((d: Record<string, unknown>) => dateToTs(sanitizeDoc({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined }))),
           total,
           page,
           pageSize,

@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Invoice, Client, Company } from "@/types";
+import { Invoice, Client, Company, Item } from "@/types";
 import { getDocuments, createDocument, where, Timestamp, search as searchConstraint } from "@/lib/firestore";
+import { getAppSettings, type AppSettings } from "@/lib/settings";
+import { generateDocNumber } from "@/lib/numbering";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -21,14 +24,18 @@ import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { ItemPicker } from "@/components/ui/item-picker";
+import { QuickAddClient } from "@/components/clients/quick-add-client";
 
 export default function InvoicesPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
   const [clients, setClients] = useState<(Client & { id: string })[]>([]);
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [lookupsLoading, setLookupsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [showAddClient, setShowAddClient] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterStatus, setFilterStatus] = useState("");
   const [search, setSearch] = useState("");
@@ -79,15 +86,18 @@ export default function InvoicesPage() {
 
     async function loadLookups() {
       try {
-        const [cls, comps] = await Promise.all([
+        const [cls, comps, settings] = await Promise.all([
           getDocuments<Client>("clients", [where("isActive", "==", true)]),
           getDocuments<Company>("companies", [where("isActive", "==", true)]),
+          getAppSettings(),
         ]);
 
         if (!isMounted) return;
 
         setClients(cls);
         setCompanies(comps);
+        setSettings(settings);
+        setForm((prev) => ({ ...prev, gstRate: settings.defaultGstRate }));
       } catch (error) {
         console.error("Error:", error);
       } finally {
@@ -115,6 +125,31 @@ export default function InvoicesPage() {
 
   const addItem = () => {
     setForm({ ...form, items: [...form.items, { description: "", quantity: 1, rate: 0, amount: 0, sacCode: "", subDescription: "" }] });
+  };
+
+  const addFromMaster = (item: Item & { id: string }) => {
+    const line = {
+      description: item.name,
+      subDescription: item.description || "",
+      quantity: 1,
+      rate: item.rate,
+      amount: item.rate,
+      sacCode: item.sacCode || item.hsnCode || "",
+      itemId: item.id,
+    };
+    setForm((f) => {
+      const items = [...f.items];
+      const lastIdx = items.length - 1;
+      const last = items[lastIdx];
+      if (last && !last.description && !last.rate) items[lastIdx] = line;
+      else items.push(line);
+      return { ...f, items };
+    });
+  };
+
+  const handleClientCreated = (client: Client & { id: string }) => {
+    setClients((prev) => [client, ...prev.filter((c) => c.id !== client.id)]);
+    setForm((f) => ({ ...f, clientId: client.id }));
   };
 
   const removeItem = (idx: number) => {
@@ -146,9 +181,7 @@ export default function InvoicesPage() {
       const totals = calculateTotals();
       const comp = companies.find((c) => c.id === form.companyId);
       const client = clients.find((c) => c.id === form.clientId);
-      const count = invoices.filter((i) => i.companyId === form.companyId && i.type === form.type).length;
-      const prefix = comp?.invoicePrefix || "INV";
-      const invoiceNumber = `${prefix}-${String(count + 1).padStart(4, "0")}`;
+      const invoiceNumber = await generateDocNumber({ series: "invoice", company: comp, settings: settings ?? undefined });
 
       await createDocument("invoices", {
         invoiceNumber,
@@ -338,13 +371,16 @@ export default function InvoicesPage() {
                 options={companies.map((c) => ({ value: c.id, label: c.name }))} placeholder="Select" required />
             </div>
             <div className="space-y-2">
-              <Label>Client *</Label>
+              <div className="flex items-center justify-between">
+                <Label>Client *</Label>
+                <button type="button" onClick={() => setShowAddClient(true)} className="text-xs font-medium text-blue-600 hover:underline">+ Add New</button>
+              </div>
               <Select value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}
                 options={clients.map((c) => ({ value: c.id, label: c.companyName }))} placeholder="Select" required />
             </div>
             <div className="space-y-2">
               <Label>Due Date *</Label>
-              <Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} required />
+              <DatePicker value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} required />
             </div>
           </div>
 
@@ -352,9 +388,12 @@ export default function InvoicesPage() {
           <div className="border rounded-lg p-4 space-y-3">
             <div className="flex justify-between items-center">
               <h4 className="font-semibold text-sm">Line Items</h4>
-              <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                <Plus className="h-3 w-3 mr-1" /> Add Item
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={addItem}>
+                  <Plus className="h-3 w-3 mr-1" /> Add Item
+                </Button>
+                <ItemPicker onSelect={addFromMaster} className="inline-block" />
+              </div>
             </div>
             {form.items.map((item, idx) => (
               <div key={idx} className="space-y-1.5 border border-gray-100 rounded-lg p-2">
@@ -452,6 +491,8 @@ export default function InvoicesPage() {
           </div>
         </form>
       </Dialog>
+
+      <QuickAddClient open={showAddClient} onClose={() => setShowAddClient(false)} onCreated={handleClientCreated} />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -254,11 +255,11 @@ export default function AssetReportsPage() {
         <div className="flex flex-wrap gap-3 items-end">
           <div className="space-y-1">
             <Label className="text-xs">From</Label>
-            <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-[150px]" />
+            <DatePicker value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-[150px]" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">To</Label>
-            <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-[150px]" />
+            <DatePicker value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-[150px]" />
           </div>
           {reportType !== "activity" && (
             <div className="space-y-1">

@@ -6,6 +6,7 @@ import { getDocuments, createDocument, deleteDocument, orderBy, where, Timestamp
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -290,7 +291,7 @@ export default function AccountingPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Date *</Label>
-              <Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
+              <DatePicker value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
             </div>
             <div className="space-y-2">
               <Label>Payment Mode *</Label>

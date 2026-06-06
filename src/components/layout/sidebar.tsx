@@ -18,6 +18,8 @@ import {
   ClipboardList,
   Package,
   Clock,
+  ClipboardCheck,
+  Hourglass,
   Wallet,
   Bell,
   Shield,
@@ -56,6 +58,9 @@ const menuSections = [
     items: [
       { label: "Leave Requests", href: "/dashboard/leaves", icon: CalendarDays, roles: ["admin", "department-head"] },
       { label: "Attendance", href: "/dashboard/attendance", icon: Clock, roles: ["admin", "department-head"] },
+      { label: "Corrections", href: "/dashboard/attendance/corrections", icon: ClipboardCheck, roles: ["admin", "department-head"] },
+      { label: "Shifts", href: "/dashboard/attendance/shifts", icon: Hourglass, roles: ["admin"] },
+      { label: "Attendance Reports", href: "/dashboard/attendance/reports", icon: BarChart3, roles: ["admin", "department-head", "accounts"] },
       { label: "Payroll", href: "/dashboard/payroll", icon: Wallet, roles: ["admin", "accounts"] },
     ],
   },
@@ -73,6 +78,8 @@ const menuSections = [
       { label: "Accounting", href: "/dashboard/accounting", icon: DollarSign, roles: ["admin", "accounts"] },
       { label: "Invoices", href: "/dashboard/invoices", icon: FileText, roles: ["admin", "accounts"] },
       { label: "Quotations", href: "/dashboard/quotations", icon: Receipt, roles: ["admin", "accounts"] },
+      { label: "Item Master", href: "/dashboard/items", icon: Package, roles: ["admin", "accounts"] },
+      { label: "Sales Reports", href: "/dashboard/reports/sales", icon: BarChart3, roles: ["admin", "accounts"] },
     ],
   },
   {
@@ -93,6 +100,13 @@ export function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const closeSidebar = () => setMobileOpen(false);
+
+  // Resolve the single most-specific matching link so a parent route isn't
+  // highlighted at the same time as its child route.
+  const activeHref = menuSections
+    .flatMap((section) => section.items)
+    .filter((item) => pathname === item.href || pathname.startsWith(item.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
     <>
@@ -170,7 +184,7 @@ export function Sidebar() {
                 </p>
                 <ul className="space-y-0.5">
                   {visibleItems.map((item) => {
-                    const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"));
+                    const isActive = item.href === activeHref;
                     return (
                       <li key={item.href}>
                         <Link

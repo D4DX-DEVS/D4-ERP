@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -161,14 +162,14 @@ export default function AssetAvailabilityPage() {
                 From Date{" "}
                 <span className="text-gray-400 text-xs font-normal">(optional)</span>
               </Label>
-              <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+              <DatePicker value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label>
                 To Date{" "}
                 <span className="text-gray-400 text-xs font-normal">(optional)</span>
               </Label>
-              <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+              <DatePicker value={toDate} onChange={(e) => setToDate(e.target.value)} />
             </div>
           </div>
 

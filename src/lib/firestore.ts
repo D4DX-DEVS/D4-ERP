@@ -144,6 +144,18 @@ export async function deleteDocument(
   await apiCall({ action: "delete", collection: collectionName, id: docId });
 }
 
+// ── Atomic numbering sequence ─────────────────────────────────────────────────
+
+/**
+ * Atomically increments and returns the next value for a numbering sequence.
+ * Backed by a server-side findOneAndUpdate ($inc, upsert) so concurrent callers
+ * never receive the same value — guaranteeing duplicate-free document numbers.
+ */
+export async function getNextSequence(key: string): Promise<number> {
+  const result = await apiCall({ action: "nextSequence", collection: "number_sequences", key });
+  return result.value as number;
+}
+
 // ── Sub-collection operations ─────────────────────────────────────────────────
 
 export async function getSubDocuments<T>(

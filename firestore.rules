@@ -71,6 +71,24 @@ service cloud.firestore {
       allow write: if hasRole(['admin', 'accounts']);
     }
 
+    // Item Master - admin & accounts
+    match /items/{itemId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'accounts']);
+    }
+
+    // Receipts - admin & accounts
+    match /receipts/{receiptId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'accounts']);
+    }
+
+    // Numbering sequences - admin & accounts
+    match /number_sequences/{seqId} {
+      allow read: if isAuth();
+      allow write: if hasRole(['admin', 'accounts']);
+    }
+
     // Transactions (accounting)
     match /transactions/{txnId} {
       allow read: if isAuth();

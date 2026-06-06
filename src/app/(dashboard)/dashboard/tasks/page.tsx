@@ -6,6 +6,7 @@ import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy, 
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -204,7 +205,7 @@ export default function TasksPage() {
           </div>
           <div className="space-y-2">
             <Label>Due Date *</Label>
-            <Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} required />
+            <DatePicker value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} required />
           </div>
           <div className="space-y-2">
             <Label>Tags (comma-separated)</Label>
