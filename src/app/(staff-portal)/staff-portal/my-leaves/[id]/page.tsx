@@ -83,6 +83,14 @@ export default function MyLeaveDetailPage() {
             <DetailField label="Status" value={<Badge variant={getStatusColor(leave.status)}>{leave.status}</Badge>} />
             <DetailField label="Start Date" value={start} />
             <DetailField label="End Date" value={end} />
+            <DetailField
+              label="Duration"
+              value={
+                leave.isHalfDay
+                  ? `Half Day (${leave.session === "first-half" ? "First Half / Morning" : "Second Half / Afternoon"})`
+                  : "Full Day"
+              }
+            />
             <DetailField label="Start Time" value={leave.startTime || "—"} />
             <DetailField label="End Time" value={leave.endTime || "—"} />
             <div className="md:col-span-2">

@@ -1,19 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocument } from "@/lib/firestore";
-import { Staff } from "@/types";
+import { Staff, Department, Company } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { EmployeeDocuments } from "@/components/staff/employee-documents";
-import { User, Phone, Mail, Briefcase, Building, Calendar, IndianRupee } from "lucide-react";
+import { Camera, Loader2, User, Phone, Mail, Briefcase, Building, Calendar, IndianRupee } from "lucide-react";
 
 export default function StaffProfilePage() {
   const { user } = useAuthStore();
   const [staff, setStaff] = useState<Staff | null>(null);
+  const [department, setDepartment] = useState<Department | null>(null);
+  const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const staffId = user?.staffId;
@@ -26,7 +31,19 @@ export default function StaffProfilePage() {
       }
       try {
         const data = await getDocument<Staff>("staff", staffId);
-        if (isMounted) setStaff(data);
+        if (isMounted) {
+          setStaff(data);
+          if (data) {
+            const [dept, comp] = await Promise.all([
+              data.departmentId ? getDocument<Department>("departments", data.departmentId) : null,
+              data.companyId ? getDocument<Company>("companies", data.companyId) : null,
+            ]);
+            if (isMounted) {
+              setDepartment(dept ?? null);
+              setCompany(comp ?? null);
+            }
+          }
+        }
       } catch (error) {
         console.error("Error:", error);
       } finally {
@@ -38,6 +55,45 @@ export default function StaffProfilePage() {
       isMounted = false;
     };
   }, [user]);
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadError("");
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "profiles");
+
+      const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || "Upload failed");
+      }
+      const { url } = (await uploadRes.json()) as { url: string };
+
+      const saveRes = await fetch("/api/staff/profile-image", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profileImage: url }),
+      });
+      if (!saveRes.ok) {
+        const err = await saveRes.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || "Save failed");
+      }
+
+      setStaff((prev) => (prev ? { ...prev, profileImage: url } : prev));
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      // Reset input so the same file can be re-selected
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   if (loading) {
     return (
@@ -60,12 +116,54 @@ export default function StaffProfilePage() {
       {/* Avatar & Name */}
       <Card>
         <CardContent className="p-6 text-center">
-          <div className="h-20 w-20 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto text-2xl font-bold">
-            {staff.firstName?.charAt(0) || "?"}
+          {/* Clickable avatar with camera overlay */}
+          <div className="relative inline-block">
+            <button
+              type="button"
+              onClick={() => !uploading && fileInputRef.current?.click()}
+              className="group relative h-24 w-24 rounded-full overflow-hidden ring-4 ring-emerald-100 focus:outline-none focus-visible:ring-emerald-400"
+              aria-label="Change profile photo"
+            >
+              {staff.profileImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={staff.profileImage}
+                  alt={`${staff.firstName} ${staff.lastName}`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center bg-emerald-100 text-emerald-700 text-3xl font-bold">
+                  {staff.firstName?.charAt(0) || "?"}
+                </span>
+              )}
+              {/* Hover overlay */}
+              <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+                {uploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-white" />
+                ) : (
+                  <>
+                    <Camera className="h-5 w-5 text-white" />
+                    <span className="text-[10px] font-semibold text-white">Change</span>
+                  </>
+                )}
+              </span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/webp"
+              className="hidden"
+              onChange={handleImageChange}
+            />
           </div>
+
           <h2 className="text-lg font-bold mt-3">{staff.firstName} {staff.lastName}</h2>
           <p className="text-sm text-gray-500">{staff.designation}</p>
           <Badge variant={statusColor} className="mt-2">{staff.status}</Badge>
+          {uploadError && (
+            <p className="mt-2 text-xs text-red-500">{uploadError}</p>
+          )}
+          <p className="mt-2 text-xs text-slate-400">Tap photo to update your profile picture</p>
         </CardContent>
       </Card>
 
@@ -77,7 +175,7 @@ export default function StaffProfilePage() {
           <InfoRow icon={<Phone className="h-4 w-4" />} label="Phone" value={staff.mobile} />
           <InfoRow icon={<Mail className="h-4 w-4" />} label="Email" value={staff.email || "—"} />
           <InfoRow icon={<Calendar className="h-4 w-4" />} label="Date of Birth" value={staff.dateOfBirth ? formatDate(new Date(staff.dateOfBirth.seconds * 1000)) : "—"} />
-          <InfoRow icon={<MapPinIcon />} label="Address" value={staff.address ? `${staff.address.street || ""}, ${staff.address.city || ""}, ${staff.address.state || ""}` : "—"} />
+          <InfoRow icon={<MapPinIcon />} label="Address" value={staff.address ? [staff.address.street, staff.address.city, staff.address.state, staff.address.pincode].filter(Boolean).join(", ") || "—" : "—"} />
         </CardContent>
       </Card>
 
@@ -85,8 +183,8 @@ export default function StaffProfilePage() {
       <Card>
         <CardHeader><CardTitle>Employment Details</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <InfoRow icon={<Briefcase className="h-4 w-4" />} label="Department" value={staff.departmentId || "—"} />
-          <InfoRow icon={<Building className="h-4 w-4" />} label="Company" value={staff.companyId || "—"} />
+          <InfoRow icon={<Briefcase className="h-4 w-4" />} label="Department" value={department?.name || staff.departmentId || "—"} />
+          <InfoRow icon={<Building className="h-4 w-4" />} label="Company" value={company?.name || staff.companyId || "—"} />
           <InfoRow icon={<Calendar className="h-4 w-4" />} label="Joining Date" value={staff.dateOfJoining ? formatDate(new Date(staff.dateOfJoining.seconds * 1000)) : "—"} />
           <InfoRow icon={<IndianRupee className="h-4 w-4" />} label="Current Salary" value={staff.currentSalary ? formatCurrency(staff.currentSalary) : "—"} />
         </CardContent>

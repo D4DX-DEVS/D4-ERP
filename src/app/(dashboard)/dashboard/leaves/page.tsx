@@ -139,7 +139,7 @@ export default function LeavesPage() {
     end.setHours(0, 0, 0, 0);
 
     const sameDay = start.getTime() === end.getTime();
-    const isHalfDay = sameDay && !!leave.startTime && !!leave.endTime;
+    const isHalfDay = leave.isHalfDay || (sameDay && !!leave.startTime && !!leave.endTime);
     const dayStatus: AttendanceStatus = isHalfDay ? "half-day" : baseStatus;
 
     for (let d = new Date(start); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
@@ -257,6 +257,7 @@ export default function LeavesPage() {
                   <TableHead>Staff</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Leave Type</TableHead>
+                  <TableHead>Duration</TableHead>
                   <TableHead>From</TableHead>
                   <TableHead>To</TableHead>
                   <TableHead>Reason</TableHead>
@@ -272,6 +273,15 @@ export default function LeavesPage() {
                       <Badge>{typeLabels[req.type] || req.type}</Badge>
                     </TableCell>
                     <TableCell>{req.leaveType || "—"}</TableCell>
+                    <TableCell>
+                      {req.isHalfDay ? (
+                        <Badge variant="bg-amber-100 text-amber-700">
+                          Half Day{req.session === "first-half" ? " (AM)" : req.session === "second-half" ? " (PM)" : ""}
+                        </Badge>
+                      ) : (
+                        <span className="text-sm text-slate-500">Full Day</span>
+                      )}
+                    </TableCell>
                     <TableCell>{req.startDate ? formatDate(new Date(req.startDate.seconds * 1000)) : "—"}</TableCell>
                     <TableCell>{req.endDate ? formatDate(new Date(req.endDate.seconds * 1000)) : "—"}</TableCell>
                     <TableCell className="max-w-[200px] truncate">{req.reason}</TableCell>

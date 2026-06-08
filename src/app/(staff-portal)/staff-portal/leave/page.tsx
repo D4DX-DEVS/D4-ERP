@@ -21,6 +21,8 @@ export default function ApplyLeavePage() {
   const [form, setForm] = useState({
     type: "leave" as "leave" | "wfh" | "overtime" | "on-duty",
     leaveType: "CL",
+    isHalfDay: false,
+    session: "first-half" as "first-half" | "second-half",
     startDate: "",
     endDate: "",
     startTime: "",
@@ -39,6 +41,8 @@ export default function ApplyLeavePage() {
         staffName: `${user.firstName} ${user.lastName}`,
         type: form.type,
         leaveType: form.type === "leave" ? form.leaveType : null,
+        isHalfDay: form.type === "leave" && form.isHalfDay,
+        session: form.type === "leave" && form.isHalfDay ? form.session : null,
         startDate: Timestamp.fromDate(new Date(form.startDate)),
         endDate: Timestamp.fromDate(new Date(form.endDate || form.startDate)),
         startTime: form.startTime || null,
@@ -60,7 +64,7 @@ export default function ApplyLeavePage() {
         <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
         <h2 className="text-xl font-bold mb-2">Request Submitted!</h2>
         <p className="text-sm text-gray-500 mb-6">Your request has been sent for approval.</p>
-        <Button onClick={() => { setSubmitted(false); setForm({ type: "leave", leaveType: "CL", startDate: "", endDate: "", startTime: "", endTime: "", reason: "" }); }}>
+        <Button onClick={() => { setSubmitted(false); setForm({ type: "leave", leaveType: "CL", isHalfDay: false, session: "first-half", startDate: "", endDate: "", startTime: "", endTime: "", reason: "" }); }}>
           Submit Another
         </Button>
       </div>
@@ -94,9 +98,38 @@ export default function ApplyLeavePage() {
                     { value: "SL", label: "Sick Leave" },
                     { value: "EL", label: "Earned Leave" },
                     { value: "CO", label: "Compensatory Off" },
-                    { value: "HD", label: "Half Day" },
                     { value: "LOP", label: "Loss of Pay" },
                   ]} />
+              </div>
+            )}
+
+            {form.type === "leave" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      className="peer sr-only"
+                      checked={form.isHalfDay}
+                      onChange={(e) => setForm({ ...form, isHalfDay: e.target.checked })}
+                    />
+                    <div className="h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-emerald-600 peer-checked:after:translate-x-full" />
+                  </label>
+                  <Label className="cursor-pointer">Half Day Leave</Label>
+                </div>
+                {form.isHalfDay && (
+                  <div className="space-y-2">
+                    <Label>Session *</Label>
+                    <Select
+                      value={form.session}
+                      onChange={(e) => setForm({ ...form, session: e.target.value as "first-half" | "second-half" })}
+                      options={[
+                        { value: "first-half", label: "First Half (Morning)" },
+                        { value: "second-half", label: "Second Half (Afternoon)" },
+                      ]}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -105,7 +138,7 @@ export default function ApplyLeavePage() {
                 <Label>{form.type === "overtime" ? "Date *" : "From Date *"}</Label>
                 <DatePicker value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} required />
               </div>
-              {form.type !== "overtime" && (
+              {form.type !== "overtime" && !form.isHalfDay && (
                 <div className="space-y-2">
                   <Label>To Date *</Label>
                   <DatePicker value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} required />
@@ -113,7 +146,7 @@ export default function ApplyLeavePage() {
               )}
             </div>
 
-            {(form.type === "overtime" || form.leaveType === "HD") && (
+            {(form.type === "overtime" || form.isHalfDay) && (
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Start Time</Label>

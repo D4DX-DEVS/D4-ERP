@@ -84,7 +84,7 @@ export default function StaffPortalHome() {
   const pendingLeaves = recentLeaves.filter((l) => l.status === "pending").length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <h1 className="text-xl font-bold">Welcome, {user?.firstName}!</h1>
 
       {/* Banners */}

@@ -121,6 +121,7 @@ export interface EmployeeDocument extends BaseDocument {
 // ==================== Leave Management ====================
 export type LeaveRequestType = "leave" | "wfh" | "overtime" | "on-duty";
 export type LeaveType = "CL" | "SL" | "EL" | "CO" | "HD" | "LOP";
+export type HalfDaySession = "first-half" | "second-half";
 export type RequestStatus = "pending" | "approved" | "rejected" | "cancelled";
 
 export interface LeaveRequest extends BaseDocument {
@@ -128,6 +129,10 @@ export interface LeaveRequest extends BaseDocument {
   staffName?: string;
   type: LeaveRequestType;
   leaveType?: LeaveType;
+  /** Whether this is a half-day request. */
+  isHalfDay?: boolean;
+  /** Which session for half-day: first-half (morning) or second-half (afternoon). */
+  session?: HalfDaySession;
   startDate: Timestamp;
   endDate: Timestamp;
   startTime?: string;

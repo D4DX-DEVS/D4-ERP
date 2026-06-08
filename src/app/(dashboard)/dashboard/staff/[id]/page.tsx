@@ -218,8 +218,17 @@ export default function StaffProfilePage() {
 
         <div className="flex-1 flex items-center gap-4">
           {/* Avatar */}
-          <div className="h-16 w-16 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0">
-            {getInitials(staff.firstName, staff.lastName)}
+          <div className="h-16 w-16 rounded-full overflow-hidden bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0">
+            {staff.profileImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={staff.profileImage}
+                alt={`${staff.firstName} ${staff.lastName}`}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              getInitials(staff.firstName, staff.lastName)
+            )}
           </div>
 
           <div className="flex-1 min-w-0">

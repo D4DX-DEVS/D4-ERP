@@ -100,7 +100,12 @@ export default function MyLeavesPage() {
                     <TableCell>
                       <div>
                         <p className="font-medium text-slate-950">{typeLabels[leave.type]}</p>
-                        {leave.leaveType ? <Badge className="mt-2" variant="bg-slate-100 text-slate-700">{leave.leaveType}</Badge> : null}
+                        {leave.leaveType ? <Badge className="mt-1" variant="bg-slate-100 text-slate-700">{leave.leaveType}</Badge> : null}
+                        {leave.isHalfDay && (
+                          <Badge className="mt-1 ml-1" variant="bg-amber-100 text-amber-700">
+                            Half Day{leave.session === "first-half" ? " (AM)" : leave.session === "second-half" ? " (PM)" : ""}
+                          </Badge>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>{end ? `${start} - ${end}` : start}</TableCell>
