@@ -8,8 +8,10 @@ import type { StaffRole } from "@/types";
 
 export type FeatureKey =
   | "studio-booking"
+  | "studio-manage"
   | "asset-management"
   | "tasks"
+  | "work-logs"
   | "calendar"
   | "clients"
   | "attendance-manage"
@@ -19,7 +21,8 @@ export type FeatureKey =
   | "quotations"
   | "items"
   | "payroll"
-  | "reports";
+  | "reports"
+  | "events";
 
 export interface FeatureMeta {
   key: FeatureKey;
@@ -38,6 +41,18 @@ export const FEATURES: FeatureMeta[] = [
     defaultRoles: ["admin", "department-head"],
   },
   {
+    key: "studio-manage",
+    label: "Studio Management",
+    description: "Manage studio resources, equipment, and settings.",
+    defaultRoles: ["admin"],
+  },
+  {
+    key: "events",
+    label: "Event Management",
+    description: "Create and manage events with lifecycle tracking.",
+    defaultRoles: ["admin", "department-head"],
+  },
+  {
     key: "asset-management",
     label: "Asset Management",
     description: "Manage assets, movements and availability.",
@@ -47,6 +62,12 @@ export const FEATURES: FeatureMeta[] = [
     key: "tasks",
     label: "Tasks",
     description: "Create and manage tasks.",
+    defaultRoles: ["admin", "department-head"],
+  },
+  {
+    key: "work-logs",
+    label: "Work Logs",
+    description: "View and manage staff daily work logs.",
     defaultRoles: ["admin", "department-head"],
   },
   {

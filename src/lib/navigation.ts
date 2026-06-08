@@ -21,6 +21,8 @@ import {
   Image as ImageIcon,
   Settings,
   Calendar,
+  PartyPopper,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 import type { FeatureKey } from "@/lib/permissions";
@@ -130,6 +132,9 @@ export const navigationModules: NavModule[] = [
         icon: ClipboardList,
         items: [
           { label: "Task Board", href: "/dashboard/tasks", roles: ["admin", "department-head"] },
+          { label: "Daily Updates", href: "/dashboard/tasks/daily-updates", roles: ["admin", "department-head"], feature: "work-logs" },
+          { label: "Work Logs", href: "/dashboard/tasks/work-logs", roles: ["admin", "department-head"], feature: "work-logs" },
+          { label: "Performance", href: "/dashboard/tasks/performance", roles: ["admin", "department-head"], feature: "work-logs" },
         ],
       },
       {
@@ -139,13 +144,39 @@ export const navigationModules: NavModule[] = [
           { label: "Team Calendar", href: "/dashboard/calendar", roles: ["admin", "department-head"] },
         ],
       },
-      {
-        label: "Studio Booking",
-        icon: Clapperboard,
-        items: [
-          { label: "Bookings", href: "/dashboard/studio", roles: ["admin", "department-head"], feature: "studio-booking" },
-        ],
-      },
+    ],
+  },
+
+  // ─── Event Management ────────────────────────────────────────────────
+  {
+    id: "events",
+    label: "Events",
+    icon: PartyPopper,
+    roles: ["admin", "department-head"],
+    feature: "events",
+    items: [
+      { label: "Dashboard", href: "/dashboard/events", roles: ["admin", "department-head"] },
+      { label: "All Events", href: "/dashboard/events/list", roles: ["admin", "department-head"] },
+      { label: "Event Calendar", href: "/dashboard/events/calendar", icon: Calendar, roles: ["admin", "department-head"] },
+      { label: "Reports", href: "/dashboard/events/reports", icon: BarChart3, roles: ["admin", "department-head"] },
+    ],
+  },
+
+  // ─── Studio Management ───────────────────────────────────────────────
+  {
+    id: "studio",
+    label: "Studio",
+    icon: Clapperboard,
+    roles: ["admin", "department-head"],
+    feature: "studio-booking",
+    items: [
+      { label: "Dashboard", href: "/dashboard/studio", roles: ["admin", "department-head"] },
+      { label: "Bookings", href: "/dashboard/studio/bookings", roles: ["admin", "department-head"] },
+      { label: "Calendar", href: "/dashboard/studio/calendar", icon: Calendar, roles: ["admin", "department-head"] },
+      { label: "Timeline", href: "/dashboard/studio/timeline", roles: ["admin", "department-head"] },
+      { label: "Availability", href: "/dashboard/studio/availability", roles: ["admin", "department-head"] },
+      { label: "Resources", href: "/dashboard/studio/resources", roles: ["admin"], feature: "studio-manage" },
+      { label: "Reports", href: "/dashboard/studio/reports", icon: BarChart3, roles: ["admin", "department-head"] },
     ],
   },
 
@@ -200,8 +231,11 @@ export const navigationModules: NavModule[] = [
         label: "Reports",
         icon: BarChart3,
         items: [
-          { label: "Sales Reports", href: "/dashboard/reports/sales", roles: ["admin", "accounts"] },
-          { label: "Financial Reports", href: "/dashboard/reports", roles: ["admin", "accounts"] },
+          { label: "Overview", href: "/dashboard/reports", roles: ["admin", "accounts"] },
+          { label: "Department Reports", href: "/dashboard/reports/department", icon: FileText, roles: ["admin", "department-head", "accounts"] },
+          { label: "Company Report", href: "/dashboard/reports/company", icon: BarChart3, roles: ["admin"] },
+          { label: "KPI Management", href: "/dashboard/reports/kpis", roles: ["admin", "department-head"] },
+          { label: "Productivity", href: "/dashboard/reports/productivity", roles: ["admin", "department-head"] },
         ],
       },
     ],

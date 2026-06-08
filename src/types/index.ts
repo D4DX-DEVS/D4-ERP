@@ -399,6 +399,10 @@ export interface Task extends BaseDocument {
   completedAt?: Timestamp;
   subtasks: { title: string; isCompleted: boolean }[];
   tags: string[];
+  /** Percentage completion (0-100). */
+  completionPercentage?: number;
+  /** Linked work log IDs. */
+  workLogIds?: string[];
   createdBy: string;
 }
 
@@ -409,7 +413,7 @@ export interface TaskComment extends BaseDocument {
 }
 
 // ==================== Studio Booking ====================
-export type StudioBookingStatus = "pending" | "approved" | "rejected" | "cancelled";
+export type StudioBookingStatus = "pending" | "approved" | "confirmed" | "in-progress" | "completed" | "rejected" | "cancelled";
 
 export interface Studio extends BaseDocument {
   name: string;
@@ -422,6 +426,8 @@ export interface Studio extends BaseDocument {
 }
 
 export interface StudioBooking extends BaseDocument {
+  /** Auto-numbered booking ID (STB-001). */
+  bookingId?: string;
   studioId: string;
   studioName?: string;
   /** Local date key "YYYY-MM-DD" for the booking. */
@@ -429,11 +435,26 @@ export interface StudioBooking extends BaseDocument {
   /** 24h "HH:mm" start/end times. */
   startTime: string;
   endTime: string;
+  /** Duration in minutes (computed). */
+  duration?: number;
+  bookingType?: StudioBookingType;
   purpose: string;
   notes?: string;
   clientId?: string;
   clientName?: string;
+  companyName?: string;
+  contactNumber?: string;
+  email?: string;
+  eventName?: string;
+  /** Equipment allocated for this booking. */
+  requiredEquipment?: { equipmentId: string; name: string }[];
+  /** Staff assigned to this booking. */
+  assignedStaff?: { staffId: string; staffName: string }[];
   status: StudioBookingStatus;
+  statusHistory?: StatusHistoryEntry[];
+  attachments?: { name: string; url: string; type: string; size?: number }[];
+  /** Link to a managed event. */
+  linkedEventId?: string;
   /** Staff id who requested the booking. */
   requestedBy: string;
   requestedByName?: string;
@@ -699,7 +720,7 @@ export interface Payroll extends BaseDocument {
 // ==================== Notification ====================
 export interface AppNotification extends BaseDocument {
   recipientId: string;
-  type: "leave" | "invoice" | "event" | "task" | "system" | "payroll" | "announcement";
+  type: "leave" | "invoice" | "event" | "task" | "system" | "payroll" | "announcement" | "studio" | "work-log";
   title: string;
   message: string;
   link?: string;
@@ -745,6 +766,187 @@ export interface AuditLog extends BaseDocument {
   ipAddress?: string;
   previousData?: Record<string, unknown>;
   newData?: Record<string, unknown>;
+}
+
+// ==================== Status History (Cross-Cutting) ====================
+export interface StatusHistoryEntry {
+  status: string;
+  changedBy: string;
+  changedByName: string;
+  changedAt: Timestamp;
+  remarks?: string;
+}
+
+// ==================== Comments (Cross-Cutting) ====================
+export type CommentEntityType = "event" | "studio_booking" | "task" | "work_log";
+
+export interface Comment extends BaseDocument {
+  entityType: CommentEntityType;
+  entityId: string;
+  text: string;
+  authorId: string;
+  authorName: string;
+  attachments?: { name: string; url: string; type: string; size?: number }[];
+}
+
+// ==================== Work Logs ====================
+export type WorkLogStatus = "draft" | "submitted" | "reviewed" | "needs-revision";
+export type ActivityType =
+  | "development"
+  | "design"
+  | "meeting"
+  | "research"
+  | "admin"
+  | "support"
+  | "fieldwork"
+  | "other";
+
+export interface WorkLogEntry {
+  project: string;
+  activityType: ActivityType;
+  description: string;
+  hours: number;
+  taskId?: string;
+  taskTitle?: string;
+  blockers?: string;
+}
+
+export interface WorkLog extends BaseDocument {
+  staffId: string;
+  staffName: string;
+  departmentId: string;
+  date: string; // YYYY-MM-DD
+  entries: WorkLogEntry[];
+  totalHours: number;
+  submittedAt?: Timestamp;
+  status: WorkLogStatus;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  reviewDate?: Timestamp;
+  reviewRemarks?: string;
+}
+
+// ==================== Event Management ====================
+export type EventManagementStatus =
+  | "inquiry"
+  | "quotation"
+  | "confirmed"
+  | "planning"
+  | "in-progress"
+  | "completed"
+  | "cancelled";
+export type EventManagementType =
+  | "shoot"
+  | "wedding"
+  | "corporate"
+  | "concert"
+  | "exhibition"
+  | "other";
+
+export interface EventStaffAssignment {
+  staffId: string;
+  staffName: string;
+  role: string;
+}
+
+export interface ManagedEvent extends BaseDocument {
+  eventId: string; // Auto: EVT-001
+  title: string;
+  description?: string;
+  eventType: EventManagementType;
+  clientId?: string;
+  clientName?: string;
+  venue?: string;
+  location?: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  startTime?: string;
+  endTime?: string;
+  status: EventManagementStatus;
+  statusHistory: StatusHistoryEntry[];
+  budget?: number;
+  actualCost?: number;
+  assignedStaff: EventStaffAssignment[];
+  linkedAssets?: string[];
+  linkedStudioBookings?: string[];
+  linkedQuotationId?: string;
+  notes?: string;
+  attachments?: { name: string; url: string; type: string; size?: number }[];
+  tags?: string[];
+  companyId: string;
+  createdBy: string;
+  createdByName?: string;
+}
+
+// ==================== Studio Booking (Enhanced) ====================
+export type StudioBookingType =
+  | "photography"
+  | "videography"
+  | "podcast"
+  | "rehearsal"
+  | "meeting"
+  | "other";
+
+export interface StudioEquipment extends BaseDocument {
+  name: string;
+  description?: string;
+  category?: string;
+  isAvailable: boolean;
+  studioId?: string;
+}
+
+// ==================== Department Reports ====================
+export type ReportPeriod = "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
+export type ReportStatus = "draft" | "published";
+
+export interface CustomKPI {
+  label: string;
+  value: number;
+  target?: number;
+  unit: string;
+  trend?: "up" | "down" | "stable";
+}
+
+export interface ReportAutoMetrics {
+  attendance: { presentRate: number; lateRate: number; absentRate: number; totalDays: number };
+  tasks: { total: number; completed: number; inProgress: number; overdue: number; completionRate: number };
+  leaves: { approved: number; pending: number; rejected: number; byType: Record<string, number> };
+  workLogs: { totalHours: number; avgHoursPerStaff: number; coverageRate: number };
+  revenue?: { invoiced: number; received: number; pending: number };
+}
+
+export interface DepartmentReport extends BaseDocument {
+  departmentId: string;
+  departmentName: string;
+  companyId: string;
+  period: ReportPeriod;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  autoMetrics: ReportAutoMetrics;
+  customKPIs: CustomKPI[];
+  generatedBy: string;
+  generatedByName?: string;
+  generatedAt: Timestamp;
+  status: ReportStatus;
+  remarks?: string;
+}
+
+export interface CompanyReport extends BaseDocument {
+  companyId: string;
+  period: ReportPeriod;
+  startDate: string;
+  endDate: string;
+  departmentBreakdown: {
+    departmentId: string;
+    departmentName: string;
+    metrics: ReportAutoMetrics;
+    customKPIs: CustomKPI[];
+  }[];
+  executiveSummary?: string;
+  generatedBy: string;
+  generatedByName?: string;
+  generatedAt: Timestamp;
+  status: ReportStatus;
 }
 
 // ==================== Auth ====================

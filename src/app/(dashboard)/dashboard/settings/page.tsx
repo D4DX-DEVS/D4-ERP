@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getDocuments, createDocument, updateDocument, Timestamp } from "@/lib/firestore";
+import { getDocuments, createDocument, updateDocument, Timestamp, where } from "@/lib/firestore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Building, Save, Globe, Clock, IndianRupee, CalendarOff, Plus, Trash2, MapPin, FileText } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import type { Company } from "@/types";
 import {
   AppSettings,
   WeekdayKey,
@@ -37,7 +38,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [newHoliday, setNewHoliday] = useState({ date: "", name: "" });
+  const [newHoliday, setNewHoliday] = useState({ date: "", name: "", companyId: "" });
+  const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
   const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
   const { toast } = useToast();
 
@@ -57,6 +59,12 @@ export default function SettingsPage() {
     };
     fetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    getDocuments<Company>("companies", [where("isActive", "==", true)])
+      .then(setCompanies)
+      .catch((error) => console.error("Error:", error));
   }, []);
 
   const updateDay = (key: WeekdayKey, patch: Partial<AppSettings["weeklySchedule"][WeekdayKey]>) => {
@@ -91,19 +99,33 @@ export default function SettingsPage() {
       toast("error", "Enter both a date and a name");
       return;
     }
-    if (settings.holidays.some((h) => h.date === newHoliday.date)) {
-      toast("error", "A holiday already exists on that date");
+    if (
+      settings.holidays.some(
+        (h) => h.date === newHoliday.date && (h.companyId ?? "") === newHoliday.companyId
+      )
+    ) {
+      toast("error", "A holiday already exists on that date for this scope");
       return;
     }
-    const holidays = [...settings.holidays, { date: newHoliday.date, name: newHoliday.name.trim() }].sort(
-      (a, b) => a.date.localeCompare(b.date)
-    );
+    const holidays = [
+      ...settings.holidays,
+      {
+        date: newHoliday.date,
+        name: newHoliday.name.trim(),
+        ...(newHoliday.companyId ? { companyId: newHoliday.companyId } : {}),
+      },
+    ].sort((a, b) => a.date.localeCompare(b.date));
     setSettings({ ...settings, holidays });
-    setNewHoliday({ date: "", name: "" });
+    setNewHoliday({ date: "", name: "", companyId: "" });
   };
 
-  const removeHoliday = (date: string) => {
-    setSettings({ ...settings, holidays: settings.holidays.filter((h) => h.date !== date) });
+  const removeHoliday = (date: string, companyId?: string) => {
+    setSettings({
+      ...settings,
+      holidays: settings.holidays.filter(
+        (h) => !(h.date === date && (h.companyId ?? "") === (companyId ?? ""))
+      ),
+    });
   };
 
   const handleSave = async () => {
@@ -517,8 +539,9 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <p className="text-sm text-gray-500">
             Add public holidays or one-off company closures. These dates are treated as non-working days in attendance.
+            Choose a company to limit a holiday to that company&apos;s staff, or leave it as &ldquo;All companies&rdquo;.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr_auto] gap-3 sm:items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr_180px_auto] gap-3 sm:items-end">
             <div>
               <Label>Date</Label>
               <DatePicker value={newHoliday.date} onChange={(e) => setNewHoliday({ ...newHoliday, date: e.target.value })} />
@@ -526,6 +549,21 @@ export default function SettingsPage() {
             <div>
               <Label>Holiday Name</Label>
               <Input value={newHoliday.name} onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })} placeholder="e.g. Independence Day" />
+            </div>
+            <div>
+              <Label>Company</Label>
+              <SelectRoot
+                value={newHoliday.companyId || "all"}
+                onValueChange={(v) => setNewHoliday({ ...newHoliday, companyId: v === "all" ? "" : v })}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All companies</SelectItem>
+                  {companies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </SelectRoot>
             </div>
             <Button type="button" variant="outline" onClick={addHoliday}>
               <Plus className="h-4 w-4 mr-1" /> Add
@@ -536,24 +574,32 @@ export default function SettingsPage() {
             <p className="text-sm text-gray-400 py-2">No holidays added yet.</p>
           ) : (
             <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
-              {settings.holidays.map((h) => (
-                <div key={h.date} className="flex items-center justify-between px-4 py-2.5">
-                  <div>
-                    <p className="text-sm font-medium">{h.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {new Date(`${h.date}T00:00:00`).toLocaleDateString("en-IN", {
-                        weekday: "short",
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </p>
+              {settings.holidays.map((h) => {
+                const companyName = h.companyId ? companies.find((c) => c.id === h.companyId)?.name : null;
+                return (
+                  <div key={`${h.date}-${h.companyId ?? "all"}`} className="flex items-center justify-between px-4 py-2.5">
+                    <div>
+                      <p className="text-sm font-medium">{h.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(`${h.date}T00:00:00`).toLocaleDateString("en-IN", {
+                          weekday: "short",
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                        {companyName ?? "All companies"}
+                      </span>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => removeHoliday(h.date, h.companyId)}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
                   </div>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => removeHoliday(h.date)}>
-                    <Trash2 className="h-4 w-4 text-red-500" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

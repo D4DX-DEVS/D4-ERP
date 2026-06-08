@@ -155,7 +155,7 @@ export default function AttendanceDetailPage() {
 
       if (checkInTs) {
         data.checkIn = checkInTs;
-        data.isLate = evaluateCheckIn(settings, checkInTs.toDate()).isLate;
+        data.isLate = evaluateCheckIn(settings, checkInTs.toDate(), null, staff?.companyId).isLate;
       } else {
         data.isLate = false;
       }

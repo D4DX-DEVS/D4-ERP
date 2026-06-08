@@ -28,6 +28,8 @@ export interface Holiday {
   /** "YYYY-MM-DD" calendar date that is a non-working day. */
   date: string;
   name: string;
+  /** When set, the holiday applies only to staff of this company. Empty/undefined = all companies. */
+  companyId?: string;
 }
 
 export interface AttendanceRules {
@@ -269,15 +271,27 @@ export function dateKey(date: Date): string {
   ).padStart(2, "0")}`;
 }
 
-/** Returns the matching holiday for a date, or null. Accepts a Date or "YYYY-MM-DD". */
-export function getHoliday(settings: AppSettings, date: Date | string): Holiday | null {
+/**
+ * Returns the matching holiday for a date, or null. Accepts a Date or "YYYY-MM-DD".
+ * When `companyId` is supplied, only global holidays (no companyId) and holidays
+ * for that company are considered.
+ */
+export function getHoliday(
+  settings: AppSettings,
+  date: Date | string,
+  companyId?: string
+): Holiday | null {
   const key = typeof date === "string" ? date : dateKey(date);
-  return settings.holidays.find((h) => h.date === key) ?? null;
+  return (
+    settings.holidays.find(
+      (h) => h.date === key && (!h.companyId || h.companyId === companyId)
+    ) ?? null
+  );
 }
 
 /** A day is "off" when it is a weekly off OR a configured holiday. */
-export function isNonWorkingDay(settings: AppSettings, date: Date): boolean {
-  return !getDaySchedule(settings, date).enabled || getHoliday(settings, date) !== null;
+export function isNonWorkingDay(settings: AppSettings, date: Date, companyId?: string): boolean {
+  return !getDaySchedule(settings, date).enabled || getHoliday(settings, date, companyId) !== null;
 }
 
 /** Converts "HH:mm" into minutes since midnight. Returns null on bad input. */
@@ -298,9 +312,14 @@ export interface CheckInEvaluation {
 
 /** Evaluates a check-in against the configured schedule for that day. A shift,
  * when supplied, overrides the day's start time and grace window. */
-export function evaluateCheckIn(settings: AppSettings, when: Date, shift?: Shift | null): CheckInEvaluation {
+export function evaluateCheckIn(
+  settings: AppSettings,
+  when: Date,
+  shift?: Shift | null,
+  companyId?: string
+): CheckInEvaluation {
   const day = getDaySchedule(settings, when);
-  const holiday = getHoliday(settings, when);
+  const holiday = getHoliday(settings, when, companyId);
   const isOff = !day.enabled || holiday !== null;
   const start = shift?.startTime ?? day.start;
   const grace = shift ? shift.graceMinutes ?? 0 : settings.lateThresholdMinutes ?? 0;

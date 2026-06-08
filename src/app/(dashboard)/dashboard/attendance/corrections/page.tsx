@@ -149,7 +149,7 @@ export default function AttendanceCorrectionsPage() {
 
       if (checkInTs) {
         data.checkIn = checkInTs;
-        data.isLate = evaluateCheckIn(settings, checkInTs.toDate()).isLate;
+        data.isLate = evaluateCheckIn(settings, checkInTs.toDate(), null, staffMap[c.staffId]?.companyId).isLate;
       }
       if (checkOutTs) {
         data.checkOut = checkOutTs;

@@ -22,6 +22,10 @@ export const WRITE_ROLES: Record<string, string[]> = {
   letterTemplates: ["admin"],
   issuedLetters: ["admin"],
   studios: ["admin"],
+  studio_equipment: ["admin"],
+  events: ["admin", "department-head"],
+  department_reports: ["admin", "department-head"],
+  custom_kpis: ["admin", "department-head"],
 };
 
 /**
@@ -31,6 +35,7 @@ export const WRITE_ROLES: Record<string, string[]> = {
  */
 export const FEATURE_WRITE: Record<string, { roles: string[]; feature: string }> = {
   studio_bookings: { roles: ["admin", "department-head"], feature: "studio-booking" },
+  work_logs: { roles: ["admin", "department-head"], feature: "work-logs" },
 };
 
 /** Collections that are append-only from the client (no update/delete). */

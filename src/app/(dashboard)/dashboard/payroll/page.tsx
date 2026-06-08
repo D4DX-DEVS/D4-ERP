@@ -66,14 +66,23 @@ export default function PayrollPage() {
 
       const liveAttendance = attendance.filter((r) => !r.isDeleted);
 
-      // Total scheduled working days in the month (excludes weekly offs + holidays).
-      let workingDays = 0;
-      for (let d = new Date(monthStart); d <= monthEnd; d.setDate(d.getDate() + 1)) {
-        if (!isNonWorkingDay(settings, new Date(d))) workingDays += 1;
-      }
-      if (workingDays === 0) workingDays = 26;
-
       const fullDayHours = settings.attendanceRules.fullDayHours || 8;
+
+      // Scheduled working days in the month, cached per company since
+      // company-specific holidays can change the count.
+      const workingDaysCache = new Map<string, number>();
+      const workingDaysFor = (companyId?: string): number => {
+        const key = companyId ?? "";
+        const cached = workingDaysCache.get(key);
+        if (cached !== undefined) return cached;
+        let days = 0;
+        for (let d = new Date(monthStart); d <= monthEnd; d.setDate(d.getDate() + 1)) {
+          if (!isNonWorkingDay(settings, new Date(d), companyId)) days += 1;
+        }
+        if (days === 0) days = 26;
+        workingDaysCache.set(key, days);
+        return days;
+      };
 
       const byStaff = new Map<string, Attendance[]>();
       for (const r of liveAttendance) {
@@ -84,6 +93,7 @@ export default function PayrollPage() {
       for (const staff of staffList) {
         const basicSalary = staff.currentSalary || 0;
         const recs = byStaff.get(staff.id) ?? [];
+        const workingDays = workingDaysFor(staff.companyId);
 
         const presentLike = recs.filter(
           (r) => r.status === "present" || r.status === "late" || r.status === "wfh" || r.status === "on-duty"

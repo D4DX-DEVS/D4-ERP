@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getStatusColor, formatDate } from "@/lib/utils";
+import { ClockInOutCard } from "@/components/staff/clock-in-out-card";
 import { CalendarDays, ClipboardList, Eye } from "lucide-react";
 
 export default function StaffPortalHome() {
@@ -86,6 +87,8 @@ export default function StaffPortalHome() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Welcome, {user?.firstName}!</h1>
+
+      <ClockInOutCard />
 
       {/* Banners */}
       {banners.length > 0 && (

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { LeaveRequest, Staff, AttendanceStatus } from "@/types";
 import { countDocuments, createDocument, getDocuments, updateDocument, where, Timestamp } from "@/lib/firestore";
 import { getAppSettings, isNonWorkingDay } from "@/lib/settings";
+import { createNotification } from "@/lib/notifications";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -102,6 +103,7 @@ export default function LeavesPage() {
       const request = requests.find((r) => r.id === id);
       if (request) {
         await syncLeaveToAttendance(request, status);
+        await notifyStaffOfDecision(request, status);
       }
       toast("success", `Request ${status} successfully`);
       await refreshLeaves();
@@ -109,6 +111,31 @@ export default function LeavesPage() {
       console.error("Error:", error);
       toast("error", `Failed to ${status} request`);
     }
+  };
+
+  // Notify the requesting staff member that their request was decided.
+  const notifyStaffOfDecision = async (leave: LeaveRequest, status: "approved" | "rejected") => {
+    const labels: Record<string, string> = {
+      leave: "Leave",
+      wfh: "Work From Home",
+      overtime: "Overtime",
+      "on-duty": "On Duty",
+    };
+    const label = labels[leave.type] ?? "Request";
+    const sameDay = leave.endDate && leave.startDate && leave.endDate.seconds === leave.startDate.seconds;
+    const range = leave.startDate
+      ? `${formatDate(new Date(leave.startDate.seconds * 1000))}${!sameDay && leave.endDate ? ` – ${formatDate(new Date(leave.endDate.seconds * 1000))}` : ""}`
+      : "";
+    await createNotification({
+      recipientId: leave.staffId,
+      type: "leave",
+      title: `${label} request ${status}`,
+      message: `Your ${label.toLowerCase()} request${range ? ` for ${range}` : ""} has been ${status}.`,
+      link: "/staff-portal/my-leaves",
+      entityId: leave.id,
+      entityType: "leaveRequest",
+      senderName: user ? `${user.firstName} ${user.lastName}` : "Admin",
+    });
   };
 
   // Map a leave-type request onto attendance status. Overtime requests do not
@@ -141,13 +168,14 @@ export default function LeavesPage() {
     const sameDay = start.getTime() === end.getTime();
     const isHalfDay = leave.isHalfDay || (sameDay && !!leave.startTime && !!leave.endTime);
     const dayStatus: AttendanceStatus = isHalfDay ? "half-day" : baseStatus;
+    const staffCompanyId = staffMap[leave.staffId]?.companyId;
 
     for (let d = new Date(start); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
       const day = new Date(d);
       day.setHours(0, 0, 0, 0);
 
       // Leave should not consume scheduled off days or holidays.
-      if (isNonWorkingDay(settings, day)) continue;
+      if (isNonWorkingDay(settings, day, staffCompanyId)) continue;
 
       const existing = await getDocuments<{ id: string; source?: string }>("attendance", [
         where("staffId", "==", leave.staffId),
