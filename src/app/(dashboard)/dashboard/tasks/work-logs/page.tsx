@@ -5,6 +5,15 @@ import { getDocuments, updateDocument, where, orderBy, Timestamp } from "@/lib/f
 import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast";
 import { ListingHeader } from "@/components/ui/listing";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/loading";
+import { ClipboardList } from "lucide-react";
 import type { WorkLog } from "@/types";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -86,8 +95,10 @@ export default function WorkLogsAdminPage() {
           <button
             key={s}
             onClick={() => { setStatusFilter(s); setLoading(true); }}
-            className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-              statusFilter === s ? "bg-primary text-primary-foreground border-primary" : "border-input hover:bg-accent"
+            className={`rounded-full px-3.5 py-1.5 text-xs font-semibold border transition-colors capitalize ${
+              statusFilter === s
+                ? "bg-gradient-to-r from-teal-600 to-emerald-500 text-white border-transparent shadow-sm"
+                : "border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
           >
             {s === "" ? "All" : s.replace(/-/g, " ")}
@@ -96,82 +107,76 @@ export default function WorkLogsAdminPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-slate-500">Loading...</p>
       ) : logs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No work logs found.</p>
+        <Card><CardContent><EmptyState icon={<ClipboardList className="h-12 w-12" />} title="No work logs found" /></CardContent></Card>
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/30">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium">Staff</th>
-                <th className="text-left px-4 py-3 font-medium">Date</th>
-                <th className="text-left px-4 py-3 font-medium">Entries</th>
-                <th className="text-left px-4 py-3 font-medium">Hours</th>
-                <th className="text-left px-4 py-3 font-medium">Status</th>
-                <th className="text-right px-4 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card className="overflow-hidden p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Staff</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Entries</TableHead>
+                <TableHead>Hours</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {logs.map((log) => (
-                <tr key={log.id} className="border-b last:border-0 hover:bg-accent/30">
-                  <td className="px-4 py-3 font-medium">{log.staffName}</td>
-                  <td className="px-4 py-3">{log.date}</td>
-                  <td className="px-4 py-3">{log.entries.length}</td>
-                  <td className="px-4 py-3">{log.totalHours}h</td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs rounded-full px-2 py-0.5 capitalize ${STATUS_COLORS[log.status] || ""}`}>
+                <TableRow key={log.id}>
+                  <TableCell className="font-medium text-slate-900">{log.staffName}</TableCell>
+                  <TableCell>{log.date}</TableCell>
+                  <TableCell>{log.entries.length}</TableCell>
+                  <TableCell>{log.totalHours}h</TableCell>
+                  <TableCell>
+                    <Badge variant={STATUS_COLORS[log.status]} className="capitalize">
                       {log.status.replace(/-/g, " ")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right space-x-2">
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right space-x-2">
                     {log.status === "submitted" && (
                       <>
-                        <button
-                          onClick={() => handleMarkReviewed(log)}
-                          className="rounded px-2 py-1 text-xs bg-green-50 text-green-700 hover:bg-green-100"
-                        >
+                        <Button variant="outline" size="sm" className="border-emerald-200 text-emerald-700 hover:bg-emerald-50" onClick={() => handleMarkReviewed(log)}>
                           Approve
-                        </button>
-                        <button
-                          onClick={() => { setReviewLog(log); setRemarks(""); }}
-                          className="rounded px-2 py-1 text-xs bg-orange-50 text-orange-700 hover:bg-orange-100"
-                        >
+                        </Button>
+                        <Button variant="outline" size="sm" className="border-orange-200 text-orange-700 hover:bg-orange-50" onClick={() => { setReviewLog(log); setRemarks(""); }}>
                           Revise
-                        </button>
+                        </Button>
                       </>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
 
       {/* Revision dialog */}
-      {reviewLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background border rounded-xl shadow-lg w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold mb-2">Request Revision</h2>
-            <p className="text-sm text-muted-foreground mb-4">{reviewLog.staffName} — {reviewLog.date}</p>
-            <div>
-              <label className="text-sm font-medium">Remarks *</label>
-              <textarea
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                rows={3}
-                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-                placeholder="What needs to be corrected?"
-              />
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setReviewLog(null)} className="rounded-md border px-4 py-2 text-sm hover:bg-accent">Cancel</button>
-              <button onClick={handleRequestRevision} className="rounded-md bg-orange-500 px-4 py-2 text-sm text-white hover:bg-orange-600">Send</button>
-            </div>
-          </div>
+      <Dialog open={!!reviewLog} onClose={() => setReviewLog(null)} className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Request Revision</DialogTitle>
+        </DialogHeader>
+        {reviewLog && (
+          <p className="text-sm text-slate-500 -mt-2 mb-4">{reviewLog.staffName} — {reviewLog.date}</p>
+        )}
+        <div className="space-y-2">
+          <Label>Remarks *</Label>
+          <Textarea
+            value={remarks}
+            onChange={(e) => setRemarks(e.target.value)}
+            rows={3}
+            className="resize-none"
+            placeholder="What needs to be corrected?"
+          />
         </div>
-      )}
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+          <Button variant="outline" onClick={() => setReviewLog(null)}>Cancel</Button>
+          <Button className="bg-gradient-to-r from-orange-500 to-amber-500" onClick={handleRequestRevision}>Send</Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

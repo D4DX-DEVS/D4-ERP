@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/loading";
 import { BarChart3, Building2, FileText, TrendingUp } from "lucide-react";
 import type { DepartmentReport } from "@/types";
 
@@ -38,41 +41,41 @@ export default function CompanyReportPage() {
       <ListingHeader title="Company Report" description="Aggregated metrics across all departments." />
 
       <ListingStatGrid>
-        <ListingStatCard label="Departments" value={departments.size} icon={<Building2 className="h-5 w-5" />} />
-        <ListingStatCard label="Published Reports" value={published.length} icon={<FileText className="h-5 w-5" />} />
-        <ListingStatCard label="Total Hours" value={`${totalHours}h`} icon={<BarChart3 className="h-5 w-5" />} />
-        <ListingStatCard label="Task Completion" value={`${avgCompletion}%`} icon={<TrendingUp className="h-5 w-5" />} />
+        <ListingStatCard label="Departments" value={departments.size} icon={<Building2 className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white" />
+        <ListingStatCard label="Published Reports" value={published.length} icon={<FileText className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white" />
+        <ListingStatCard label="Total Hours" value={`${totalHours}h`} icon={<BarChart3 className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white" />
+        <ListingStatCard label="Task Completion" value={`${avgCompletion}%`} icon={<TrendingUp className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white" />
       </ListingStatGrid>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-slate-500">Loading...</p>
       ) : published.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No published department reports yet.</p>
+        <Card><CardContent><EmptyState icon={<FileText className="h-12 w-12" />} title="No published department reports yet" /></CardContent></Card>
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/30">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium">Department</th>
-                <th className="text-left px-4 py-3 font-medium">Period</th>
-                <th className="text-left px-4 py-3 font-medium">Tasks</th>
-                <th className="text-left px-4 py-3 font-medium">Hours</th>
-                <th className="text-left px-4 py-3 font-medium">Coverage</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card className="overflow-hidden p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Department</TableHead>
+                <TableHead>Period</TableHead>
+                <TableHead>Tasks</TableHead>
+                <TableHead>Hours</TableHead>
+                <TableHead>Coverage</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {published.map((r) => (
-                <tr key={r.id} className="border-b last:border-0">
-                  <td className="px-4 py-3 font-medium">{r.departmentName}</td>
-                  <td className="px-4 py-3 capitalize">{r.period} ({r.startDate})</td>
-                  <td className="px-4 py-3">{r.autoMetrics?.tasks?.completed}/{r.autoMetrics?.tasks?.total}</td>
-                  <td className="px-4 py-3">{r.autoMetrics?.workLogs?.totalHours}h</td>
-                  <td className="px-4 py-3">{r.autoMetrics?.workLogs?.coverageRate}%</td>
-                </tr>
+                <TableRow key={r.id}>
+                  <TableCell className="font-medium text-slate-900">{r.departmentName}</TableCell>
+                  <TableCell className="capitalize">{r.period} ({r.startDate})</TableCell>
+                  <TableCell>{r.autoMetrics?.tasks?.completed}/{r.autoMetrics?.tasks?.total}</TableCell>
+                  <TableCell>{r.autoMetrics?.workLogs?.totalHours}h</TableCell>
+                  <TableCell>{r.autoMetrics?.workLogs?.coverageRate}%</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

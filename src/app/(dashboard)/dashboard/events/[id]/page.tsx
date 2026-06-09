@@ -24,6 +24,16 @@ import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast";
 import { StatusTimeline } from "@/components/ui/status-timeline";
 import { CommentsSection } from "@/components/ui/comments-section";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PageLoader } from "@/components/ui/loading";
+import { formatCurrency } from "@/lib/utils";
 import { pushStatusChange } from "@/lib/status-history";
 import { createBulkNotifications } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
@@ -202,20 +212,16 @@ export default function EventDetailPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-muted-foreground">Loading event...</p>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!event) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p className="text-muted-foreground">Event not found.</p>
-        <button onClick={() => router.back()} className="text-sm text-primary hover:underline">
+        <p className="text-slate-500">Event not found.</p>
+        <Button variant="outline" onClick={() => router.back()}>
           Go back
-        </button>
+        </Button>
       </div>
     );
   }
@@ -226,17 +232,17 @@ export default function EventDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <button onClick={() => router.back()} className="rounded-md p-2 hover:bg-accent">
+        <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-5 w-5" />
-        </button>
+        </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{event.title}</h1>
-            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize border ${STATUS_COLORS[event.status] || ""}`}>
+            <h1 className="text-2xl font-bold tracking-[-0.02em] text-slate-950">{event.title}</h1>
+            <Badge variant={STATUS_COLORS[event.status]} className="capitalize">
               {event.status.replace(/-/g, " ")}
-            </span>
+            </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-slate-500">
             {event.eventId} • {event.eventType} • Created by {event.createdByName || "Unknown"}
           </p>
         </div>
@@ -246,17 +252,15 @@ export default function EventDetailPage() {
       {nextStatuses.length > 0 && (
         <div className="flex gap-2">
           {nextStatuses.map((s) => (
-            <button
+            <Button
               key={s}
+              size="sm"
+              variant={s === "cancelled" ? "outline" : "default"}
+              className="capitalize"
               onClick={() => { setTargetStatus(s); setShowStatusDialog(true); }}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize ${
-                s === "cancelled"
-                  ? "border border-red-300 text-red-700 hover:bg-red-50"
-                  : "bg-primary text-primary-foreground hover:bg-primary/90"
-              }`}
             >
               Move to {s.replace(/-/g, " ")}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -265,91 +269,88 @@ export default function EventDetailPage() {
         {/* Main Content */}
         <div className="lg:col-span-2 space-y-6">
           {/* Overview */}
-          <div className="rounded-xl border bg-card p-6">
-            <h3 className="text-lg font-semibold mb-4">Overview</h3>
+          <Card>
+            <CardContent className="p-6">
+            <h3 className="text-lg font-semibold tracking-[-0.02em] text-slate-950 mb-4">Overview</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground" />
+                <Calendar className="h-4 w-4 text-teal-600" />
                 <span>{event.startDate}{event.endDate !== event.startDate ? ` → ${event.endDate}` : ""}</span>
               </div>
               {(event.startTime || event.endTime) && (
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <Calendar className="h-4 w-4 text-teal-600" />
                   <span>{event.startTime || "—"} – {event.endTime || "—"}</span>
                 </div>
               )}
               {event.venue && (
                 <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <MapPin className="h-4 w-4 text-sky-600" />
                   <span>{event.venue}</span>
                 </div>
               )}
               {event.location && (
                 <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <MapPin className="h-4 w-4 text-sky-600" />
                   <span>{event.location}</span>
                 </div>
               )}
               {event.clientName && (
                 <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <Users className="h-4 w-4 text-violet-600" />
                   <span>Client: {event.clientName}</span>
                 </div>
               )}
               {event.budget && (
                 <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  <span>Budget: ₹{event.budget.toLocaleString("en-IN")}</span>
+                  <DollarSign className="h-4 w-4 text-amber-600" />
+                  <span>Budget: {formatCurrency(event.budget)}</span>
                   {event.actualCost != null && (
-                    <span className="text-muted-foreground">
-                      (Actual: ₹{event.actualCost.toLocaleString("en-IN")})
+                    <span className="text-slate-500">
+                      (Actual: {formatCurrency(event.actualCost)})
                     </span>
                   )}
                 </div>
               )}
             </div>
             {event.description && (
-              <p className="mt-4 text-sm text-muted-foreground">{event.description}</p>
+              <p className="mt-4 text-sm text-slate-500">{event.description}</p>
             )}
             {event.tags && event.tags.length > 0 && (
-              <div className="mt-4 flex flex-wrap gap-1">
+              <div className="mt-4 flex flex-wrap gap-1.5">
                 {event.tags.map((tag) => (
-                  <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs">
+                  <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-teal-50 text-teal-700 px-2.5 py-0.5 text-xs font-medium">
                     <Tag className="h-3 w-3" /> {tag}
                   </span>
                 ))}
               </div>
             )}
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Staff Assignment */}
-          <div className="rounded-xl border bg-card p-6">
+          <Card>
+            <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Assigned Staff</h3>
-              <button
-                onClick={() => setShowStaffPicker(true)}
-                className="flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90"
-              >
+              <h3 className="text-lg font-semibold tracking-[-0.02em] text-slate-950">Assigned Staff</h3>
+              <Button size="sm" onClick={() => setShowStaffPicker(true)}>
                 <Plus className="h-3 w-3" /> Add
-              </button>
+              </Button>
             </div>
 
             {event.assignedStaff.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No staff assigned yet.</p>
+              <p className="text-sm text-slate-500">No staff assigned yet.</p>
             ) : (
               <div className="space-y-2">
                 {event.assignedStaff.map((s) => (
-                  <div key={s.staffId} className="flex items-center justify-between rounded-lg border p-3">
+                  <div key={s.staffId} className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/60 p-3">
                     <div>
-                      <p className="text-sm font-medium">{s.staffName}</p>
-                      <p className="text-xs text-muted-foreground">{s.role}</p>
+                      <p className="text-sm font-semibold text-slate-900">{s.staffName}</p>
+                      <p className="text-xs text-slate-500">{s.role}</p>
                     </div>
-                    <button
-                      onClick={() => handleRemoveStaff(s.staffId)}
-                      className="rounded p-1 hover:bg-destructive/10 text-destructive"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                    <Button variant="ghost" size="icon" onClick={() => handleRemoveStaff(s.staffId)}>
+                      <X className="h-4 w-4 text-red-500" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -357,78 +358,77 @@ export default function EventDetailPage() {
 
             {/* Staff Picker Inline */}
             {showStaffPicker && (
-              <div className="mt-4 rounded-lg border p-4 space-y-3">
+              <div className="mt-4 rounded-2xl border border-white/70 bg-white/60 p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium">Staff Member</label>
-                    <select
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Staff Member</Label>
+                    <Select
                       value={selectedStaffId}
                       onChange={(e) => setSelectedStaffId(e.target.value)}
-                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    >
-                      <option value="">Select staff</option>
-                      {staffList
-                        .filter((s) => !event.assignedStaff.some((a) => a.staffId === s.id))
-                        .map((s) => (
-                          <option key={s.id} value={s.id!}>{s.firstName} {s.lastName}</option>
-                        ))}
-                    </select>
+                      placeholder="Select staff"
+                      options={[
+                        { value: "", label: "Select staff" },
+                        ...staffList
+                          .filter((s) => !event.assignedStaff.some((a) => a.staffId === s.id))
+                          .map((s) => ({ value: s.id!, label: `${s.firstName} ${s.lastName}` })),
+                      ]}
+                    />
                   </div>
-                  <div>
-                    <label className="text-xs font-medium">Role</label>
-                    <input
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Role</Label>
+                    <Input
                       value={staffRole}
                       onChange={(e) => setStaffRole(e.target.value)}
-                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       placeholder="e.g. Photographer"
                     />
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={handleAddStaff}
-                    disabled={!selectedStaffId}
-                    className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                  >
+                  <Button size="sm" onClick={handleAddStaff} disabled={!selectedStaffId}>
                     Add
-                  </button>
-                  <button
-                    onClick={() => setShowStaffPicker(false)}
-                    className="rounded-md border border-input px-3 py-1.5 text-xs hover:bg-accent"
-                  >
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowStaffPicker(false)}>
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Comments */}
-          <div className="rounded-xl border bg-card p-6">
+          <Card>
+            <CardContent className="p-6">
             <CommentsSection entityType="event" entityId={eventId} />
-          </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Status Timeline */}
-          <div className="rounded-xl border bg-card p-6">
-            <h3 className="text-sm font-semibold mb-3">Status History</h3>
+          <Card>
+            <CardContent className="p-6">
+            <h3 className="text-sm font-semibold text-slate-950 mb-3">Status History</h3>
             <StatusTimeline history={event.statusHistory || []} />
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Notes */}
           {event.notes && (
-            <div className="rounded-xl border bg-card p-6">
-              <h3 className="text-sm font-semibold mb-2">Internal Notes</h3>
-              <p className="text-sm text-muted-foreground whitespace-pre-wrap">{event.notes}</p>
-            </div>
+            <Card>
+              <CardContent className="p-6">
+              <h3 className="text-sm font-semibold text-slate-950 mb-2">Internal Notes</h3>
+              <p className="text-sm text-slate-500 whitespace-pre-wrap">{event.notes}</p>
+              </CardContent>
+            </Card>
           )}
 
           {/* Attachments */}
           {event.attachments && event.attachments.length > 0 && (
-            <div className="rounded-xl border bg-card p-6">
-              <h3 className="text-sm font-semibold mb-2">Attachments</h3>
+            <Card>
+              <CardContent className="p-6">
+              <h3 className="text-sm font-semibold text-slate-950 mb-2">Attachments</h3>
               <div className="space-y-1">
                 {event.attachments.map((att, i) => (
                   <a
@@ -436,55 +436,46 @@ export default function EventDetailPage() {
                     href={att.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-primary hover:underline"
+                    className="flex items-center gap-2 text-sm text-teal-700 hover:text-teal-800 hover:underline"
                   >
                     <Paperclip className="h-3 w-3" /> {att.name}
                   </a>
                 ))}
               </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>
 
       {/* Status Change Dialog */}
-      {showStatusDialog && targetStatus && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background border rounded-xl shadow-lg w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold mb-2">
-              Move to &quot;{targetStatus.replace(/-/g, " ")}&quot;
-            </h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              Add optional remarks for this status change.
-            </p>
-            <textarea
-              value={statusRemarks}
-              onChange={(e) => setStatusRemarks(e.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-              placeholder="Remarks (optional)..."
-            />
-            <div className="flex justify-end gap-3 mt-4">
-              <button
-                onClick={() => { setShowStatusDialog(false); setTargetStatus(null); }}
-                className="rounded-md border border-input px-4 py-2 text-sm hover:bg-accent"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleStatusChange}
-                className={`rounded-md px-4 py-2 text-sm font-medium ${
-                  targetStatus === "cancelled"
-                    ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    : "bg-primary text-primary-foreground hover:bg-primary/90"
-                }`}
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
+      <Dialog open={showStatusDialog && !!targetStatus} onClose={() => { setShowStatusDialog(false); setTargetStatus(null); }} className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="capitalize">
+            Move to &quot;{targetStatus?.replace(/-/g, " ")}&quot;
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-slate-500 mb-4">
+          Add optional remarks for this status change.
+        </p>
+        <Textarea
+          value={statusRemarks}
+          onChange={(e) => setStatusRemarks(e.target.value)}
+          rows={3}
+          placeholder="Remarks (optional)..."
+        />
+        <div className="flex justify-end gap-3 mt-4">
+          <Button variant="outline" onClick={() => { setShowStatusDialog(false); setTargetStatus(null); }}>
+            Cancel
+          </Button>
+          <Button
+            variant={targetStatus === "cancelled" ? "destructive" : "default"}
+            onClick={handleStatusChange}
+          >
+            Confirm
+          </Button>
         </div>
-      )}
+      </Dialog>
     </div>
   );
 }

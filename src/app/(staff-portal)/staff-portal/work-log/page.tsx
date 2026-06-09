@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash2, Send, FileText } from "lucide-react";
+import { Plus, Trash2, Send, FileText, Clock, CalendarDays, Briefcase, AlertCircle } from "lucide-react";
 import {
   getDocuments,
   createDocument,
@@ -12,6 +12,13 @@ import {
 } from "@/lib/firestore";
 import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import type { WorkLog, WorkLogEntry, ActivityType, Task } from "@/types";
 
 const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
@@ -25,11 +32,11 @@ const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-slate-100 text-slate-700",
-  submitted: "bg-blue-100 text-blue-700",
-  reviewed: "bg-green-100 text-green-700",
-  "needs-revision": "bg-orange-100 text-orange-700",
+const STATUS_STYLES: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-700 border-slate-200",
+  submitted: "bg-blue-50 text-blue-700 border-blue-200",
+  reviewed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "needs-revision": "bg-amber-50 text-amber-700 border-amber-200",
 };
 
 const emptyEntry: WorkLogEntry = {
@@ -176,208 +183,249 @@ export default function StaffWorkLogPage() {
     );
   };
 
+  const taskOptions = [
+    { value: "", label: "No task" },
+    ...tasks.map((t) => ({ value: t.id!, label: t.title })),
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">My Work Log</h1>
-          <p className="text-sm text-muted-foreground">Submit your daily work updates.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">My Work Log</h1>
+          <p className="mt-1 text-sm text-slate-500">Submit your daily work updates and track your progress.</p>
         </div>
         {!showForm && (
-          <button
+          <Button
             onClick={() => { setShowForm(true); setTab("form"); setEditingId(null); setEntries([{ ...emptyEntry }]); }}
-            className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" /> New Log
-          </button>
+          </Button>
         )}
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 rounded-full bg-slate-100/80 p-1 w-fit">
         <button
           onClick={() => { setTab("form"); if (!showForm) { setShowForm(true); setEditingId(null); setEntries([{ ...emptyEntry }]); } }}
-          className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === "form" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
+          className={`rounded-full px-5 py-2 text-sm font-medium transition-all ${tab === "form" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
         >
-          {showForm ? (editingId ? "Edit Log" : "New Log") : "Submit"}
+          {showForm ? (editingId ? "Edit Log" : "New Log") : "New Log"}
         </button>
         <button
           onClick={() => setTab("history")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 ${tab === "history" ? "border-primary text-primary" : "border-transparent text-muted-foreground"}`}
+          className={`rounded-full px-5 py-2 text-sm font-medium transition-all ${tab === "history" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
         >
           History
         </button>
       </div>
 
+      {/* Form */}
       {tab === "form" && showForm && (
-        <div className="rounded-xl border bg-card p-6 space-y-4">
-          <div className="flex items-center gap-4">
-            <div>
-              <label className="text-sm font-medium">Date</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="ml-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-              />
-            </div>
-            <div className="ml-auto text-sm">
-              Total: <span className="font-semibold">{totalHours}h</span>
-            </div>
-          </div>
-
-          {/* Entries */}
-          <div className="space-y-4">
-            {entries.map((entry, idx) => (
-              <div key={idx} className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-muted-foreground">Entry {idx + 1}</span>
-                  {entries.length > 1 && (
-                    <button onClick={() => removeEntry(idx)} className="text-destructive hover:bg-destructive/10 rounded p-1">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs font-medium">Project</label>
-                    <input
-                      value={entry.project}
-                      onChange={(e) => updateEntry(idx, "project", e.target.value)}
-                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Project name"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium">Activity Type</label>
-                    <select
-                      value={entry.activityType}
-                      onChange={(e) => updateEntry(idx, "activityType", e.target.value)}
-                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    >
-                      {ACTIVITY_TYPES.map((t) => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium">Hours</label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      max="24"
-                      value={entry.hours || ""}
-                      onChange={(e) => updateEntry(idx, "hours", Number(e.target.value))}
-                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Description</label>
-                  <textarea
-                    value={entry.description}
-                    onChange={(e) => updateEntry(idx, "description", e.target.value)}
-                    rows={2}
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-                    placeholder="What did you work on?"
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium">Link to Task (optional)</label>
-                    <select
-                      value={entry.taskId || ""}
-                      onChange={(e) => handleTaskSelect(idx, e.target.value)}
-                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    >
-                      <option value="">No task</option>
-                      {tasks.map((t) => (
-                        <option key={t.id} value={t.id!}>{t.title}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium">Blockers (optional)</label>
-                    <input
-                      value={entry.blockers || ""}
-                      onChange={(e) => updateEntry(idx, "blockers", e.target.value)}
-                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      placeholder="Any blockers?"
-                    />
-                  </div>
-                </div>
+        <Card>
+          <CardContent className="p-6 space-y-6">
+            {/* Date & Total */}
+            <div className="flex items-end justify-between gap-4 flex-wrap">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                  <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
+                  Date
+                </label>
+                <DatePicker
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-48"
+                />
               </div>
-            ))}
-          </div>
+              <div className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-100 px-4 py-2.5">
+                <Clock className="h-4 w-4 text-teal-600" />
+                <span className="text-sm text-slate-600">Total:</span>
+                <span className="text-lg font-bold text-teal-700">{totalHours}h</span>
+              </div>
+            </div>
 
-          <button
-            onClick={addEntry}
-            className="flex items-center gap-1 text-sm text-primary hover:underline"
-          >
-            <Plus className="h-3 w-3" /> Add entry
-          </button>
+            {/* Entries */}
+            <div className="space-y-4">
+              {entries.map((entry, idx) => (
+                <div key={idx} className="relative rounded-2xl border border-slate-200/80 bg-slate-50/50 p-5 space-y-4 transition-all hover:border-slate-300/80">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Entry {idx + 1}</span>
+                    {entries.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeEntry(idx)}
+                        className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <button
-              onClick={() => { setShowForm(false); setEditingId(null); }}
-              className="rounded-md border px-4 py-2 text-sm hover:bg-accent"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => handleSave(false)}
-              disabled={saving}
-              className="rounded-md border border-input px-4 py-2 text-sm hover:bg-accent disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save Draft"}
-            </button>
-            <button
-              onClick={() => handleSave(true)}
-              disabled={saving}
-              className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              <Send className="h-3.5 w-3.5" /> Submit
-            </button>
-          </div>
-        </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                        <Briefcase className="h-3 w-3 text-slate-400" />
+                        Project
+                      </label>
+                      <Input
+                        value={entry.project}
+                        onChange={(e) => updateEntry(idx, "project", e.target.value)}
+                        placeholder="Project name"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600">Activity Type</label>
+                      <Select
+                        value={entry.activityType}
+                        onChange={(e) => updateEntry(idx, "activityType", e.target.value)}
+                        options={ACTIVITY_TYPES}
+                        placeholder="Select activity"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                        <Clock className="h-3 w-3 text-slate-400" />
+                        Hours
+                      </label>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max="24"
+                        value={entry.hours || ""}
+                        onChange={(e) => updateEntry(idx, "hours", Number(e.target.value))}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-600">Description</label>
+                    <Textarea
+                      value={entry.description}
+                      onChange={(e) => updateEntry(idx, "description", e.target.value)}
+                      rows={2}
+                      className="min-h-[80px]"
+                      placeholder="What did you work on?"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600">Link to Task <span className="text-slate-400">(optional)</span></label>
+                      <Select
+                        value={entry.taskId || ""}
+                        onChange={(e) => handleTaskSelect(idx, e.target.value)}
+                        options={taskOptions}
+                        placeholder="No task"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-slate-600 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3 text-slate-400" />
+                        Blockers <span className="text-slate-400">(optional)</span>
+                      </label>
+                      <Input
+                        value={entry.blockers || ""}
+                        onChange={(e) => updateEntry(idx, "blockers", e.target.value)}
+                        placeholder="Any blockers?"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <Button variant="ghost" onClick={addEntry} className="text-teal-700 hover:text-teal-800 hover:bg-teal-50">
+              <Plus className="h-4 w-4" /> Add entry
+            </Button>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-5 border-t border-slate-100">
+              <Button
+                variant="ghost"
+                onClick={() => { setShowForm(false); setEditingId(null); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleSave(false)}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Save Draft"}
+              </Button>
+              <Button
+                onClick={() => handleSave(true)}
+                disabled={saving}
+              >
+                <Send className="h-4 w-4" /> Submit
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
+      {/* History */}
       {tab === "history" && (
         <div className="space-y-3">
           {loading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <Card>
+              <CardContent className="p-8 text-center">
+                <div className="animate-pulse flex flex-col items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-slate-200" />
+                  <div className="h-4 w-32 rounded bg-slate-200" />
+                </div>
+              </CardContent>
+            </Card>
           ) : logs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No work logs submitted yet.</p>
+            <Card>
+              <CardContent className="p-10 text-center">
+                <FileText className="mx-auto h-10 w-10 text-slate-300 mb-3" />
+                <p className="text-sm text-slate-500 font-medium">No work logs submitted yet.</p>
+                <p className="text-xs text-slate-400 mt-1">Start by creating your first work log entry.</p>
+              </CardContent>
+            </Card>
           ) : (
             logs.map((log) => (
-              <div
+              <Card
                 key={log.id}
-                className="rounded-xl border bg-card p-4 hover:bg-accent/30 cursor-pointer transition-colors"
+                className="cursor-pointer transition-all hover:shadow-[0_18px_44px_rgba(15,23,42,0.09)] hover:-translate-y-0.5"
                 onClick={() => handleEdit(log)}
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{log.date}</span>
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100">
+                        <FileText className="h-4 w-4 text-slate-500" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-semibold text-slate-800">{log.date}</span>
+                        <p className="text-xs text-slate-400">
+                          {log.entries.length} {log.entries.length === 1 ? "entry" : "entries"}
+                          {log.entries[0]?.project && ` · ${log.entries[0].project}`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-semibold text-slate-600">{log.totalHours}h</span>
+                      <Badge className={STATUS_STYLES[log.status] || ""}>
+                        {log.status.replace(/-/g, " ")}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{log.totalHours}h</span>
-                    <span className={`text-xs rounded-full px-2 py-0.5 font-medium capitalize ${STATUS_COLORS[log.status] || ""}`}>
-                      {log.status.replace(/-/g, " ")}
-                    </span>
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {log.entries.length} {log.entries.length === 1 ? "entry" : "entries"}
-                  {log.entries[0]?.project && ` • ${log.entries[0].project}`}
-                </div>
-                {log.reviewRemarks && (
-                  <p className="mt-2 text-xs text-orange-600 italic">
-                    Review: {log.reviewRemarks}
-                  </p>
-                )}
-              </div>
+                  {log.reviewRemarks && (
+                    <div className="mt-3 flex items-start gap-2 rounded-xl bg-amber-50/80 border border-amber-100 p-3">
+                      <AlertCircle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
+                      <p className="text-xs text-amber-700">
+                        {log.reviewRemarks}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             ))
           )}
         </div>

@@ -10,8 +10,11 @@ import {
   TrendingUp,
   ArrowRight,
 } from "lucide-react";
-import { getDocuments, where, orderBy } from "@/lib/firestore";
+import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/utils";
 import type { ManagedEvent } from "@/types";
 
 export default function EventsDashboardPage() {
@@ -55,12 +58,9 @@ export default function EventsDashboardPage() {
         title="Event Management"
         description="Overview of all events, revenue, and team allocation."
         action={
-          <button
-            onClick={() => router.push("/dashboard/events/list")}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Create Event
-          </button>
+          <Button onClick={() => router.push("/dashboard/events/list")}>
+            <PartyPopper className="h-4 w-4" /> Create Event
+          </Button>
         }
       />
 
@@ -69,61 +69,66 @@ export default function EventsDashboardPage() {
           label="Total Events"
           value={events.length}
           icon={<PartyPopper className="h-5 w-5" />}
+          toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white"
         />
         <ListingStatCard
           label="Upcoming"
           value={upcoming.length}
           icon={<CalendarDays className="h-5 w-5" />}
           meta={`${activeEvents.length} active`}
+          toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white"
         />
         <ListingStatCard
           label="Budget"
-          value={`₹${(totalBudget / 1000).toFixed(0)}k`}
+          value={formatCurrency(totalBudget)}
           icon={<DollarSign className="h-5 w-5" />}
-          meta={`Actual: ₹${(totalActual / 1000).toFixed(0)}k`}
+          meta={`Actual: ${formatCurrency(totalActual)}`}
+          toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white"
         />
         <ListingStatCard
           label="Success Rate"
           value={`${successRate}%`}
           icon={<TrendingUp className="h-5 w-5" />}
           meta={`${completedEvents.length} completed`}
+          toneClassName="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white"
         />
       </ListingStatGrid>
 
       {/* Upcoming Events */}
-      <div className="rounded-xl border bg-card p-6">
+      <Card>
+        <CardContent className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Upcoming Events</h3>
+          <h3 className="text-lg font-semibold tracking-[-0.02em] text-slate-950">Upcoming Events</h3>
           <button
             onClick={() => router.push("/dashboard/events/list")}
-            className="text-sm text-primary flex items-center gap-1 hover:underline"
+            className="text-sm font-medium text-teal-700 flex items-center gap-1 hover:text-teal-800 hover:underline"
           >
             View all <ArrowRight className="h-3 w-3" />
           </button>
         </div>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <p className="text-sm text-slate-500">Loading...</p>
         ) : upcoming.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No upcoming events.</p>
+          <p className="text-sm text-slate-500">No upcoming events.</p>
         ) : (
           <div className="space-y-3">
             {upcoming.slice(0, 5).map((event) => (
               <div
                 key={event.id}
-                className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent/50 cursor-pointer transition-colors"
+                className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/60 p-3 hover:bg-white hover:shadow-[0_12px_30px_rgba(15,23,42,0.08)] cursor-pointer transition-all"
                 onClick={() => router.push(`/dashboard/events/${event.id}`)}
               >
                 <div className="flex-1">
-                  <h4 className="text-sm font-medium">{event.title}</h4>
-                  <p className="text-xs text-muted-foreground">
+                  <h4 className="text-sm font-semibold text-slate-900">{event.title}</h4>
+                  <p className="text-xs text-slate-500">
                     {event.eventType} • {event.startDate}
                     {event.venue && ` • ${event.venue}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
                   {event.assignedStaff.length > 0 && (
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1 text-xs text-slate-500">
                       <Users className="h-3 w-3" />
                       {event.assignedStaff.length}
                     </span>
@@ -134,26 +139,28 @@ export default function EventsDashboardPage() {
             ))}
           </div>
         )}
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Recent Activity */}
-      <div className="rounded-xl border bg-card p-6">
-        <h3 className="text-lg font-semibold mb-4">Recent Events</h3>
+      <Card>
+        <CardContent className="p-6">
+        <h3 className="text-lg font-semibold tracking-[-0.02em] text-slate-950 mb-4">Recent Events</h3>
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <p className="text-sm text-slate-500">Loading...</p>
         ) : events.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No events created yet.</p>
+          <p className="text-sm text-slate-500">No events created yet.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {events.slice(0, 8).map((event) => (
               <div
                 key={event.id}
-                className="flex items-center justify-between py-2 border-b last:border-0 cursor-pointer hover:bg-accent/30 px-2 rounded"
+                className="flex items-center justify-between py-2.5 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-white/70 px-2 rounded-xl transition-colors"
                 onClick={() => router.push(`/dashboard/events/${event.id}`)}
               >
                 <div>
-                  <span className="text-sm font-medium">{event.title}</span>
-                  <span className="text-xs text-muted-foreground ml-2">
+                  <span className="text-sm font-semibold text-slate-900">{event.title}</span>
+                  <span className="text-xs text-slate-500 ml-2">
                     {event.clientName || "No client"}
                   </span>
                 </div>
@@ -162,7 +169,8 @@ export default function EventsDashboardPage() {
             ))}
           </div>
         )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

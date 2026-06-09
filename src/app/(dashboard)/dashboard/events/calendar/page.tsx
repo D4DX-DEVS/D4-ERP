@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader } from "@/components/ui/listing";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import type { ManagedEvent } from "@/types";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -86,31 +88,28 @@ export default function EventCalendarPage() {
       {/* Month Navigation */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <button onClick={prevMonth} className="rounded-md p-2 hover:bg-accent">
+          <Button variant="ghost" size="icon" onClick={prevMonth}>
             <ChevronLeft className="h-4 w-4" />
-          </button>
-          <h2 className="text-lg font-semibold min-w-[180px] text-center">{monthLabel}</h2>
-          <button onClick={nextMonth} className="rounded-md p-2 hover:bg-accent">
+          </Button>
+          <h2 className="text-lg font-semibold min-w-[180px] text-center text-slate-950">{monthLabel}</h2>
+          <Button variant="ghost" size="icon" onClick={nextMonth}>
             <ChevronRight className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
-        <button
-          onClick={goToday}
-          className="rounded-md border border-input px-3 py-1.5 text-sm hover:bg-accent"
-        >
+        <Button variant="outline" size="sm" onClick={goToday}>
           Today
-        </button>
+        </Button>
       </div>
 
       {/* Calendar Grid */}
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-slate-500">Loading...</p>
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <Card>
           {/* Day Headers */}
-          <div className="grid grid-cols-7 border-b bg-muted/30">
+          <div className="grid grid-cols-7 border-b border-slate-200/70 bg-slate-50/80">
             {DAYS.map((d) => (
-              <div key={d} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+              <div key={d} className="px-2 py-3 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
                 {d}
               </div>
             ))}
@@ -120,19 +119,19 @@ export default function EventCalendarPage() {
           <div className="grid grid-cols-7">
             {cells.map((day, idx) => {
               if (day === null) {
-                return <div key={idx} className="border-b border-r p-2 min-h-[100px] bg-muted/10" />;
+                return <div key={idx} className="border-b border-r border-slate-200/60 p-2 min-h-[100px] bg-slate-50/40" />;
               }
               const dayEvents = getEventsForDate(day);
               return (
                 <div
                   key={idx}
-                  className={`border-b border-r p-2 min-h-[100px] hover:bg-accent/20 transition-colors ${
-                    isToday(day) ? "bg-primary/5" : ""
+                  className={`border-b border-r border-slate-200/60 p-2 min-h-[100px] hover:bg-teal-50/40 transition-colors ${
+                    isToday(day) ? "bg-teal-50/60" : ""
                   }`}
                 >
                   <span
-                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
-                      isToday(day) ? "bg-primary text-primary-foreground" : ""
+                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
+                      isToday(day) ? "bg-gradient-to-r from-teal-600 to-emerald-500 text-white shadow-[0_6px_14px_rgba(15,118,110,0.3)]" : "text-slate-700"
                     }`}
                   >
                     {day}
@@ -142,7 +141,7 @@ export default function EventCalendarPage() {
                       <button
                         key={e.id}
                         onClick={() => router.push(`/dashboard/events/${e.id}`)}
-                        className="w-full text-left rounded px-1 py-0.5 text-[10px] truncate hover:bg-accent flex items-center gap-1"
+                        className="w-full text-left rounded-md px-1 py-0.5 text-[10px] truncate hover:bg-white flex items-center gap-1 text-slate-700"
                         title={e.title}
                       >
                         <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT_COLORS[e.status] || "bg-gray-400"}`} />
@@ -150,7 +149,7 @@ export default function EventCalendarPage() {
                       </button>
                     ))}
                     {dayEvents.length > 3 && (
-                      <p className="text-[10px] text-muted-foreground px-1">
+                      <p className="text-[10px] text-slate-400 px-1">
                         +{dayEvents.length - 3} more
                       </p>
                     )}
@@ -159,7 +158,7 @@ export default function EventCalendarPage() {
               );
             })}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Legend */}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
+import { Card, CardContent } from "@/components/ui/card";
 import { BarChart3, Clock, XCircle, TrendingUp } from "lucide-react";
 import type { StudioBooking } from "@/types";
 
@@ -51,62 +52,66 @@ export default function StudioReportsPage() {
       <ListingHeader title="Studio Reports" description="Booking analytics and utilization." />
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-slate-500">Loading...</p>
       ) : (<>
 
       <ListingStatGrid>
-        <ListingStatCard label="Total Bookings" value={bookings.length} icon={<BarChart3 className="h-5 w-5" />} />
-        <ListingStatCard label="Completed" value={completed.length} icon={<TrendingUp className="h-5 w-5" />} />
-        <ListingStatCard label="Avg Duration" value={`${avgDuration} min`} icon={<Clock className="h-5 w-5" />} />
-        <ListingStatCard label="Cancellation Rate" value={`${cancellationRate}%`} icon={<XCircle className="h-5 w-5" />} />
+        <ListingStatCard label="Total Bookings" value={bookings.length} icon={<BarChart3 className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white" />
+        <ListingStatCard label="Completed" value={completed.length} icon={<TrendingUp className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white" />
+        <ListingStatCard label="Avg Duration" value={`${avgDuration} min`} icon={<Clock className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white" />
+        <ListingStatCard label="Cancellation Rate" value={`${cancellationRate}%`} icon={<XCircle className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-rose-500 to-red-500 text-white" />
       </ListingStatGrid>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Per Studio */}
-        <div className="rounded-xl border bg-card p-6">
-          <h3 className="text-sm font-semibold mb-4">Bookings per Studio</h3>
+        <Card>
+          <CardContent className="p-6">
+          <h3 className="text-sm font-semibold text-slate-900 mb-4">Bookings per Studio</h3>
           <div className="space-y-3">
             {Object.entries(perStudio)
               .sort((a, b) => b[1] - a[1])
               .map(([name, count]) => (
                 <div key={name} className="flex items-center justify-between">
-                  <span className="text-sm">{name}</span>
+                  <span className="text-sm text-slate-700">{name}</span>
                   <div className="flex items-center gap-2">
-                    <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
+                    <div className="w-24 h-2 rounded-full bg-slate-100 overflow-hidden">
                       <div
-                        className="h-full bg-primary rounded-full"
+                        className="h-full bg-gradient-to-r from-teal-600 to-emerald-500 rounded-full"
                         style={{ width: `${(count / bookings.length) * 100}%` }}
                       />
                     </div>
-                    <span className="text-sm font-medium w-8 text-right">{count}</span>
+                    <span className="text-sm font-semibold text-slate-900 w-8 text-right">{count}</span>
                   </div>
                 </div>
               ))}
           </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Per Type */}
-        <div className="rounded-xl border bg-card p-6">
-          <h3 className="text-sm font-semibold mb-4">Bookings by Type</h3>
+        <Card>
+          <CardContent className="p-6">
+          <h3 className="text-sm font-semibold text-slate-900 mb-4">Bookings by Type</h3>
           <div className="space-y-3">
             {Object.entries(perType)
               .sort((a, b) => b[1] - a[1])
               .map(([type, count]) => (
                 <div key={type} className="flex items-center justify-between">
-                  <span className="text-sm capitalize">{type}</span>
+                  <span className="text-sm capitalize text-slate-700">{type}</span>
                   <div className="flex items-center gap-2">
-                    <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
+                    <div className="w-24 h-2 rounded-full bg-slate-100 overflow-hidden">
                       <div
-                        className="h-full bg-indigo-500 rounded-full"
+                        className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500 rounded-full"
                         style={{ width: `${(count / bookings.length) * 100}%` }}
                       />
                     </div>
-                    <span className="text-sm font-medium w-8 text-right">{count}</span>
+                    <span className="text-sm font-semibold text-slate-900 w-8 text-right">{count}</span>
                   </div>
                 </div>
               ))}
           </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
       </>)}
     </div>

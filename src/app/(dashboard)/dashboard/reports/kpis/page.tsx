@@ -12,6 +12,12 @@ import {
 import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast";
 import { ListingHeader } from "@/components/ui/listing";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/loading";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { CustomKPI } from "@/types";
 
@@ -88,83 +94,80 @@ export default function KPIManagementPage() {
         title="KPI Management"
         description="Define and track custom key performance indicators."
         action={
-          <button
-            onClick={() => setDialog(true)}
-            className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-          >
+          <Button onClick={() => setDialog(true)}>
             <Plus className="h-4 w-4" /> Add KPI
-          </button>
+          </Button>
         }
       />
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-slate-500">Loading...</p>
       ) : kpis.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No KPIs defined yet.</p>
+        <Card><CardContent><EmptyState icon={<Plus className="h-12 w-12" />} title="No KPIs defined yet" description="Add your first KPI to start tracking." /></CardContent></Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {kpis.map((kpi) => {
             const progress = kpi.target ? Math.min(100, Math.round((kpi.value / kpi.target) * 100)) : null;
             return (
-              <div key={kpi.id} className="rounded-xl border bg-card p-4">
+              <Card key={kpi.id}>
+                <CardContent className="p-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <h4 className="font-medium text-sm">{kpi.label}</h4>
-                    <p className="text-2xl font-bold mt-1">{kpi.value} <span className="text-sm font-normal text-muted-foreground">{kpi.unit}</span></p>
+                    <h4 className="font-semibold text-sm text-slate-700">{kpi.label}</h4>
+                    <p className="text-[1.7rem] font-semibold tracking-[-0.04em] text-slate-950 mt-1">{kpi.value} <span className="text-sm font-normal text-slate-400">{kpi.unit}</span></p>
                   </div>
-                  <button onClick={() => setDeleteId(kpi.id!)} className="rounded p-1 hover:bg-destructive/10 text-destructive">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(kpi.id!)}>
+                    <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                  </Button>
                 </div>
                 {kpi.target && (
                   <div className="mt-3">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                    <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
                       <span>Target: {kpi.target} {kpi.unit}</span>
-                      <span>{progress}%</span>
+                      <span className="font-semibold text-slate-700">{progress}%</span>
                     </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full bg-primary rounded-full" style={{ width: `${progress}%` }} />
+                    <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-teal-600 to-emerald-500 rounded-full" style={{ width: `${progress}%` }} />
                     </div>
                   </div>
                 )}
-              </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
       )}
 
       {/* Create Dialog */}
-      {dialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background border rounded-xl shadow-lg w-full max-w-md p-6">
-            <h2 className="text-lg font-semibold mb-4">Add KPI</h2>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium">Label *</label>
-                <input value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="e.g. Customer Satisfaction" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-medium">Current Value</label>
-                  <input type="number" value={form.value} onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Target</label>
-                  <input type="number" value={form.target} onChange={(e) => setForm((p) => ({ ...p, target: e.target.value }))} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Unit *</label>
-                <input value={form.unit} onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value }))} className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" placeholder="e.g. %, hours, tasks" />
-              </div>
+      <Dialog open={dialog} onClose={() => setDialog(false)} className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add KPI</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label>Label *</Label>
+            <Input value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))} placeholder="e.g. Customer Satisfaction" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Current Value</Label>
+              <Input type="number" value={form.value} onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))} />
             </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button onClick={() => setDialog(false)} className="rounded-md border px-4 py-2 text-sm hover:bg-accent">Cancel</button>
-              <button onClick={handleCreate} className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">Save</button>
+            <div className="space-y-2">
+              <Label>Target</Label>
+              <Input type="number" value={form.target} onChange={(e) => setForm((p) => ({ ...p, target: e.target.value }))} />
             </div>
           </div>
+          <div className="space-y-2">
+            <Label>Unit *</Label>
+            <Input value={form.unit} onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value }))} placeholder="e.g. %, hours, tasks" />
+          </div>
         </div>
-      )}
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+          <Button variant="outline" onClick={() => setDialog(false)}>Cancel</Button>
+          <Button onClick={handleCreate}>Save</Button>
+        </div>
+      </Dialog>
 
       <ConfirmDialog
         open={!!deleteId}

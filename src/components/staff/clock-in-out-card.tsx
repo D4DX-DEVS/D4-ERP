@@ -18,7 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/toast";
-import { Clock, LogIn, LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Clock, LogIn, LogOut, MapPin, AlertTriangle, PartyPopper } from "lucide-react";
 
 /**
  * Self-contained clock in / clock out widget for the staff portal. Reads the
@@ -34,6 +35,14 @@ export function ClockInOutCard() {
   const [shift, setShift] = useState<Shift | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<"in" | "out" | null>(null);
+  const [now, setNow] = useState<Date>(() => new Date());
+
+  // Live ticking clock so the displayed time always stays current.
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const fetchToday = async () => {
     if (!user) return;
@@ -76,8 +85,9 @@ export function ClockInOutCard() {
       .catch((error) => console.error("Error:", error));
   }, [user]);
 
-  const handleCheckIn = async () => {
+  const runCheckIn = async () => {
     if (!user || !settings) return;
+    setConfirmAction(null);
     setWorking(true);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -124,8 +134,9 @@ export function ClockInOutCard() {
     }
   };
 
-  const handleCheckOut = async () => {
+  const runCheckOut = async () => {
     if (!todayRecord || !settings) return;
+    setConfirmAction(null);
     setWorking(true);
     try {
       const checkOutTime = Timestamp.now();
@@ -151,13 +162,27 @@ export function ClockInOutCard() {
     }
   };
 
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+  const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   const dateStr = now.toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const todaySchedule = settings ? getDaySchedule(settings, now) : null;
   const todayHoliday = settings ? getHoliday(settings, now, user?.companyId) : null;
 
+  // Late-arrival preview for the check-in confirmation modal.
+  const checkInPreview = settings ? evaluateCheckIn(settings, now, shift, user?.companyId) : null;
+
+  // Elapsed time since check-in, shown in the check-out confirmation modal.
+  const elapsedLabel = (() => {
+    if (!todayRecord?.checkIn?.seconds) return null;
+    const ms = now.getTime() - todayRecord.checkIn.seconds * 1000;
+    if (ms < 0) return null;
+    const totalMinutes = Math.floor(ms / 60000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}h ${minutes}m`;
+  })();
+
   return (
+    <>
     <div className="space-y-4">
       {/* Current Time */}
       <Card>
@@ -191,7 +216,7 @@ export function ClockInOutCard() {
             {!todayRecord ? (
               <div className="text-center space-y-4">
                 <p className="text-sm text-gray-500">You haven&apos;t checked in today.</p>
-                <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={handleCheckIn} disabled={!settings || working}>
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-700" onClick={() => setConfirmAction("in")} disabled={!settings || working}>
                   <LogIn className="h-5 w-5 mr-2" /> {working ? "Checking In…" : "Check In"}
                 </Button>
               </div>
@@ -205,7 +230,10 @@ export function ClockInOutCard() {
                   At {todayRecord.checkIn ? new Date(todayRecord.checkIn.seconds * 1000).toLocaleTimeString("en-IN") : "—"}
                 </p>
                 {todayRecord.isLate && <Badge variant="bg-orange-100 text-orange-700">Late Arrival</Badge>}
-                <Button className="w-full" variant="destructive" onClick={handleCheckOut} disabled={working}>
+                {elapsedLabel && (
+                  <p className="text-xs text-gray-500">Working for <span className="font-medium text-gray-700">{elapsedLabel}</span></p>
+                )}
+                <Button className="w-full" variant="destructive" onClick={() => setConfirmAction("out")} disabled={working}>
                   <LogOut className="h-5 w-5 mr-2" /> {working ? "Checking Out…" : "Check Out"}
                 </Button>
               </div>
@@ -230,6 +258,95 @@ export function ClockInOutCard() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+
+      {/* Confirmation modal */}
+      {confirmAction && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-slate-950/40 backdrop-blur-[3px]"
+            onClick={() => setConfirmAction(null)}
+          />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-slate-200/90 bg-white p-6 shadow-[0_24px_64px_rgba(15,23,42,0.18)] animate-slide-up">
+            {/* Icon */}
+            <div className="flex justify-center mb-4">
+              <span
+                className={cn(
+                  "inline-flex h-14 w-14 items-center justify-center rounded-full",
+                  confirmAction === "in" ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
+                )}
+              >
+                {confirmAction === "in" ? <LogIn className="h-6 w-6" /> : <LogOut className="h-6 w-6" />}
+              </span>
+            </div>
+
+            <h3 className="text-center text-lg font-semibold text-slate-900">
+              {confirmAction === "in" ? "Confirm Check In" : "Confirm Check Out"}
+            </h3>
+            <p className="mt-1 text-center text-sm text-slate-500">
+              {confirmAction === "in"
+                ? "You're about to start your day."
+                : "You're about to end your day."}
+            </p>
+
+            {/* Live time */}
+            <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-center">
+              <p className="text-2xl font-bold tabular-nums text-slate-900">{timeStr}</p>
+              <p className="mt-0.5 text-xs text-slate-500">{dateStr}</p>
+            </div>
+
+            {/* Contextual hints */}
+            {confirmAction === "in" && (
+              <div className="mt-3 space-y-2">
+                {todayHoliday && (
+                  <div className="flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    <PartyPopper className="h-4 w-4 shrink-0" />
+                    <span>Today is a holiday ({todayHoliday.name}). This will be logged as worked on a holiday.</span>
+                  </div>
+                )}
+                {!todayHoliday && checkInPreview?.isOff && (
+                  <div className="flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2 text-xs text-purple-700">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>Today is a scheduled off day. This will be logged as worked on an off day.</span>
+                  </div>
+                )}
+                {checkInPreview?.isLate && (
+                  <div className="flex items-center gap-2 rounded-lg bg-orange-50 px-3 py-2 text-xs text-orange-700">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <span>You&apos;re past your scheduled start time, so this will be marked as a late arrival.</span>
+                  </div>
+                )}
+                {settings?.attendanceRules.locationRequired && (
+                  <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    <MapPin className="h-4 w-4 shrink-0" />
+                    <span>Your location will be recorded with this check in.</span>
+                  </div>
+                )}
+              </div>
+            )}
+            {confirmAction === "out" && elapsedLabel && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <Clock className="h-4 w-4 shrink-0" />
+                <span>You&apos;ve been working for about <span className="font-medium text-slate-800">{elapsedLabel}</span>.</span>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="mt-6 flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setConfirmAction(null)} disabled={working}>
+                Cancel
+              </Button>
+              <Button
+                className={cn("flex-1", confirmAction === "in" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-rose-600 hover:bg-rose-700")}
+                onClick={() => (confirmAction === "in" ? void runCheckIn() : void runCheckOut())}
+                disabled={working}
+              >
+                {confirmAction === "in" ? "Check In" : "Check Out"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

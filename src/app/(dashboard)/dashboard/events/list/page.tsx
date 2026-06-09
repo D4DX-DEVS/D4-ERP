@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Filter, Eye } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import {
   getDocuments,
   createDocument,
@@ -14,7 +14,21 @@ import {
 } from "@/lib/firestore";
 import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast";
-import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
+import { ListingHeader } from "@/components/ui/listing";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/loading";
+import { formatCurrency } from "@/lib/utils";
+import { PartyPopper, Loader2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { pushStatusChange } from "@/lib/status-history";
 import { createNotification } from "@/lib/notifications";
@@ -272,294 +286,243 @@ export default function EventsListPage() {
         title="All Events"
         description="Manage events from inquiry to completion."
         action={
-          <button
-            onClick={handleOpenCreate}
-            className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
+          <Button onClick={handleOpenCreate}>
             <Plus className="h-4 w-4" />
             Create Event
-          </button>
+          </Button>
         }
       />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
+          <Input
             type="text"
             placeholder="Search events..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="pl-11"
           />
         </div>
-        <select
+        <Select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-        >
-          <option value="all">All Statuses</option>
-          {EVENT_STATUSES.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-        <select
+          className="w-[180px]"
+          options={[
+            { value: "all", label: "All Statuses" },
+            ...EVENT_STATUSES.map((s) => ({ value: s.value, label: s.label })),
+          ]}
+        />
+        <Select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-        >
-          <option value="all">All Types</option>
-          {EVENT_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </select>
+          className="w-[160px]"
+          options={[
+            { value: "all", label: "All Types" },
+            ...EVENT_TYPES.map((t) => ({ value: t.value, label: t.label })),
+          ]}
+        />
       </div>
 
       {/* Events Table */}
-      <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/30">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium">Event</th>
-                <th className="text-left px-4 py-3 font-medium">Type</th>
-                <th className="text-left px-4 py-3 font-medium">Client</th>
-                <th className="text-left px-4 py-3 font-medium">Dates</th>
-                <th className="text-left px-4 py-3 font-medium">Status</th>
-                <th className="text-left px-4 py-3 font-medium">Budget</th>
-                <th className="text-right px-4 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Loading...</td></tr>
-              ) : filteredEvents.length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No events found.</td></tr>
-              ) : (
-                filteredEvents.map((event) => (
-                  <tr key={event.id} className="border-b last:border-0 hover:bg-accent/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-medium">{event.title}</p>
-                        <p className="text-xs text-muted-foreground">{event.eventId}</p>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 capitalize">{event.eventType}</td>
-                    <td className="px-4 py-3">{event.clientName || "—"}</td>
-                    <td className="px-4 py-3">
-                      <p className="text-xs">{event.startDate}</p>
-                      {event.endDate !== event.startDate && (
-                        <p className="text-xs text-muted-foreground">to {event.endDate}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_COLORS[event.status] || ""}`}>
-                        {event.status.replace(/-/g, " ")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {event.budget ? `₹${event.budget.toLocaleString("en-IN")}` : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => router.push(`/dashboard/events/${event.id}`)}
-                          className="rounded p-1.5 hover:bg-accent"
-                          title="View details"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleOpenEdit(event)}
-                          className="rounded p-1.5 hover:bg-accent text-xs font-medium text-primary"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(event.id!)}
-                          className="rounded p-1.5 hover:bg-destructive/10 text-xs font-medium text-destructive"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {loading ? (
+        <Card><CardContent className="py-12 text-center text-sm text-slate-500">Loading...</CardContent></Card>
+      ) : filteredEvents.length === 0 ? (
+        <Card><CardContent><EmptyState icon={<PartyPopper className="h-12 w-12" />} title="No events found" description="Create your first event to get started." /></CardContent></Card>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Event</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Client</TableHead>
+              <TableHead>Dates</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Budget</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredEvents.map((event) => (
+              <TableRow key={event.id} className="cursor-pointer" onClick={() => router.push(`/dashboard/events/${event.id}`)}>
+                <TableCell>
+                  <p className="font-semibold text-slate-900">{event.title}</p>
+                  <p className="text-xs text-slate-400">{event.eventId}</p>
+                </TableCell>
+                <TableCell className="capitalize">{event.eventType}</TableCell>
+                <TableCell>{event.clientName || "—"}</TableCell>
+                <TableCell>
+                  <p className="text-xs">{event.startDate}</p>
+                  {event.endDate !== event.startDate && (
+                    <p className="text-xs text-slate-400">to {event.endDate}</p>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={STATUS_COLORS[event.status]} className="capitalize">
+                    {event.status.replace(/-/g, " ")}
+                  </Badge>
+                </TableCell>
+                <TableCell className="font-medium">
+                  {event.budget ? formatCurrency(event.budget) : "—"}
+                </TableCell>
+                <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-end gap-1">
+                    <Button variant="ghost" size="icon" title="View details" onClick={() => router.push(`/dashboard/events/${event.id}`)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" title="Edit" onClick={() => handleOpenEdit(event)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" title="Delete" onClick={() => setDeleteId(event.id!)}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
 
       {/* Create/Edit Dialog */}
-      {dialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background border rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-lg font-semibold mb-4">
-              {editingId ? "Edit Event" : "Create Event"}
-            </h2>
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{editingId ? "Edit Event" : "Create Event"}</DialogTitle>
+        </DialogHeader>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="text-sm font-medium">Title *</label>
-                <input
-                  value={form.title}
-                  onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="Event title"
-                />
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="md:col-span-2 space-y-2">
+            <Label>Title *</Label>
+            <Input
+              value={form.title}
+              onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+              placeholder="Event title"
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">Event Type</label>
-                <select
-                  value={form.eventType}
-                  onChange={(e) => setForm((p) => ({ ...p, eventType: e.target.value as EventManagementType }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  {EVENT_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
-              </div>
+          <div className="space-y-2">
+            <Label>Event Type</Label>
+            <Select
+              value={form.eventType}
+              onChange={(e) => setForm((p) => ({ ...p, eventType: e.target.value as EventManagementType }))}
+              options={EVENT_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">Client</label>
-                <select
-                  value={form.clientId}
-                  onChange={(e) => handleClientSelect(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="">No client</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id!}>{c.companyName}</option>
-                  ))}
-                </select>
-              </div>
+          <div className="space-y-2">
+            <Label>Client</Label>
+            <Select
+              value={form.clientId}
+              onChange={(e) => handleClientSelect(e.target.value)}
+              placeholder="No client"
+              options={[
+                { value: "", label: "No client" },
+                ...clients.map((c) => ({ value: c.id!, label: c.companyName })),
+              ]}
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">Start Date *</label>
-                <input
-                  type="date"
-                  value={form.startDate}
-                  onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label>Start Date *</Label>
+            <DatePicker
+              value={form.startDate}
+              onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))}
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">End Date *</label>
-                <input
-                  type="date"
-                  value={form.endDate}
-                  onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label>End Date *</Label>
+            <DatePicker
+              value={form.endDate}
+              onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))}
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">Start Time</label>
-                <input
-                  type="time"
-                  value={form.startTime}
-                  onChange={(e) => setForm((p) => ({ ...p, startTime: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label>Start Time</Label>
+            <TimePicker
+              value={form.startTime}
+              onChange={(e) => setForm((p) => ({ ...p, startTime: e.target.value }))}
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">End Time</label>
-                <input
-                  type="time"
-                  value={form.endTime}
-                  onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label>End Time</Label>
+            <TimePicker
+              value={form.endTime}
+              onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value }))}
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">Venue</label>
-                <input
-                  value={form.venue}
-                  onChange={(e) => setForm((p) => ({ ...p, venue: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Venue name"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label>Venue</Label>
+            <Input
+              value={form.venue}
+              onChange={(e) => setForm((p) => ({ ...p, venue: e.target.value }))}
+              placeholder="Venue name"
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">Location</label>
-                <input
-                  value={form.location}
-                  onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Address or area"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label>Location</Label>
+            <Input
+              value={form.location}
+              onChange={(e) => setForm((p) => ({ ...p, location: e.target.value }))}
+              placeholder="Address or area"
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">Budget (₹)</label>
-                <input
-                  type="number"
-                  value={form.budget}
-                  onChange={(e) => setForm((p) => ({ ...p, budget: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="0"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label>Budget (₹)</Label>
+            <Input
+              type="number"
+              value={form.budget}
+              onChange={(e) => setForm((p) => ({ ...p, budget: e.target.value }))}
+              placeholder="0"
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">Tags</label>
-                <input
-                  value={form.tags}
-                  onChange={(e) => setForm((p) => ({ ...p, tags: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Comma-separated tags"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <Input
+              value={form.tags}
+              onChange={(e) => setForm((p) => ({ ...p, tags: e.target.value }))}
+              placeholder="Comma-separated tags"
+            />
+          </div>
 
-              <div className="md:col-span-2">
-                <label className="text-sm font-medium">Description</label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                  rows={3}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                  placeholder="Event description..."
-                />
-              </div>
+          <div className="md:col-span-2 space-y-2">
+            <Label>Description</Label>
+            <Textarea
+              value={form.description}
+              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+              rows={3}
+              placeholder="Event description..."
+            />
+          </div>
 
-              <div className="md:col-span-2">
-                <label className="text-sm font-medium">Notes</label>
-                <textarea
-                  value={form.notes}
-                  onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-                  rows={2}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring resize-none"
-                  placeholder="Internal notes..."
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setDialogOpen(false)}
-                className="rounded-md border border-input px-4 py-2 text-sm hover:bg-accent"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {saving ? "Saving..." : editingId ? "Update" : "Create"}
-              </button>
-            </div>
+          <div className="md:col-span-2 space-y-2">
+            <Label>Notes</Label>
+            <Textarea
+              value={form.notes}
+              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+              rows={2}
+              placeholder="Internal notes..."
+            />
           </div>
         </div>
-      )}
+
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+          <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {saving ? "Saving..." : editingId ? "Update" : "Create"}
+          </Button>
+        </div>
+      </Dialog>
 
       {/* Delete Confirmation */}
       <ConfirmDialog

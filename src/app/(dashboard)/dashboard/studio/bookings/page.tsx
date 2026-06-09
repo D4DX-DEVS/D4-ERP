@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Loader2 } from "lucide-react";
 import {
   getDocuments,
   createDocument,
@@ -13,6 +13,18 @@ import {
 import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast";
 import { ListingHeader } from "@/components/ui/listing";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/loading";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { findConflict, isValidTimeRange } from "@/lib/studio-utils";
 import { pushStatusChange } from "@/lib/status-history";
@@ -306,286 +318,241 @@ export default function StudioBookingsPage() {
         title="Studio Bookings"
         description="Manage all studio booking requests."
         action={
-          <button
-            onClick={() => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); }}
-            className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-          >
+          <Button onClick={() => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); }}>
             <Plus className="h-4 w-4" /> New Booking
-          </button>
+          </Button>
         }
       />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
+          <Input
             type="text"
             placeholder="Search bookings..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-md border border-input bg-background pl-9 pr-3 py-2 text-sm"
+            className="pl-11"
           />
         </div>
-        <select
+        <Select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-        >
-          <option value="all">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="in-progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="rejected">Rejected</option>
-        </select>
+          className="w-[180px]"
+          options={[
+            { value: "all", label: "All Statuses" },
+            { value: "pending", label: "Pending" },
+            { value: "approved", label: "Approved" },
+            { value: "confirmed", label: "Confirmed" },
+            { value: "in-progress", label: "In Progress" },
+            { value: "completed", label: "Completed" },
+            { value: "cancelled", label: "Cancelled" },
+            { value: "rejected", label: "Rejected" },
+          ]}
+        />
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/30">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium">Studio</th>
-                <th className="text-left px-4 py-3 font-medium">Date / Time</th>
-                <th className="text-left px-4 py-3 font-medium">Purpose</th>
-                <th className="text-left px-4 py-3 font-medium">Client</th>
-                <th className="text-left px-4 py-3 font-medium">Status</th>
-                <th className="text-right px-4 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Loading...</td></tr>
-              ) : filteredBookings.length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No bookings found.</td></tr>
-              ) : (
-                filteredBookings.map((b) => (
-                  <tr key={b.id} className="border-b last:border-0 hover:bg-accent/30">
-                    <td className="px-4 py-3 font-medium">{b.studioName || b.studioId}</td>
-                    <td className="px-4 py-3">
-                      <p className="text-xs">{b.date}</p>
-                      <p className="text-xs text-muted-foreground">{b.startTime} – {b.endTime}</p>
-                    </td>
-                    <td className="px-4 py-3">{b.purpose}</td>
-                    <td className="px-4 py-3">{b.clientName || "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_COLORS[b.status] || ""}`}>
-                        {b.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        {b.status === "pending" && (
-                          <>
-                            <button
-                              onClick={() => handleStatusChange(b.id!, "confirmed")}
-                              className="rounded px-2 py-1 text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => handleStatusChange(b.id!, "rejected")}
-                              className="rounded px-2 py-1 text-xs bg-red-50 text-red-700 hover:bg-red-100"
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
-                        {b.status === "confirmed" && (
-                          <button
-                            onClick={() => handleStatusChange(b.id!, "completed")}
-                            className="rounded px-2 py-1 text-xs bg-green-50 text-green-700 hover:bg-green-100"
-                          >
-                            Complete
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleOpenEdit(b)}
-                          className="rounded px-2 py-1 text-xs text-primary hover:bg-accent"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => setDeleteId(b.id!)}
-                          className="rounded px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {loading ? (
+        <Card><CardContent className="py-12 text-center text-sm text-slate-500">Loading...</CardContent></Card>
+      ) : filteredBookings.length === 0 ? (
+        <Card><CardContent><EmptyState icon={<Plus className="h-12 w-12" />} title="No bookings found" description="Create your first studio booking." /></CardContent></Card>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Studio</TableHead>
+              <TableHead>Date / Time</TableHead>
+              <TableHead>Purpose</TableHead>
+              <TableHead>Client</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredBookings.map((b) => (
+              <TableRow key={b.id}>
+                <TableCell className="font-semibold text-slate-900">{b.studioName || b.studioId}</TableCell>
+                <TableCell>
+                  <p className="text-xs">{b.date}</p>
+                  <p className="text-xs text-slate-400">{b.startTime} – {b.endTime}</p>
+                </TableCell>
+                <TableCell>{b.purpose}</TableCell>
+                <TableCell>{b.clientName || "—"}</TableCell>
+                <TableCell>
+                  <Badge variant={STATUS_COLORS[b.status]} className="capitalize">
+                    {b.status}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-1.5">
+                    {b.status === "pending" && (
+                      <>
+                        <Button size="sm" variant="outline" className="h-8 px-3 text-emerald-700 border-emerald-200" onClick={() => handleStatusChange(b.id!, "confirmed")}>
+                          Confirm
+                        </Button>
+                        <Button size="sm" variant="outline" className="h-8 px-3 text-red-700 border-red-200" onClick={() => handleStatusChange(b.id!, "rejected")}>
+                          Reject
+                        </Button>
+                      </>
+                    )}
+                    {b.status === "confirmed" && (
+                      <Button size="sm" variant="outline" className="h-8 px-3 text-green-700 border-green-200" onClick={() => handleStatusChange(b.id!, "completed")}>
+                        Complete
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" title="Edit" onClick={() => handleOpenEdit(b)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" title="Delete" onClick={() => setDeleteId(b.id!)}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
 
       {/* Create/Edit Dialog */}
-      {dialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-background border rounded-xl shadow-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-lg font-semibold mb-4">
-              {editingId ? "Edit Booking" : "New Booking"}
-            </h2>
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{editingId ? "Edit Booking" : "New Booking"}</DialogTitle>
+        </DialogHeader>
 
-            {conflictWarning && (
-              <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                ⚠️ {conflictWarning}
-              </div>
-            )}
+        {conflictWarning && (
+          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            ⚠️ {conflictWarning}
+          </div>
+        )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium">Studio *</label>
-                <select
-                  value={form.studioId}
-                  onChange={(e) => setForm((p) => ({ ...p, studioId: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="">Select studio</option>
-                  {studios.filter((s) => s.isActive).map((s) => (
-                    <option key={s.id} value={s.id!}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Studio *</Label>
+            <Select
+              value={form.studioId}
+              onChange={(e) => setForm((p) => ({ ...p, studioId: e.target.value }))}
+              placeholder="Select studio"
+              options={[
+                { value: "", label: "Select studio" },
+                ...studios.filter((s) => s.isActive).map((s) => ({ value: s.id!, label: s.name })),
+              ]}
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">Booking Type</label>
-                <select
-                  value={form.bookingType}
-                  onChange={(e) => setForm((p) => ({ ...p, bookingType: e.target.value as StudioBookingType }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  {BOOKING_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>{t.label}</option>
-                  ))}
-                </select>
-              </div>
+          <div className="space-y-2">
+            <Label>Booking Type</Label>
+            <Select
+              value={form.bookingType}
+              onChange={(e) => setForm((p) => ({ ...p, bookingType: e.target.value as StudioBookingType }))}
+              options={BOOKING_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+            />
+          </div>
 
-              <div>
-                <label className="text-sm font-medium">Date *</label>
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                />
-              </div>
+          <div className="space-y-2">
+            <Label>Date *</Label>
+            <DatePicker
+              value={form.date}
+              onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
+            />
+          </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-sm font-medium">Start *</label>
-                  <input
-                    type="time"
-                    value={form.startTime}
-                    onChange={(e) => setForm((p) => ({ ...p, startTime: e.target.value }))}
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">End *</label>
-                  <input
-                    type="time"
-                    value={form.endTime}
-                    onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value }))}
-                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="text-sm font-medium">Purpose *</label>
-                <input
-                  value={form.purpose}
-                  onChange={(e) => setForm((p) => ({ ...p, purpose: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Purpose of booking"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Client</label>
-                <select
-                  value={form.clientId}
-                  onChange={(e) => {
-                    const c = clients.find((cl) => cl.id === e.target.value);
-                    setForm((p) => ({ ...p, clientId: e.target.value, clientName: c?.companyName || "" }));
-                  }}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="">No client</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id!}>{c.companyName}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Event Name</label>
-                <input
-                  value={form.eventName}
-                  onChange={(e) => setForm((p) => ({ ...p, eventName: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Event name (optional)"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Contact Number</label>
-                <input
-                  value={form.contactNumber}
-                  onChange={(e) => setForm((p) => ({ ...p, contactNumber: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Phone number"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Email</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Email address"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="text-sm font-medium">Notes</label>
-                <textarea
-                  value={form.notes}
-                  onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-                  rows={2}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
-                  placeholder="Additional notes..."
-                />
-              </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2">
+              <Label>Start *</Label>
+              <TimePicker
+                value={form.startTime}
+                onChange={(e) => setForm((p) => ({ ...p, startTime: e.target.value }))}
+              />
             </div>
-
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setDialogOpen(false)}
-                className="rounded-md border border-input px-4 py-2 text-sm hover:bg-accent"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving || (!!conflictWarning && !conflictWarning.includes("End time"))}
-                className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-              >
-                {saving ? "Saving..." : editingId ? "Update" : "Create"}
-              </button>
+            <div className="space-y-2">
+              <Label>End *</Label>
+              <TimePicker
+                value={form.endTime}
+                onChange={(e) => setForm((p) => ({ ...p, endTime: e.target.value }))}
+              />
             </div>
           </div>
+
+          <div className="md:col-span-2 space-y-2">
+            <Label>Purpose *</Label>
+            <Input
+              value={form.purpose}
+              onChange={(e) => setForm((p) => ({ ...p, purpose: e.target.value }))}
+              placeholder="Purpose of booking"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Client</Label>
+            <Select
+              value={form.clientId}
+              onChange={(e) => {
+                const c = clients.find((cl) => cl.id === e.target.value);
+                setForm((p) => ({ ...p, clientId: e.target.value, clientName: c?.companyName || "" }));
+              }}
+              placeholder="No client"
+              options={[
+                { value: "", label: "No client" },
+                ...clients.map((c) => ({ value: c.id!, label: c.companyName })),
+              ]}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Event Name</Label>
+            <Input
+              value={form.eventName}
+              onChange={(e) => setForm((p) => ({ ...p, eventName: e.target.value }))}
+              placeholder="Event name (optional)"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Contact Number</Label>
+            <Input
+              value={form.contactNumber}
+              onChange={(e) => setForm((p) => ({ ...p, contactNumber: e.target.value }))}
+              placeholder="Phone number"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <Input
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+              placeholder="Email address"
+            />
+          </div>
+
+          <div className="md:col-span-2 space-y-2">
+            <Label>Notes</Label>
+            <Textarea
+              value={form.notes}
+              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+              rows={2}
+              placeholder="Additional notes..."
+            />
+          </div>
         </div>
-      )}
+
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+          <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={saving || (!!conflictWarning && !conflictWarning.includes("End time"))}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {saving ? "Saving..." : editingId ? "Update" : "Create"}
+          </Button>
+        </div>
+      </Dialog>
 
       <ConfirmDialog
         open={!!deleteId}

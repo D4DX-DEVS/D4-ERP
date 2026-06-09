@@ -4,7 +4,7 @@ import { AUTH_COOKIE } from "@/lib/auth-cookie";
 // Lightweight edge gate: redirects unauthenticated users away from protected
 // areas for a clean UX. Cryptographic enforcement happens in /api/db, which
 // verifies the JWT on every data request — this only checks cookie presence.
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const hasSession = Boolean(req.cookies.get(AUTH_COOKIE)?.value);
   if (hasSession) return NextResponse.next();
 

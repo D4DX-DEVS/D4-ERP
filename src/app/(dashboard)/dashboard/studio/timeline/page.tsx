@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader } from "@/components/ui/listing";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { PageLoader, EmptyState } from "@/components/ui/loading";
 import type { StudioBooking, Studio } from "@/types";
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 8); // 8AM to 10PM
@@ -86,34 +89,34 @@ export default function StudioTimelinePage() {
       {/* Date Navigation */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <button onClick={prevDay} className="rounded-md p-2 hover:bg-accent">
+          <Button variant="ghost" size="icon" onClick={prevDay}>
             <ChevronLeft className="h-4 w-4" />
-          </button>
-          <h2 className="text-sm font-semibold min-w-[250px] text-center">{dateLabel}</h2>
-          <button onClick={nextDay} className="rounded-md p-2 hover:bg-accent">
+          </Button>
+          <h2 className="text-sm font-semibold min-w-[250px] text-center text-slate-900">{dateLabel}</h2>
+          <Button variant="ghost" size="icon" onClick={nextDay}>
             <ChevronRight className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
-        <button onClick={goToday} className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">
+        <Button variant="outline" size="sm" onClick={goToday}>
           Today
-        </button>
+        </Button>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <PageLoader />
       ) : studios.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No studios configured.</p>
+        <Card><CardContent><EmptyState title="No studios configured" /></CardContent></Card>
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <Card className="overflow-hidden p-0">
           {/* Hour Headers */}
-          <div className="flex border-b">
-            <div className="w-32 shrink-0 border-r p-2 bg-muted/30">
-              <span className="text-xs font-medium text-muted-foreground">Studio</span>
+          <div className="flex border-b border-slate-100">
+            <div className="w-32 shrink-0 border-r border-slate-100 p-2 bg-slate-50/60">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Studio</span>
             </div>
             <div className="flex-1 flex">
               {HOURS.map((h) => (
-                <div key={h} className="flex-1 border-r p-1 text-center bg-muted/30">
-                  <span className="text-[10px] text-muted-foreground">
+                <div key={h} className="flex-1 border-r border-slate-100 p-1 text-center bg-slate-50/60">
+                  <span className="text-[10px] text-slate-400">
                     {h > 12 ? `${h - 12}PM` : h === 12 ? "12PM" : `${h}AM`}
                   </span>
                 </div>
@@ -125,15 +128,15 @@ export default function StudioTimelinePage() {
           {studios.map((studio) => {
             const studioBookings = dayBookings.filter((b) => b.studioId === studio.id);
             return (
-              <div key={studio.id} className="flex border-b last:border-0 min-h-[48px]">
-                <div className="w-32 shrink-0 border-r p-2 flex items-center">
-                  <span className="text-xs font-medium truncate">{studio.name}</span>
+              <div key={studio.id} className="flex border-b border-slate-100 last:border-0 min-h-[48px]">
+                <div className="w-32 shrink-0 border-r border-slate-100 p-2 flex items-center">
+                  <span className="text-xs font-medium text-slate-700 truncate">{studio.name}</span>
                 </div>
                 <div className="flex-1 relative">
                   {/* Hour grid lines */}
                   <div className="absolute inset-0 flex pointer-events-none">
                     {HOURS.map((h) => (
-                      <div key={h} className="flex-1 border-r border-dashed border-muted" />
+                      <div key={h} className="flex-1 border-r border-dashed border-slate-100" />
                     ))}
                   </div>
                   {/* Booking bars */}
@@ -159,7 +162,7 @@ export default function StudioTimelinePage() {
               </div>
             );
           })}
-        </div>
+        </Card>
       )}
 
       {/* Legend */}
@@ -167,7 +170,7 @@ export default function StudioTimelinePage() {
         {Object.entries(STATUS_BAR_COLORS).map(([status, color]) => (
           <div key={status} className="flex items-center gap-1.5">
             <span className={`inline-block h-3 w-6 rounded ${color}`} />
-            <span className="capitalize">{status}</span>
+            <span className="capitalize text-slate-600">{status}</span>
           </div>
         ))}
       </div>

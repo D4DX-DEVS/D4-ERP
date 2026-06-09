@@ -3,9 +3,13 @@
 import { useEffect, useState } from "react";
 import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader } from "@/components/ui/listing";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/loading";
+import { CalendarClock } from "lucide-react";
 import type { StudioBooking, Studio } from "@/types";
-
-const HOURS = Array.from({ length: 15 }, (_, i) => i + 8); // 8-22
 
 function timeToMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
@@ -95,52 +99,52 @@ export default function StudioAvailabilityPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="text-xs font-medium block mb-1">Date</label>
-          <input
+        <div className="space-y-1.5">
+          <Label>Date</Label>
+          <Input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="w-[170px]"
           />
         </div>
-        <div>
-          <label className="text-xs font-medium block mb-1">Studio</label>
-          <select
+        <div className="space-y-1.5">
+          <Label>Studio</Label>
+          <Select
             value={selectedStudio}
             onChange={(e) => setSelectedStudio(e.target.value)}
-            className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            <option value="all">All Studios</option>
-            {studios.map((s) => (
-              <option key={s.id} value={s.id!}>{s.name}</option>
-            ))}
-          </select>
+            className="w-[180px]"
+            options={[
+              { value: "all", label: "All Studios" },
+              ...studios.map((s) => ({ value: s.id!, label: s.name })),
+            ]}
+          />
         </div>
-        <div className="ml-auto rounded-md border px-3 py-2 text-sm">
-          <span className="text-muted-foreground">Occupancy: </span>
-          <span className="font-semibold">{occupancy}%</span>
+        <div className="ml-auto rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm">
+          <span className="text-teal-600">Occupancy: </span>
+          <span className="font-semibold text-teal-700">{occupancy}%</span>
         </div>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-slate-500">Loading...</p>
       ) : displayStudios.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No studios found.</p>
+        <Card><CardContent><EmptyState icon={<CalendarClock className="h-12 w-12" />} title="No studios found" /></CardContent></Card>
       ) : (
         <div className="space-y-4">
           {displayStudios.map((studio) => {
             const slots = getAvailability(studio.id!);
             const studioBooked = activeBookings.filter((b) => b.studioId === studio.id).length;
             return (
-              <div key={studio.id} className="rounded-xl border bg-card p-4">
+              <Card key={studio.id}>
+                <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium">{studio.name}</h4>
-                  <span className="text-xs text-muted-foreground">{studioBooked} bookings</span>
+                  <h4 className="font-semibold text-slate-900">{studio.name}</h4>
+                  <span className="text-xs text-slate-500">{studioBooked} bookings</span>
                 </div>
 
                 {/* Visual blocks */}
-                <div className="flex gap-0.5 h-10 rounded-lg overflow-hidden border">
+                <div className="flex gap-0.5 h-10 rounded-lg overflow-hidden border border-slate-100">
                   {slots.map((slot, i) => {
                     const width = ((slot.end - slot.start) / (14 * 60)) * 100;
                     return (
@@ -173,12 +177,13 @@ export default function StudioAvailabilityPage() {
                   {slots
                     .filter((s) => s.type === "free" && (s.end - s.start) >= 30)
                     .map((slot, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-xs text-green-700">
+                      <span key={i} className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
                         {formatMinutes(slot.start)} – {formatMinutes(slot.end)}
                       </span>
                     ))}
                 </div>
-              </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>

@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/loading";
 import { Clock, TrendingUp, Users, Target } from "lucide-react";
 import type { WorkLog } from "@/types";
 
@@ -66,56 +69,56 @@ export default function ProductivityPage() {
       <ListingHeader title="Productivity" description="Last 30 days staff productivity analysis." />
 
       <ListingStatGrid>
-        <ListingStatCard label="Active Staff" value={staff.length} icon={<Users className="h-5 w-5" />} />
-        <ListingStatCard label="Total Hours" value={`${totalHours}h`} icon={<Clock className="h-5 w-5" />} />
-        <ListingStatCard label="Avg per Staff" value={`${avgOverall}h`} icon={<TrendingUp className="h-5 w-5" />} />
-        <ListingStatCard label="Top Performer" value={topPerformer} icon={<Target className="h-5 w-5" />} />
+        <ListingStatCard label="Active Staff" value={staff.length} icon={<Users className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white" />
+        <ListingStatCard label="Total Hours" value={`${totalHours}h`} icon={<Clock className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white" />
+        <ListingStatCard label="Avg per Staff" value={`${avgOverall}h`} icon={<TrendingUp className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white" />
+        <ListingStatCard label="Top Performer" value={topPerformer} icon={<Target className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white" />
       </ListingStatGrid>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-slate-500">Loading...</p>
       ) : staff.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No productivity data in the last 30 days.</p>
+        <Card><CardContent><EmptyState icon={<TrendingUp className="h-12 w-12" />} title="No productivity data in the last 30 days" /></CardContent></Card>
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/30">
-              <tr>
-                <th className="text-left px-4 py-3 font-medium">#</th>
-                <th className="text-left px-4 py-3 font-medium">Staff</th>
-                <th className="text-left px-4 py-3 font-medium">Days Active</th>
-                <th className="text-left px-4 py-3 font-medium">Total Hours</th>
-                <th className="text-left px-4 py-3 font-medium">Avg/Day</th>
-                <th className="text-left px-4 py-3 font-medium">Utilization</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card className="overflow-hidden p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>#</TableHead>
+                <TableHead>Staff</TableHead>
+                <TableHead>Days Active</TableHead>
+                <TableHead>Total Hours</TableHead>
+                <TableHead>Avg/Day</TableHead>
+                <TableHead>Utilization</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {staff.map((s, idx) => {
                 const utilization = Math.min(100, Math.round((s.avgPerDay / 8) * 100));
                 return (
-                  <tr key={s.staffId} className="border-b last:border-0">
-                    <td className="px-4 py-3 font-bold text-muted-foreground">{idx + 1}</td>
-                    <td className="px-4 py-3 font-medium">{s.staffName}</td>
-                    <td className="px-4 py-3">{s.daysActive}</td>
-                    <td className="px-4 py-3">{s.totalHours}h</td>
-                    <td className="px-4 py-3">{Math.round(s.avgPerDay * 10) / 10}h</td>
-                    <td className="px-4 py-3">
+                  <TableRow key={s.staffId}>
+                    <TableCell className="font-bold text-slate-400">{idx + 1}</TableCell>
+                    <TableCell className="font-medium text-slate-900">{s.staffName}</TableCell>
+                    <TableCell>{s.daysActive}</TableCell>
+                    <TableCell>{s.totalHours}h</TableCell>
+                    <TableCell>{Math.round(s.avgPerDay * 10) / 10}h</TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-2">
-                        <div className="w-16 h-2 rounded-full bg-muted overflow-hidden">
+                        <div className="w-16 h-2 rounded-full bg-slate-100 overflow-hidden">
                           <div
-                            className={`h-full rounded-full ${utilization >= 75 ? "bg-green-500" : utilization >= 50 ? "bg-yellow-500" : "bg-red-500"}`}
+                            className={`h-full rounded-full ${utilization >= 75 ? "bg-gradient-to-r from-teal-600 to-emerald-500" : utilization >= 50 ? "bg-gradient-to-r from-amber-500 to-yellow-500" : "bg-gradient-to-r from-red-500 to-rose-500"}`}
                             style={{ width: `${utilization}%` }}
                           />
                         </div>
-                        <span className="text-xs">{utilization}%</span>
+                        <span className="text-xs text-slate-500">{utilization}%</span>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

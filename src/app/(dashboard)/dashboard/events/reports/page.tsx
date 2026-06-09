@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
+import { Card, CardContent } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/utils";
 import { BarChart3, DollarSign, TrendingUp, XCircle } from "lucide-react";
-import type { ManagedEvent, EventManagementType } from "@/types";
+import type { ManagedEvent } from "@/types";
 
 export default function EventReportsPage() {
   const [events, setEvents] = useState<ManagedEvent[]>([]);
@@ -57,60 +59,67 @@ export default function EventReportsPage() {
           label="Total Events"
           value={events.length}
           icon={<BarChart3 className="h-5 w-5" />}
+          toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white"
         />
         <ListingStatCard
           label="Success Rate"
           value={`${successRate}%`}
           icon={<TrendingUp className="h-5 w-5" />}
           meta={`${completed.length} completed`}
+          toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white"
         />
         <ListingStatCard
           label="Total Budget"
-          value={`₹${(totalBudget / 1000).toFixed(0)}k`}
+          value={formatCurrency(totalBudget)}
           icon={<DollarSign className="h-5 w-5" />}
-          meta={`Actual: ₹${(totalActual / 1000).toFixed(0)}k`}
+          meta={`Actual: ${formatCurrency(totalActual)}`}
+          toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white"
         />
         <ListingStatCard
           label="Cancellation Rate"
           value={`${cancellationRate}%`}
           icon={<XCircle className="h-5 w-5" />}
           meta={`${cancelled.length} cancelled`}
+          toneClassName="bg-gradient-to-br from-rose-500 to-red-500 text-white"
         />
       </ListingStatGrid>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Events by Type */}
-        <div className="rounded-xl border bg-card p-6">
-          <h3 className="text-sm font-semibold mb-4">Events by Type</h3>
+        <Card>
+          <CardContent className="p-6">
+          <h3 className="text-sm font-semibold text-slate-950 mb-4">Events by Type</h3>
           {loading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <p className="text-sm text-slate-500">Loading...</p>
           ) : (
             <div className="space-y-3">
               {Object.entries(byType)
                 .sort((a, b) => b[1] - a[1])
                 .map(([type, count]) => (
                   <div key={type} className="flex items-center justify-between">
-                    <span className="text-sm capitalize">{type}</span>
+                    <span className="text-sm capitalize text-slate-700">{type}</span>
                     <div className="flex items-center gap-2">
-                      <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="w-24 h-2 rounded-full bg-slate-100 overflow-hidden">
                         <div
-                          className="h-full bg-primary rounded-full"
+                          className="h-full bg-gradient-to-r from-teal-600 to-emerald-500 rounded-full"
                           style={{ width: `${(count / events.length) * 100}%` }}
                         />
                       </div>
-                      <span className="text-sm font-medium w-8 text-right">{count}</span>
+                      <span className="text-sm font-semibold w-8 text-right text-slate-900">{count}</span>
                     </div>
                   </div>
                 ))}
             </div>
           )}
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Monthly Trend */}
-        <div className="rounded-xl border bg-card p-6">
-          <h3 className="text-sm font-semibold mb-4">Monthly Trend</h3>
+        <Card>
+          <CardContent className="p-6">
+          <h3 className="text-sm font-semibold text-slate-950 mb-4">Monthly Trend</h3>
           {loading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
+            <p className="text-sm text-slate-500">Loading...</p>
           ) : (
             <div className="flex items-end gap-2 h-32">
               {monthlyData.map((m) => {
@@ -118,34 +127,34 @@ export default function EventReportsPage() {
                 const height = (m.count / maxCount) * 100;
                 return (
                   <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
-                    <span className="text-xs font-medium">{m.count}</span>
-                    <div className="w-full rounded-t bg-primary/20 relative" style={{ height: `${height}%`, minHeight: "4px" }}>
-                      <div className="absolute inset-0 rounded-t bg-primary opacity-70" />
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">{m.month}</span>
+                    <span className="text-xs font-semibold text-slate-900">{m.count}</span>
+                    <div className="w-full rounded-t-lg bg-gradient-to-t from-teal-600 to-emerald-400 shadow-[0_4px_12px_rgba(15,118,110,0.25)]" style={{ height: `${height}%`, minHeight: "4px" }} />
+                    <span className="text-[10px] text-slate-400">{m.month}</span>
                   </div>
                 );
               })}
             </div>
           )}
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Revenue by Type */}
-      <div className="rounded-xl border bg-card p-6">
-        <h3 className="text-sm font-semibold mb-4">Revenue by Event Type</h3>
+      <Card>
+        <CardContent className="p-6">
+        <h3 className="text-sm font-semibold text-slate-950 mb-4">Revenue by Event Type</h3>
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <p className="text-sm text-slate-500">Loading...</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="border-b">
+              <thead className="border-b border-slate-200/70">
                 <tr>
-                  <th className="text-left py-2 font-medium">Type</th>
-                  <th className="text-right py-2 font-medium">Events</th>
-                  <th className="text-right py-2 font-medium">Budget</th>
-                  <th className="text-right py-2 font-medium">Actual</th>
-                  <th className="text-right py-2 font-medium">Variance</th>
+                  <th className="text-left py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Type</th>
+                  <th className="text-right py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Events</th>
+                  <th className="text-right py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Budget</th>
+                  <th className="text-right py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Actual</th>
+                  <th className="text-right py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Variance</th>
                 </tr>
               </thead>
               <tbody>
@@ -155,13 +164,13 @@ export default function EventReportsPage() {
                   const actual = typeEvents.reduce((s, e) => s + (e.actualCost || 0), 0);
                   const variance = budget - actual;
                   return (
-                    <tr key={type} className="border-b last:border-0">
-                      <td className="py-2 capitalize">{type}</td>
-                      <td className="py-2 text-right">{typeEvents.length}</td>
-                      <td className="py-2 text-right">₹{budget.toLocaleString("en-IN")}</td>
-                      <td className="py-2 text-right">₹{actual.toLocaleString("en-IN")}</td>
-                      <td className={`py-2 text-right font-medium ${variance >= 0 ? "text-green-600" : "text-red-600"}`}>
-                        {variance >= 0 ? "+" : ""}₹{variance.toLocaleString("en-IN")}
+                    <tr key={type} className="border-b border-slate-100 last:border-0">
+                      <td className="py-2.5 capitalize text-slate-700">{type}</td>
+                      <td className="py-2.5 text-right text-slate-700">{typeEvents.length}</td>
+                      <td className="py-2.5 text-right text-slate-700">{formatCurrency(budget)}</td>
+                      <td className="py-2.5 text-right text-slate-700">{formatCurrency(actual)}</td>
+                      <td className={`py-2.5 text-right font-semibold ${variance >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {variance >= 0 ? "+" : ""}{formatCurrency(variance)}
                       </td>
                     </tr>
                   );
@@ -170,7 +179,8 @@ export default function EventReportsPage() {
             </table>
           </div>
         )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

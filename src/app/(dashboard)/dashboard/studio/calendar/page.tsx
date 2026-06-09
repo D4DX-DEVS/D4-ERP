@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader } from "@/components/ui/listing";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { PageLoader } from "@/components/ui/loading";
 import type { StudioBooking } from "@/types";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -75,28 +78,28 @@ export default function StudioCalendarPage() {
       {/* Navigation */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <button onClick={prevMonth} className="rounded-md p-2 hover:bg-accent">
+          <Button variant="ghost" size="icon" onClick={prevMonth}>
             <ChevronLeft className="h-4 w-4" />
-          </button>
-          <h2 className="text-lg font-semibold min-w-[180px] text-center">{monthLabel}</h2>
-          <button onClick={nextMonth} className="rounded-md p-2 hover:bg-accent">
+          </Button>
+          <h2 className="text-lg font-semibold min-w-[180px] text-center text-slate-900">{monthLabel}</h2>
+          <Button variant="ghost" size="icon" onClick={nextMonth}>
             <ChevronRight className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={goToday} className="rounded-md border px-3 py-1.5 text-sm hover:bg-accent">
+          <Button variant="outline" size="sm" onClick={goToday}>
             Today
-          </button>
+          </Button>
         </div>
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <PageLoader />
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <div className="grid grid-cols-7 border-b bg-muted/30">
+        <Card className="overflow-hidden p-0">
+          <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/60">
             {DAYS.map((d) => (
-              <div key={d} className="px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+              <div key={d} className="px-2 py-2.5 text-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                 {d}
               </div>
             ))}
@@ -104,18 +107,18 @@ export default function StudioCalendarPage() {
           <div className="grid grid-cols-7">
             {cells.map((day, idx) => {
               if (day === null) {
-                return <div key={idx} className="border-b border-r p-2 min-h-[100px] bg-muted/10" />;
+                return <div key={idx} className="border-b border-r border-slate-100 p-2 min-h-[100px] bg-slate-50/40" />;
               }
               const dayBookings = getBookingsForDate(day);
               return (
                 <div
                   key={idx}
-                  className={`border-b border-r p-2 min-h-[100px] hover:bg-accent/20 transition-colors ${
-                    isToday(day) ? "bg-primary/5" : ""
+                  className={`border-b border-r border-slate-100 p-2 min-h-[100px] hover:bg-teal-50/40 transition-colors ${
+                    isToday(day) ? "bg-teal-50/50" : ""
                   }`}
                 >
-                  <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
-                    isToday(day) ? "bg-primary text-primary-foreground" : ""
+                  <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
+                    isToday(day) ? "bg-gradient-to-br from-teal-600 to-emerald-500 text-white shadow-sm" : "text-slate-600"
                   }`}>
                     {day}
                   </span>
@@ -123,23 +126,23 @@ export default function StudioCalendarPage() {
                     {dayBookings.slice(0, 3).map((b) => (
                       <div
                         key={b.id}
-                        className="w-full text-left rounded px-1 py-0.5 text-[10px] truncate hover:bg-accent flex items-center gap-1 cursor-pointer"
+                        className="w-full text-left rounded-lg px-1.5 py-0.5 text-[10px] truncate hover:bg-teal-50 flex items-center gap-1 cursor-pointer"
                         onClick={() => router.push("/dashboard/studio/bookings")}
                         title={`${b.startTime}–${b.endTime} ${b.purpose}`}
                       >
                         <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT_COLORS[b.status] || "bg-gray-400"}`} />
-                        <span className="truncate">{b.startTime} {b.studioName}</span>
+                        <span className="truncate text-slate-600">{b.startTime} {b.studioName}</span>
                       </div>
                     ))}
                     {dayBookings.length > 3 && (
-                      <p className="text-[10px] text-muted-foreground px-1">+{dayBookings.length - 3} more</p>
+                      <p className="text-[10px] text-slate-400 px-1">+{dayBookings.length - 3} more</p>
                     )}
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Legend */}
@@ -147,7 +150,7 @@ export default function StudioCalendarPage() {
         {Object.entries(STATUS_DOT_COLORS).map(([status, color]) => (
           <div key={status} className="flex items-center gap-1.5">
             <span className={`inline-block h-2 w-2 rounded-full ${color}`} />
-            <span className="capitalize">{status}</span>
+            <span className="capitalize text-slate-600">{status}</span>
           </div>
         ))}
       </div>
