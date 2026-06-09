@@ -57,6 +57,25 @@ export type NavModule = {
 };
 
 export const navigationModules: NavModule[] = [
+  // ─── My Portal (staff-only: shown when staff accesses dashboard via feature) ─
+  {
+    id: "my-portal",
+    label: "My Portal",
+    icon: Users,
+    roles: ["staff"],
+    items: [
+      { label: "Home", href: "/staff-portal", roles: ["staff"] },
+      { label: "Apply Leave", href: "/staff-portal/leave", roles: ["staff"] },
+      { label: "My Leaves", href: "/staff-portal/my-leaves", roles: ["staff"] },
+      { label: "Attendance", href: "/staff-portal/attendance", roles: ["staff"] },
+      { label: "My Tasks", href: "/staff-portal/my-tasks", roles: ["staff"] },
+      { label: "Work Log", href: "/staff-portal/work-log", roles: ["staff"] },
+      { label: "Calendar", href: "/staff-portal/calendar", icon: Calendar, roles: ["staff"] },
+      { label: "Holidays", href: "/staff-portal/holidays", roles: ["staff"] },
+      { label: "Profile", href: "/staff-portal/profile", roles: ["staff"] },
+    ],
+  },
+
   // ─── Dashboard ───────────────────────────────────────────────────────
   {
     id: "dashboard",

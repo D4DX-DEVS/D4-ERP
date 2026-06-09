@@ -256,8 +256,8 @@ export default function AssetsPage() {
             <div className="space-y-2"><Label>Purchase Date</Label><DatePicker value={form.purchaseDate} onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2"><Label>Purchase Price</Label><Input type="number" value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: Number(e.target.value) })} /></div>
-            <div className="space-y-2"><Label>Current Value</Label><Input type="number" value={form.currentValue} onChange={(e) => setForm({ ...form, currentValue: Number(e.target.value) })} /></div>
+            <div className="space-y-2"><Label>Purchase Price</Label><Input type="number" min={0} value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: Number(e.target.value) })} /></div>
+            <div className="space-y-2"><Label>Current Value</Label><Input type="number" min={0} value={form.currentValue} onChange={(e) => setForm({ ...form, currentValue: Number(e.target.value) })} /></div>
             <div className="space-y-2"><Label>Status</Label><Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Asset["status"] })} options={[{ value: "available", label: "Available" }, { value: "assigned", label: "Assigned" }, { value: "maintenance", label: "Maintenance" }, { value: "retired", label: "Retired" }]} /></div>
           </div>
           {form.status === "assigned" && (

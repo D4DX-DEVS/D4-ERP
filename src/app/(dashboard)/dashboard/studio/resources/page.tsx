@@ -310,7 +310,7 @@ export default function StudioResourcesPage() {
           </div>
           <div className="space-y-2">
             <Label>Capacity</Label>
-            <Input type="number" value={studioForm.capacity} onChange={(e) => setStudioForm((p) => ({ ...p, capacity: e.target.value }))} />
+            <Input type="number" min={0} value={studioForm.capacity} onChange={(e) => setStudioForm((p) => ({ ...p, capacity: e.target.value }))} />
           </div>
           <div className="space-y-2">
             <Label>Facilities (comma-separated)</Label>

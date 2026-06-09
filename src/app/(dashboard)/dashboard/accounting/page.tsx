@@ -286,7 +286,7 @@ export default function AccountingPage() {
             </div>
             <div className="space-y-2">
               <Label>Amount *</Label>
-              <Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} required />
+              <Input type="number" min={0} step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} required />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">

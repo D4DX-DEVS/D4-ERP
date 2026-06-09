@@ -5,7 +5,9 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
-import { StaffRole } from "@/types";
+import { hasFeature } from "@/lib/permissions";
+import type { StaffRole } from "@/types";
+import type { FeatureKey } from "@/lib/permissions";
 
 // Route-level role access map — mirrors sidebar.tsx roles
 const ROUTE_ROLES: Record<string, StaffRole[]> = {
@@ -41,6 +43,20 @@ const ROUTE_ROLES: Record<string, StaffRole[]> = {
   "/dashboard/settings": ["admin"],
 };
 
+/** Routes that can also be accessed if the user has a granted feature. */
+const ROUTE_FEATURES: Record<string, FeatureKey> = {
+  "/dashboard/studio": "studio-booking",
+  "/dashboard/studio/bookings": "studio-booking",
+  "/dashboard/studio/calendar": "studio-booking",
+  "/dashboard/studio/timeline": "studio-booking",
+  "/dashboard/studio/availability": "studio-booking",
+  "/dashboard/studio/resources": "studio-manage",
+  "/dashboard/events": "events",
+  "/dashboard/assets": "asset-management",
+  "/dashboard/calendar": "calendar",
+  "/dashboard/clients": "clients",
+};
+
 function getRouteRoles(pathname: string): StaffRole[] | null {
   // Check exact match first, then prefix (for /dashboard/staff/[id] etc.)
   if (ROUTE_ROLES[pathname]) return ROUTE_ROLES[pathname];
@@ -50,6 +66,18 @@ function getRouteRoles(pathname: string): StaffRole[] | null {
     parts.pop();
     const parent = parts.join("/");
     if (ROUTE_ROLES[parent]) return ROUTE_ROLES[parent];
+  }
+  return null;
+}
+
+/** Get the feature key that grants access to a route, if any. */
+function getRouteFeature(pathname: string): FeatureKey | null {
+  if (ROUTE_FEATURES[pathname]) return ROUTE_FEATURES[pathname];
+  const parts = pathname.split("/");
+  while (parts.length > 2) {
+    parts.pop();
+    const parent = parts.join("/");
+    if (ROUTE_FEATURES[parent]) return ROUTE_FEATURES[parent];
   }
   return null;
 }
@@ -70,7 +98,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!isLoading && user && pathname) {
       const allowedRoles = getRouteRoles(pathname);
       if (allowedRoles && !allowedRoles.includes(user.role as StaffRole)) {
-        router.replace("/dashboard");
+        // Check if user has a feature that grants access to this route
+        const feature = getRouteFeature(pathname);
+        const featureSubject = { role: user.role, grantedFeatures: user.grantedFeatures };
+        if (!feature || !hasFeature(featureSubject, feature)) {
+          router.replace("/dashboard");
+        }
       }
     }
   }, [user, isLoading, pathname, router]);
@@ -93,7 +126,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // Check role access before rendering
   const allowedRoles = getRouteRoles(pathname);
-  if (allowedRoles && !allowedRoles.includes(user.role as StaffRole)) {
+  const routeFeature = getRouteFeature(pathname);
+  const featureSubject = { role: user.role, grantedFeatures: user.grantedFeatures };
+  const hasRoleAccess = !allowedRoles || allowedRoles.includes(user.role as StaffRole);
+  const hasFeatureAccess = routeFeature ? hasFeature(featureSubject, routeFeature) : false;
+  if (!hasRoleAccess && !hasFeatureAccess) {
     return (
       <div className="mesh-bg flex min-h-screen items-center justify-center px-6">
         <div className="glass-panel max-w-lg rounded-[32px] px-8 py-10 text-center">

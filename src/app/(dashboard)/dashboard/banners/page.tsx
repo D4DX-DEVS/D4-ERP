@@ -247,7 +247,7 @@ export default function BannersPage() {
             </div>
             <div className="space-y-2">
               <Label>Priority</Label>
-              <Input type="number" value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} />
+              <Input type="number" min={0} value={form.priority} onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })} />
             </div>
           </div>
           {form.audience === "department" && (
