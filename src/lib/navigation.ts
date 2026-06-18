@@ -103,39 +103,24 @@ export const navigationModules: NavModule[] = [
     label: "People",
     icon: Users,
     roles: ["admin", "department-head", "accounts"],
-    subGroups: [
-      {
-        label: "Employees",
-        icon: Users,
-        items: [
-          { label: "Staff", href: "/dashboard/staff", roles: ["admin", "department-head"] },
-          { label: "Clients", href: "/dashboard/clients", icon: UserCheck, roles: ["admin", "department-head", "accounts"] },
-        ],
-      },
-      {
-        label: "Attendance",
-        icon: Clock,
-        items: [
-          { label: "Attendance", href: "/dashboard/attendance", roles: ["admin", "department-head"] },
-          { label: "Corrections", href: "/dashboard/attendance/corrections", icon: ClipboardCheck, roles: ["admin", "department-head"] },
-          { label: "Shifts", href: "/dashboard/attendance/shifts", icon: Hourglass, roles: ["admin"] },
-          { label: "Attendance Reports", href: "/dashboard/attendance/reports", icon: BarChart3, roles: ["admin", "department-head", "accounts"] },
-        ],
-      },
-      {
-        label: "Leave Management",
-        icon: CalendarDays,
-        items: [
-          { label: "Leave Requests", href: "/dashboard/leaves", roles: ["admin", "department-head"] },
-        ],
-      },
-      {
-        label: "Payroll",
-        icon: Wallet,
-        items: [
-          { label: "Payroll", href: "/dashboard/payroll", roles: ["admin", "accounts"] },
-        ],
-      },
+    items: [
+      { label: "Staff", href: "/dashboard/staff", roles: ["admin", "department-head"] },
+      { label: "Leave Requests", href: "/dashboard/leaves", roles: ["admin", "department-head"] },
+      { label: "Payroll", href: "/dashboard/payroll", roles: ["admin", "accounts"] },
+    ],
+  },
+
+  // ─── Attendance ──────────────────────────────────────────────────────
+  {
+    id: "attendance",
+    label: "Attendance",
+    icon: Clock,
+    roles: ["admin", "department-head", "accounts"],
+    items: [
+      { label: "Attendance", href: "/dashboard/attendance", roles: ["admin", "department-head"] },
+      { label: "Corrections", href: "/dashboard/attendance/corrections", icon: ClipboardCheck, roles: ["admin", "department-head"] },
+      { label: "Shifts", href: "/dashboard/attendance/shifts", icon: Hourglass, roles: ["admin"] },
+      { label: "Attendance Reports", href: "/dashboard/attendance/reports", icon: BarChart3, roles: ["admin", "department-head", "accounts"] },
     ],
   },
 
@@ -145,24 +130,12 @@ export const navigationModules: NavModule[] = [
     label: "Work",
     icon: ClipboardList,
     roles: ["admin", "department-head"],
-    subGroups: [
-      {
-        label: "Tasks",
-        icon: ClipboardList,
-        items: [
-          { label: "Task Board", href: "/dashboard/tasks", roles: ["admin", "department-head"] },
-          { label: "Daily Updates", href: "/dashboard/tasks/daily-updates", roles: ["admin", "department-head"], feature: "work-logs" },
-          { label: "Work Logs", href: "/dashboard/tasks/work-logs", roles: ["admin", "department-head"], feature: "work-logs" },
-          { label: "Performance", href: "/dashboard/tasks/performance", roles: ["admin", "department-head"], feature: "work-logs" },
-        ],
-      },
-      {
-        label: "Calendar",
-        icon: Calendar,
-        items: [
-          { label: "Team Calendar", href: "/dashboard/calendar", roles: ["admin", "department-head"] },
-        ],
-      },
+    items: [
+      { label: "Task Board", href: "/dashboard/tasks", roles: ["admin", "department-head"] },
+      { label: "Daily Updates", href: "/dashboard/tasks/daily-updates", roles: ["admin", "department-head"], feature: "work-logs" },
+      { label: "Work Logs", href: "/dashboard/tasks/work-logs", roles: ["admin", "department-head"], feature: "work-logs" },
+      { label: "Performance", href: "/dashboard/tasks/performance", roles: ["admin", "department-head"], feature: "work-logs" },
+      { label: "Team Calendar", href: "/dashboard/calendar", icon: Calendar, roles: ["admin", "department-head"] },
     ],
   },
 
@@ -223,27 +196,18 @@ export const navigationModules: NavModule[] = [
     label: "Finance",
     icon: DollarSign,
     roles: ["admin", "accounts"],
+    items: [
+      { label: "Accounting", href: "/dashboard/accounting", roles: ["admin", "accounts"] },
+      { label: "Item Master", href: "/dashboard/items", roles: ["admin", "accounts"] },
+    ],
     subGroups: [
-      {
-        label: "Accounting",
-        icon: DollarSign,
-        items: [
-          { label: "Accounting", href: "/dashboard/accounting", roles: ["admin", "accounts"] },
-        ],
-      },
       {
         label: "Sales",
         icon: Receipt,
         items: [
+          { label: "Clients", href: "/dashboard/clients", icon: UserCheck, roles: ["admin", "department-head", "accounts"] },
           { label: "Quotations", href: "/dashboard/quotations", roles: ["admin", "accounts"] },
           { label: "Invoices", href: "/dashboard/invoices", roles: ["admin", "accounts"] },
-        ],
-      },
-      {
-        label: "Inventory",
-        icon: Package,
-        items: [
-          { label: "Item Master", href: "/dashboard/items", roles: ["admin", "accounts"] },
         ],
       },
       {

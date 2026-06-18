@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { CommandSearch } from "@/components/layout/command-search";
 import { hasFeature } from "@/lib/permissions";
 import type { StaffRole } from "@/types";
 import type { FeatureKey } from "@/lib/permissions";
@@ -145,6 +146,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="mesh-bg min-h-screen">
       <Sidebar />
+      <CommandSearch />
       <div className="relative z-10 min-h-screen lg:pl-[calc(var(--sidebar-width)+1.75rem)]">
         <Header />
         <main className="page-frame px-4 pb-16 pt-4 sm:px-5 lg:px-6 lg:pt-5">

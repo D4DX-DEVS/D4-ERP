@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
-import { Bell, ChevronRight, LogOut } from "lucide-react";
+import { Bell, ChevronRight, LogOut, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const SECTION_TITLES: Record<string, { title: string; description: string }> = {
@@ -97,6 +97,15 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-2 self-end lg:self-auto">
+          <Button
+            variant="outline"
+            className="hidden h-10 items-center gap-2 rounded-2xl border-slate-200/80 bg-white/70 px-3 text-sm text-slate-400 hover:text-slate-600 sm:inline-flex"
+            onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))}
+          >
+            <Search className="h-4 w-4" />
+            <span>Search...</span>
+            <kbd className="ml-2 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold">Ctrl K</kbd>
+          </Button>
           <Button variant="outline" size="icon" className="relative" onClick={() => router.push("/dashboard/notifications")}>
             <Bell className="h-4.5 w-4.5" />
             <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-orange-500" />

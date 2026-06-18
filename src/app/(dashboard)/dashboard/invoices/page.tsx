@@ -308,7 +308,11 @@ export default function InvoicesPage() {
               {invoices.map((inv) => (
                 <TableRow key={inv.id}>
                   <TableCell className="font-mono font-medium">{inv.invoiceNumber}</TableCell>
-                  <TableCell>{inv.clientName || getClientName(inv.clientId)}</TableCell>
+                  <TableCell>
+                    <Link href={`/dashboard/clients/${inv.clientId}`} className="text-blue-600 hover:underline">
+                      {inv.clientName || getClientName(inv.clientId)}
+                    </Link>
+                  </TableCell>
                   <TableCell>{getCompanyName(inv.companyId)}</TableCell>
                   <TableCell>{inv.date ? formatDate(new Date(inv.date.seconds * 1000)) : "—"}</TableCell>
                   <TableCell><Badge>{inv.taxType === "gst" ? "GST" : "No Tax"}</Badge></TableCell>
@@ -341,7 +345,8 @@ export default function InvoicesPage() {
             <div className="space-y-2">
               <Label>Client *</Label>
               <Select value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}
-                options={clients.map((c) => ({ value: c.id, label: c.companyName }))} placeholder="Select" required />
+                options={clients.map((c) => ({ value: c.id, label: c.companyName }))} placeholder="Select" required
+                footerAction={{ label: "New Client", href: "/dashboard/clients" }} />
             </div>
             <div className="space-y-2">
               <Label>Due Date *</Label>

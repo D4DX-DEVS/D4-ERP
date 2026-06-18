@@ -3,16 +3,18 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, Plus } from "lucide-react";
 
 /* ===== Simple Select (modern dropdown, same options/value/onChange API) ===== */
 export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   options: { value: string; label: string }[];
   placeholder?: string;
+  /** Optional action link rendered at the bottom of the dropdown */
+  footerAction?: { label: string; href: string };
 }
 
 const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
-  ({ className, options, placeholder, value, onChange, disabled, id, name, required }, ref) => {
+  ({ className, options, placeholder, value, onChange, disabled, id, name, required, footerAction }, ref) => {
     const [open, setOpen] = React.useState(false);
     const [mounted, setMounted] = React.useState(false);
     const [coords, setCoords] = React.useState({ top: 0, left: 0, width: 0 });
@@ -126,6 +128,16 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
                     </div>
                   );
                 })}
+                {footerAction && (
+                  <a
+                    href={footerAction.href}
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-2 rounded-xl border-t border-slate-100 mt-1 px-3 py-2.5 text-sm font-medium text-teal-700 hover:bg-teal-50 transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>{footerAction.label}</span>
+                  </a>
+                )}
               </div>
             </>,
             document.body
