@@ -16,6 +16,7 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { getStatusColor, formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import { FEATURES, roleHasFeature } from "@/lib/permissions";
+import { getContractStatus, getDaysRemaining, CONTRACT_DURATIONS, type ContractStatus } from "@/lib/contract-utils";
 import { useAuthStore } from "@/store/auth-store";
 import { LetterGenerator } from "@/components/staff/letter-generator";
 import { EmployeeDocuments } from "@/components/staff/employee-documents";
@@ -199,6 +200,17 @@ export default function StaffProfilePage() {
 
   const canEditFeatures = currentUser?.role === "admin";
 
+  const contractEndDate = staff.contractEndDate ? new Date(staff.contractEndDate.seconds * 1000) : null;
+  const contractStatus = getContractStatus(contractEndDate);
+  const contractDaysRemaining = getDaysRemaining(contractEndDate);
+  const contractTypeLabel = CONTRACT_DURATIONS.find((d) => d.value === staff.contractType)?.label || "Permanent";
+  const CONTRACT_STATUS_COLORS: Record<ContractStatus, string> = {
+    none: "bg-gray-50 text-gray-700",
+    active: "bg-green-50 text-green-700",
+    "expiring-soon": "bg-amber-50 text-amber-700",
+    expired: "bg-red-50 text-red-700",
+  };
+
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: "overview", label: "Overview", icon: <User className="h-4 w-4" /> },
     { key: "salary", label: "Salary & Status", icon: <History className="h-4 w-4" /> },
@@ -329,6 +341,12 @@ export default function StaffProfilePage() {
                 />
                 <InfoItem icon={<User className="h-4 w-4" />} label="Gender" value={staff.gender} />
               </div>
+              {staff.jobDescription && (
+                <div className="mt-5 pt-5 border-t">
+                  <p className="text-xs text-gray-500 mb-1">Job Description</p>
+                  <p className="text-sm text-gray-900 whitespace-pre-wrap">{staff.jobDescription}</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -340,6 +358,24 @@ export default function StaffProfilePage() {
                   <p className="text-2xl font-bold text-green-600">{formatCurrency(staff.currentSalary)}</p>
                   <p className="text-xs text-gray-400 mt-1">Base: {formatCurrency(staff.baseSalary)}</p>
                 </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className={`pt-6 rounded-b-lg ${CONTRACT_STATUS_COLORS[contractStatus]}`}>
+                <p className="text-xs uppercase tracking-wider opacity-70 mb-1">Contract</p>
+                <p className="text-lg font-bold">{contractTypeLabel}</p>
+                {contractEndDate ? (
+                  <>
+                    <p className="text-sm mt-1">Ends {formatDate(contractEndDate)}</p>
+                    <p className="text-xs mt-0.5 font-medium">
+                      {contractStatus === "expired"
+                        ? `Expired ${Math.abs(contractDaysRemaining ?? 0)}d ago`
+                        : `${contractDaysRemaining}d remaining`}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm mt-1">No end date</p>
+                )}
               </CardContent>
             </Card>
             <Card>
