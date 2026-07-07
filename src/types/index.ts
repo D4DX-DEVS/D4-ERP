@@ -42,6 +42,15 @@ export type StaffRole = "admin" | "department-head" | "accounts" | "staff";
 export type StaffStatus = "active" | "suspended" | "terminated" | "on-leave";
 export type Gender = "Male" | "Female" | "Other";
 
+export type ContractType =
+  | "3-months"
+  | "6-months"
+  | "12-months"
+  | "24-months"
+  | "36-months"
+  | "permanent"
+  | "custom";
+
 export interface Staff extends BaseDocument {
   employeeCode: string;
   firstName: string;
@@ -67,6 +76,9 @@ export interface Staff extends BaseDocument {
   role: StaffRole;
   isActive: boolean;
   shiftId?: string;
+  jobDescription?: string;
+  contractType?: ContractType;
+  contractEndDate?: Timestamp | null;
   /** Extra feature keys granted to this employee beyond their role defaults. */
   grantedFeatures?: string[];
   bankDetails?: {
@@ -92,6 +104,14 @@ export interface StatusHistory extends BaseDocument {
   startDate: Timestamp;
   endDate?: Timestamp;
   approvedBy: string;
+}
+
+export interface ContractHistory extends BaseDocument {
+  previousEndDate: Timestamp | null;
+  newEndDate: Timestamp | null;
+  contractType: ContractType;
+  reason: string;
+  extendedOn: Timestamp;
 }
 
 // ==================== Employee Documents ====================

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Staff, Company, Department, Shift } from "@/types";
+import { Staff, Company, Department, Shift, ContractType } from "@/types";
 import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint, type QueryConstraint } from "@/lib/firestore";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +18,9 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { Pagination } from "@/components/ui/pagination";
 import { getStatusColor, formatCurrency, generateEmployeeCode } from "@/lib/utils";
-import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search } from "lucide-react";
+import { CONTRACT_DURATIONS, computeContractEndDate, getContractStatus, getDaysRemaining } from "@/lib/contract-utils";
+import { FEATURES, roleHasFeature } from "@/lib/permissions";
+import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search, Shield } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
@@ -86,7 +89,30 @@ export default function StaffPage() {
     status: "active" as "active" | "suspended" | "terminated" | "on-leave",
     shiftId: "",
     isActive: true,
+    jobDescription: "",
+    contractType: "permanent" as ContractType,
+    contractEndDate: "",
+    grantedFeatures: [] as string[],
   });
+
+  const setContractType = (type: ContractType) => {
+    const start = form.dateOfJoining ? new Date(form.dateOfJoining) : new Date();
+    const computed = computeContractEndDate(start, type);
+    setForm((f) => ({
+      ...f,
+      contractType: type,
+      contractEndDate: computed ? computed.toISOString().split("T")[0] : "",
+    }));
+  };
+
+  const toggleGrantedFeature = (key: string) => {
+    setForm((f) => ({
+      ...f,
+      grantedFeatures: f.grantedFeatures.includes(key)
+        ? f.grantedFeatures.filter((k) => k !== key)
+        : [...f.grantedFeatures, key],
+    }));
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -141,6 +167,10 @@ export default function StaffPage() {
         status: staff.status || "active",
         shiftId: staff.shiftId || "",
         isActive: staff.isActive,
+        jobDescription: staff.jobDescription || "",
+        contractType: staff.contractType || "permanent",
+        contractEndDate: staff.contractEndDate ? new Date(staff.contractEndDate.seconds * 1000).toISOString().split("T")[0] : "",
+        grantedFeatures: staff.grantedFeatures || [],
       });
     } else {
       setEditingId(null);
@@ -163,6 +193,10 @@ export default function StaffPage() {
         status: "active",
         shiftId: "",
         isActive: true,
+        jobDescription: "",
+        contractType: "permanent",
+        contractEndDate: "",
+        grantedFeatures: [],
       });
     }
     setFormStep(1);
@@ -175,9 +209,10 @@ export default function StaffPage() {
     try {
       const data = {
         ...form,
-        dateOfBirth: Timestamp.fromDate(new Date(form.dateOfBirth)),
-        dateOfJoining: Timestamp.fromDate(new Date(form.dateOfJoining)),
+        dateOfBirth: form.dateOfBirth ? Timestamp.fromDate(new Date(form.dateOfBirth)) : null,
+        dateOfJoining: form.dateOfJoining ? Timestamp.fromDate(new Date(form.dateOfJoining)) : null,
         currentSalary: form.currentSalary || form.baseSalary,
+        contractEndDate: form.contractEndDate ? Timestamp.fromDate(new Date(form.contractEndDate)) : null,
       };
       if (editingId) {
         await updateDocument("staff", editingId, data);
@@ -300,6 +335,9 @@ export default function StaffPage() {
               <TableBody>
                 {staffList.map((staff) => {
                   const detailHref = `/dashboard/staff/${staff.id}`;
+                  const contractEnd = staff.contractEndDate ? new Date(staff.contractEndDate.seconds * 1000) : null;
+                  const contractStatus = getContractStatus(contractEnd);
+                  const contractDays = getDaysRemaining(contractEnd);
 
                   return (
                   <TableRow
@@ -329,6 +367,12 @@ export default function StaffPage() {
                       <Badge variant={getStatusColor(staff.status)}>
                         {staff.status}
                       </Badge>
+                      {contractStatus === "expiring-soon" && (
+                        <p className="text-[11px] text-amber-600 font-medium mt-1">Contract: {contractDays}d left</p>
+                      )}
+                      {contractStatus === "expired" && (
+                        <p className="text-[11px] text-red-600 font-medium mt-1">Contract expired</p>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
@@ -383,6 +427,13 @@ export default function StaffPage() {
           >
             2. Work & Address
           </button>
+          <button
+            type="button"
+            onClick={() => setFormStep(3)}
+            className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-colors ${formStep === 3 ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+          >
+            3. Permissions
+          </button>
         </div>
 
         <form onSubmit={handleSave} className="space-y-4">
@@ -391,8 +442,13 @@ export default function StaffPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Employee Code</Label>
-                  <Input value={form.employeeCode} disabled className="bg-gray-50 font-mono" />
+                  <Label>Employee Code *</Label>
+                  <Input
+                    value={form.employeeCode}
+                    onChange={(e) => setForm({ ...form, employeeCode: e.target.value })}
+                    className="font-mono"
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Role *</Label>
@@ -423,8 +479,8 @@ export default function StaffPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Email *</Label>
-                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+                  <Label>Email</Label>
+                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label>Mobile *</Label>
@@ -434,11 +490,11 @@ export default function StaffPage() {
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>Date of Birth *</Label>
-                  <DatePicker value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} required />
+                  <Label>Date of Birth</Label>
+                  <DatePicker value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Gender *</Label>
+                  <Label>Gender</Label>
                   <Select
                     value={form.gender}
                     onChange={(e) => setForm({ ...form, gender: e.target.value as Staff["gender"] })}
@@ -447,12 +503,11 @@ export default function StaffPage() {
                       { value: "Female", label: "Female" },
                       { value: "Other", label: "Other" },
                     ]}
-                    required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Date of Joining *</Label>
-                  <DatePicker value={form.dateOfJoining} onChange={(e) => setForm({ ...form, dateOfJoining: e.target.value })} required />
+                  <Label>Date of Joining</Label>
+                  <DatePicker value={form.dateOfJoining} onChange={(e) => setForm({ ...form, dateOfJoining: e.target.value })} />
                 </div>
               </div>
 
@@ -469,38 +524,65 @@ export default function StaffPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Company *</Label>
+                  <Label>Company</Label>
                   <Select
                     value={form.companyId}
                     onChange={(e) => setForm({ ...form, companyId: e.target.value })}
                     options={companies.map((c) => ({ value: c.id, label: c.name }))}
                     placeholder="Select company"
-                    required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Department *</Label>
+                  <Label>Department</Label>
                   <Select
                     value={form.departmentId}
                     onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
                     options={departments.map((d) => ({ value: d.id, label: d.name }))}
                     placeholder="Select department"
-                    required
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Designation *</Label>
-                  <Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} required />
+                  <Label>Designation</Label>
+                  <Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Base Salary *</Label>
-                  <Input type="number" value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value), currentSalary: Number(e.target.value) })} required />
+                  <Label>Base Salary</Label>
+                  <Input type="number" value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value), currentSalary: Number(e.target.value) })} />
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label>Job Description</Label>
+                <Textarea
+                  value={form.jobDescription}
+                  onChange={(e) => setForm({ ...form, jobDescription: e.target.value })}
+                  placeholder="Key responsibilities for this role..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Contract Duration</Label>
+                  <Select
+                    value={form.contractType}
+                    onChange={(e) => setContractType(e.target.value as ContractType)}
+                    options={CONTRACT_DURATIONS.map((d) => ({ value: d.value, label: d.label }))}
+                  />
+                </div>
+                {form.contractType !== "permanent" && (
+                  <div className="space-y-2">
+                    <Label>Contract End Date</Label>
+                    <DatePicker
+                      value={form.contractEndDate}
+                      onChange={(e) => setForm({ ...form, contractEndDate: e.target.value })}
+                      min={form.dateOfJoining || undefined}
+                    />
+                  </div>
+                )}
+              </div>
 
               <div className="border-t pt-4">
                 <h4 className="text-sm font-semibold mb-3">Address</h4>
@@ -526,6 +608,64 @@ export default function StaffPage() {
 
               <div className="flex justify-between pt-4 border-t">
                 <Button type="button" variant="outline" onClick={() => setFormStep(1)}>
+                  Back
+                </Button>
+                <Button type="button" onClick={() => setFormStep(3)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Permissions */}
+          {formStep === 3 && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">
+                Features granted by the <span className="font-semibold">{form.role}</span> role are enabled automatically. Grant extra features below.
+              </p>
+              {form.role === "admin" ? (
+                <div className="text-center py-8">
+                  <Shield className="h-8 w-8 text-teal-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600 font-medium">Admins have access to all features</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto">
+                  {FEATURES.map((f) => {
+                    const auto = roleHasFeature(form.role, f.key);
+                    const granted = form.grantedFeatures.includes(f.key);
+                    return (
+                      <label
+                        key={f.key}
+                        className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                          auto ? "bg-teal-50/50 border-teal-200" : granted ? "border-teal-500 bg-teal-50/30" : "hover:bg-gray-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={auto || granted}
+                          disabled={auto}
+                          onChange={() => toggleGrantedFeature(f.key)}
+                          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                        />
+                        <div>
+                          <p className="text-sm font-medium">
+                            {f.label}
+                            {auto && (
+                              <span className="ml-2 text-[10px] uppercase tracking-wider text-teal-600 bg-teal-100 px-1.5 py-0.5 rounded">
+                                Role default
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-500">{f.description}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex justify-between pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => setFormStep(2)}>
                   Back
                 </Button>
                 <div className="flex gap-3">
