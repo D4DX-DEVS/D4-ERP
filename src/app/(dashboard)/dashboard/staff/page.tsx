@@ -18,7 +18,7 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { Pagination } from "@/components/ui/pagination";
 import { getStatusColor, formatCurrency, generateEmployeeCode } from "@/lib/utils";
-import { CONTRACT_DURATIONS, computeContractEndDate } from "@/lib/contract-utils";
+import { CONTRACT_DURATIONS, computeContractEndDate, getContractStatus, getDaysRemaining } from "@/lib/contract-utils";
 import { FEATURES, roleHasFeature } from "@/lib/permissions";
 import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search, Shield } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
@@ -335,6 +335,9 @@ export default function StaffPage() {
               <TableBody>
                 {staffList.map((staff) => {
                   const detailHref = `/dashboard/staff/${staff.id}`;
+                  const contractEnd = staff.contractEndDate ? new Date(staff.contractEndDate.seconds * 1000) : null;
+                  const contractStatus = getContractStatus(contractEnd);
+                  const contractDays = getDaysRemaining(contractEnd);
 
                   return (
                   <TableRow
@@ -364,6 +367,12 @@ export default function StaffPage() {
                       <Badge variant={getStatusColor(staff.status)}>
                         {staff.status}
                       </Badge>
+                      {contractStatus === "expiring-soon" && (
+                        <p className="text-[11px] text-amber-600 font-medium mt-1">Contract: {contractDays}d left</p>
+                      )}
+                      {contractStatus === "expired" && (
+                        <p className="text-[11px] text-red-600 font-medium mt-1">Contract expired</p>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
