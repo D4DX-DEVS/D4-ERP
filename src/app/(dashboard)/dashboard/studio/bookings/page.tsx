@@ -8,6 +8,7 @@ import {
   updateDocument,
   deleteDocument,
   orderBy,
+  where,
   Timestamp,
 } from "@/lib/firestore";
 import { useAuthStore } from "@/store/auth-store";
@@ -27,10 +28,26 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/loading";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { findConflict, isValidTimeRange } from "@/lib/studio-utils";
+import {
+  itemBusyReason,
+  type AvailabilityContext,
+  type BusyReason,
+  type ReservedItem,
+} from "@/lib/asset-availability";
 import { pushStatusChange } from "@/lib/status-history";
 import { createNotification } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
-import type { StudioBooking, Studio, Client, StudioBookingStatus, StudioBookingType } from "@/types";
+import type {
+  StudioBooking,
+  Studio,
+  Client,
+  StudioBookingStatus,
+  StudioBookingType,
+  Asset,
+  StudioEquipment,
+  AssetMovement,
+  AssetEvent,
+} from "@/types";
 
 const BOOKING_TYPES: { value: StudioBookingType; label: string }[] = [
   { value: "photography", label: "Photography" },
@@ -45,7 +62,7 @@ const STATUS_COLORS: Record<string, string> = {
   pending: "bg-yellow-100 text-yellow-700",
   approved: "bg-emerald-100 text-emerald-700",
   confirmed: "bg-blue-100 text-blue-700",
-  "in-progress": "bg-amber-100 text-amber-700",
+  "in-progress": "bg-yellow-100 text-yellow-700",
   completed: "bg-green-100 text-green-700",
   rejected: "bg-red-100 text-red-700",
   cancelled: "bg-slate-100 text-slate-700",
@@ -64,6 +81,7 @@ interface BookingForm {
   email: string;
   eventName: string;
   notes: string;
+  reservedItems: ReservedItem[];
 }
 
 const emptyForm: BookingForm = {
@@ -79,6 +97,7 @@ const emptyForm: BookingForm = {
   email: "",
   eventName: "",
   notes: "",
+  reservedItems: [],
 };
 
 export default function StudioBookingsPage() {
@@ -88,6 +107,10 @@ export default function StudioBookingsPage() {
   const [bookings, setBookings] = useState<StudioBooking[]>([]);
   const [studios, setStudios] = useState<Studio[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [assets, setAssets] = useState<(Asset & { id: string })[]>([]);
+  const [equipment, setEquipment] = useState<(StudioEquipment & { id: string })[]>([]);
+  const [outMovements, setOutMovements] = useState<(AssetMovement & { id: string })[]>([]);
+  const [assetEvents, setAssetEvents] = useState<(AssetEvent & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -99,14 +122,22 @@ export default function StudioBookingsPage() {
 
   const fetchData = async () => {
     try {
-      const [b, s, c] = await Promise.all([
+      const [b, s, c, a, eq, mv, ev] = await Promise.all([
         getDocuments<StudioBooking>("studio_bookings", [orderBy("createdAt", "desc")]),
         getDocuments<Studio>("studios", []),
         getDocuments<Client>("clients", []),
+        getDocuments<Asset>("assets", [where("isActive", "!=", false)]),
+        getDocuments<StudioEquipment>("studio_equipment", []),
+        getDocuments<AssetMovement>("asset-movements", [where("status", "==", "OUT")]),
+        getDocuments<AssetEvent>("asset-events", []),
       ]);
       setBookings(b);
       setStudios(s);
       setClients(c);
+      setAssets(a);
+      setEquipment(eq);
+      setOutMovements(mv);
+      setAssetEvents(ev);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     } finally {
@@ -115,22 +146,8 @@ export default function StudioBookingsPage() {
   };
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const [b, s, c] = await Promise.all([
-          getDocuments<StudioBooking>("studio_bookings", [orderBy("createdAt", "desc")]),
-          getDocuments<Studio>("studios", []),
-          getDocuments<Client>("clients", []),
-        ]);
-        setBookings(b);
-        setStudios(s);
-        setClients(c);
-      } catch (error) {
-        console.error("Failed to fetch data:", error);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchData();
   }, []);
 
   // Compute conflict warning as derived state
@@ -151,6 +168,61 @@ export default function StudioBookingsPage() {
     }
     return "";
   }, [form.studioId, form.date, form.startTime, form.endTime, bookings, editingId]);
+
+  // ── Cross-availability of assets + studio equipment for the chosen slot ──
+  const hasValidWindow = !!form.date && isValidTimeRange(form.startTime, form.endTime);
+
+  const availabilityCtx: AvailabilityContext = useMemo(
+    () => ({
+      outMovements,
+      assetEvents,
+      studioBookings: bookings,
+      ignoreBookingId: editingId || undefined,
+    }),
+    [outMovements, assetEvents, bookings, editingId]
+  );
+
+  const itemRows = useMemo(() => {
+    const base = [
+      ...assets.map((a) => ({ id: a.id, name: a.name, kind: "asset" as const, sub: a.category, globallyOk: true })),
+      ...equipment.map((e) => ({
+        id: e.id,
+        name: e.name,
+        kind: "equipment" as const,
+        sub: e.category || "Equipment",
+        globallyOk: e.isAvailable !== false,
+      })),
+    ];
+    return base.map((it) => {
+      let available = true;
+      let reason: BusyReason | undefined;
+      if (!it.globallyOk) {
+        available = false;
+        reason = { type: "studio", name: "Marked unavailable" };
+      } else if (hasValidWindow) {
+        const res = itemBusyReason(
+          { id: it.id, kind: it.kind },
+          { kind: "studio", date: form.date, startTime: form.startTime, endTime: form.endTime },
+          availabilityCtx
+        );
+        available = !res.busy;
+        reason = res.reason;
+      }
+      return { id: it.id, name: it.name, kind: it.kind, sub: it.sub, available, reason };
+    });
+  }, [assets, equipment, hasValidWindow, form.date, form.startTime, form.endTime, availabilityCtx]);
+
+  const isSelected = (id: string, kind: ReservedItem["kind"]) =>
+    form.reservedItems.some((r) => r.itemId === id && r.kind === kind);
+
+  const toggleItem = (row: { id: string; name: string; kind: ReservedItem["kind"] }) => {
+    setForm((p) => {
+      const exists = p.reservedItems.some((r) => r.itemId === row.id && r.kind === row.kind);
+      return exists
+        ? { ...p, reservedItems: p.reservedItems.filter((r) => !(r.itemId === row.id && r.kind === row.kind)) }
+        : { ...p, reservedItems: [...p.reservedItems, { itemId: row.id, name: row.name, kind: row.kind }] };
+    });
+  };
 
   const filteredBookings = bookings.filter((b) => {
     if (statusFilter !== "all" && b.status !== statusFilter) return false;
@@ -187,6 +259,11 @@ export default function StudioBookingsPage() {
       const endMinutes = parseInt(form.endTime.split(":")[0]) * 60 + parseInt(form.endTime.split(":")[1]);
       const duration = endMinutes - startMinutes;
 
+      // Never persist an item that is out for this slot (hard block).
+      const reservedItems = form.reservedItems.filter((r) =>
+        itemRows.some((row) => row.id === r.itemId && row.kind === r.kind && row.available)
+      );
+
       if (editingId) {
         await updateDocument("studio_bookings", editingId, {
           studioId: form.studioId,
@@ -203,6 +280,7 @@ export default function StudioBookingsPage() {
           email: form.email,
           eventName: form.eventName,
           notes: form.notes.trim(),
+          reservedItems,
           updatedAt: Timestamp.now(),
         });
         await logAudit("update", "studio", "studio_booking", editingId, `Updated booking`, user);
@@ -229,6 +307,7 @@ export default function StudioBookingsPage() {
           statusHistory,
           attachments: [],
           requiredEquipment: [],
+          reservedItems,
           assignedStaff: [],
           linkedEventId: null,
           requestedBy: user.uid,
@@ -307,6 +386,7 @@ export default function StudioBookingsPage() {
       email: b.email || "",
       eventName: b.eventName || "",
       notes: b.notes || "",
+      reservedItems: b.reservedItems || [],
     });
     setEditingId(b.id!);
     setDialogOpen(true);
@@ -537,6 +617,60 @@ export default function StudioBookingsPage() {
               rows={2}
               placeholder="Additional notes..."
             />
+          </div>
+
+          {/* Assets & equipment picker — out items are shown but not selectable */}
+          <div className="md:col-span-2 space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Assets &amp; Equipment</Label>
+              {form.reservedItems.length > 0 && (
+                <span className="text-xs text-slate-400">{form.reservedItems.length} reserved</span>
+              )}
+            </div>
+            {!hasValidWindow ? (
+              <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-400">
+                Pick a date, start and end time to see which assets are available.
+              </p>
+            ) : itemRows.length === 0 ? (
+              <p className="text-xs text-slate-400">No assets or equipment found.</p>
+            ) : (
+              <div className="flex max-h-56 flex-wrap gap-2 overflow-y-auto rounded-2xl border border-slate-200 p-2">
+                {itemRows.map((row) => {
+                  const selected = isSelected(row.id, row.kind);
+                  const blocked = !row.available;
+                  return (
+                    <button
+                      key={`${row.kind}:${row.id}`}
+                      type="button"
+                      disabled={blocked && !selected}
+                      onClick={() => toggleItem(row)}
+                      title={
+                        blocked && row.reason
+                          ? `${row.reason.type === "event" ? "Out to event" : "Reserved by"}: ${row.reason.name}`
+                          : row.sub
+                      }
+                      className={[
+                        "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition",
+                        blocked
+                          ? "cursor-not-allowed border-red-200 bg-red-50 text-red-500"
+                          : selected
+                          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
+                      ].join(" ")}
+                    >
+                      {selected && !blocked && <span>✓</span>}
+                      <span className="font-medium">{row.name}</span>
+                      <span className="text-[10px] uppercase opacity-60">{row.kind}</span>
+                      {blocked && row.reason && (
+                        <span className="text-[10px]">
+                          · {row.reason.type === "event" ? "OUT" : "BUSY"}: {row.reason.name}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 

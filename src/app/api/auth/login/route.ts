@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getModel } from "@/models";
 import bcrypt from "bcryptjs";
-import { signToken, sessionCookieOptions, AUTH_COOKIE } from "@/lib/auth";
+import { signToken, sessionCookieOptions, AUTH_COOKIE, PWA_TOKEN_TTL_SECONDS } from "@/lib/auth";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
@@ -61,13 +61,19 @@ export async function POST(req: NextRequest) {
     const grantedFeatures = Array.isArray(staff.grantedFeatures)
       ? (staff.grantedFeatures as unknown[]).filter((f): f is string => typeof f === "string")
       : [];
-    const token = signToken({
-      uid,
-      email: staff.email as string,
-      role: staff.role as string,
-      name: `${staff.firstName ?? ""} ${staff.lastName ?? ""}`.trim(),
-      features: grantedFeatures,
-    });
+    // Installed PWA gets a long-lived session (one-time login, like a native app).
+    const isPwa = body?.pwa === true;
+    const ttl = isPwa ? PWA_TOKEN_TTL_SECONDS : undefined;
+    const token = signToken(
+      {
+        uid,
+        email: staff.email as string,
+        role: staff.role as string,
+        name: `${staff.firstName ?? ""} ${staff.lastName ?? ""}`.trim(),
+        features: grantedFeatures,
+      },
+      ttl
+    );
 
     const res = NextResponse.json({
       user: {
@@ -82,7 +88,7 @@ export async function POST(req: NextRequest) {
         grantedFeatures,
       },
     });
-    res.cookies.set(AUTH_COOKIE, token, sessionCookieOptions());
+    res.cookies.set(AUTH_COOKIE, token, sessionCookieOptions(ttl));
     return res;
   } catch (error: unknown) {
     console.error("Login error:", error);

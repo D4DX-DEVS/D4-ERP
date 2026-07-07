@@ -1,6 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getModel } from "@/models";
+import { itemBusyReason, type BookingLike, type MovementLike, type AssetEventLike } from "@/lib/asset-availability";
+import type { StudioBookingStatus } from "@/types";
+
+/** Load + normalize cross-availability inputs (all OUT movements, asset-events, studio bookings). */
+async function loadAvailabilityContext(): Promise<{
+  outMovements: MovementLike[];
+  assetEvents: AssetEventLike[];
+  studioBookings: BookingLike[];
+}> {
+  const [outs, events, bookings] = await Promise.all([
+    getModel("asset-movements").find({ status: "OUT" }).lean(),
+    getModel("asset-events").find().lean(),
+    getModel("studio_bookings").find().lean(),
+  ]);
+  const idOf = (d: Record<string, unknown>) => (d._id as { toString(): string }).toString();
+  return {
+    outMovements: (outs as Record<string, unknown>[]).map((m) => ({
+      assetId: String(m.assetId ?? ""),
+      eventId: String(m.eventId ?? ""),
+      eventName: m.eventName as string | undefined,
+      status: String(m.status ?? ""),
+    })),
+    assetEvents: (events as Record<string, unknown>[]).map((e) => ({
+      id: idOf(e),
+      name: e.name as string | undefined,
+      fromDate: e.fromDate,
+      toDate: e.toDate,
+    })),
+    studioBookings: (bookings as Record<string, unknown>[]).map((b) => ({
+      id: idOf(b),
+      date: String(b.date ?? ""),
+      startTime: String(b.startTime ?? ""),
+      endTime: String(b.endTime ?? ""),
+      status: b.status as StudioBookingStatus,
+      reservedItems: b.reservedItems as BookingLike["reservedItems"],
+      purpose: b.purpose as string | undefined,
+      studioName: b.studioName as string | undefined,
+    })),
+  };
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,6 +75,25 @@ export async function POST(req: NextRequest) {
       const existing = await Movement.findOne({ assetId, eventId, status: "OUT" });
       if (existing) {
         return NextResponse.json({ error: "This asset is already checked out for this event" }, { status: 409 });
+      }
+
+      // Hard block: reject if the asset is committed elsewhere (studio booking or
+      // another event) during this event's window.
+      const eventDoc = (await getModel("asset-events").findById(eventId).lean()) as Record<string, unknown> | null;
+      if (eventDoc) {
+        const ctx = await loadAvailabilityContext();
+        const conflict = itemBusyReason(
+          { id: assetId, kind: "asset" },
+          { kind: "event", fromDate: eventDoc.fromDate, toDate: eventDoc.toDate },
+          { ...ctx, ignoreEventId: String(eventId) }
+        );
+        if (conflict.busy && conflict.reason) {
+          const label = conflict.reason.type === "event" ? "another event" : "a studio booking";
+          return NextResponse.json(
+            { error: `Asset is reserved by ${label} ("${conflict.reason.name}") during this period` },
+            { status: 409 }
+          );
+        }
       }
 
       const now = new Date();
@@ -233,6 +292,20 @@ export async function POST(req: NextRequest) {
           const aid = m.assetId as string;
           busyAssetIds.add(aid);
           busyMovementMap.set(aid, m);
+        }
+      }
+
+      // Also mark assets reserved by an overlapping blocking studio booking as busy.
+      if (fromDate || toDate) {
+        const { studioBookings } = await loadAvailabilityContext();
+        for (const aid of assetIds) {
+          if (busyAssetIds.has(aid)) continue;
+          const res = itemBusyReason(
+            { id: aid, kind: "asset" },
+            { kind: "event", fromDate, toDate },
+            { outMovements: [], assetEvents: [], studioBookings }
+          );
+          if (res.busy) busyAssetIds.add(aid);
         }
       }
 

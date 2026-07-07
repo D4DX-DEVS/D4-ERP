@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Invoice, Client, Company } from "@/types";
 import { getDocuments, createDocument, updateDocument, where, Timestamp, search as searchConstraint } from "@/lib/firestore";
+import { generateDocNumber } from "@/lib/numbering";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { cn, formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
-import { Plus, Trash2, Search, Eye, Copy, FileText, Loader2, Pencil } from "lucide-react";
+import { Plus, Trash2, Search, Eye, FileText, Loader2, Pencil, Receipt } from "lucide-react";
+import { ItemPicker } from "@/components/ui/item-picker";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
@@ -34,6 +37,7 @@ export default function QuotationsPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const { toast } = useToast();
+  const router = useRouter();
   const constraints = useMemo(() => {
     const nextConstraints: Array<ReturnType<typeof where> | ReturnType<typeof searchConstraint>> = [where("type", "==", "quotation")];
     if (filterStatus) {
@@ -112,6 +116,20 @@ export default function QuotationsPage() {
     if (field === "quantity" || field === "rate") {
       newItems[idx].amount = newItems[idx].quantity * newItems[idx].rate;
     }
+    setForm({ ...form, items: newItems });
+  };
+
+  // Autofill a line item from the Item Master; rate stays editable afterwards.
+  const selectItem = (idx: number, picked: { name: string; rate: number; sacCode?: string; description?: string }) => {
+    const newItems = [...form.items];
+    newItems[idx] = {
+      ...newItems[idx],
+      description: picked.name,
+      rate: picked.rate,
+      sacCode: picked.sacCode || "",
+      subDescription: picked.description || newItems[idx].subDescription || "",
+      amount: newItems[idx].quantity * picked.rate,
+    };
     setForm({ ...form, items: newItems });
   };
 
@@ -246,17 +264,35 @@ export default function QuotationsPage() {
 
   const executeConvertToInvoice = async (quotation: Invoice & { id: string }) => {
     setConfirmConvert(null);
-    const invNumber = `INV-${Timestamp.now().seconds.toString(36).toUpperCase()}`;
-    await createDocument("invoices", {
-      ...quotation,
-      type: "invoice",
-      invoiceNumber: invNumber,
-      status: "sent",
-      createdAt: Timestamp.now(),
-    });
-    await updateDocument("invoices", quotation.id, { status: "accepted" });
-    toast("success", "Quotation converted to invoice");
-    refresh();
+    if (quotation.convertedToInvoiceId) {
+      toast("error", "This quotation has already been converted to an invoice");
+      return;
+    }
+    try {
+      const company = companies.find((c) => c.id === quotation.companyId) ?? null;
+      const invNumber = await generateDocNumber({ series: "invoice", company });
+      const rest: Record<string, unknown> = { ...quotation };
+      for (const key of ["id", "status", "invoiceNumber", "createdAt", "updatedAt", "convertedFrom", "convertedToInvoiceId", "paidAmount", "balanceAmount"]) {
+        delete rest[key];
+      }
+      const invoiceId = await createDocument("invoices", {
+        ...rest,
+        type: "invoice",
+        invoiceNumber: invNumber,
+        status: "sent",
+        paidAmount: 0,
+        balanceAmount: quotation.totalAmount,
+        convertedFrom: quotation.id,
+        date: Timestamp.now(),
+        createdAt: Timestamp.now(),
+      });
+      await updateDocument("invoices", quotation.id, { status: "converted", convertedToInvoiceId: invoiceId });
+      toast("success", "Quotation converted to invoice");
+      router.push(`/dashboard/invoices/${invoiceId}`);
+    } catch (error) {
+      console.error("Error:", error);
+      toast("error", "Failed to convert quotation");
+    }
   };
 
   if (loading || lookupsLoading) return <PageLoader />;
@@ -343,12 +379,15 @@ export default function QuotationsPage() {
                           <Trash2 className="h-4 w-4 text-red-400" />
                         </Button>
                       </div>
-                      <Input
-                        className="h-7 text-xs text-gray-500 border-dashed border-gray-300"
-                        placeholder="Item description (optional)"
-                        value={item.subDescription || ""}
-                        onChange={(e) => updateItem(idx, "subDescription", e.target.value)}
-                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <Input
+                          className="h-7 flex-1 text-xs text-gray-500 border-dashed border-gray-300"
+                          placeholder="Item description (optional)"
+                          value={item.subDescription || ""}
+                          onChange={(e) => updateItem(idx, "subDescription", e.target.value)}
+                        />
+                        <ItemPicker onSelect={(picked) => selectItem(idx, picked)} />
+                      </div>
                     </div>
                   ))}
                   <Button variant="outline" size="sm" onClick={addItem}><Plus className="mr-1 h-3 w-3" /> Add Item</Button>
@@ -485,7 +524,7 @@ export default function QuotationsPage() {
                       </Button>
                       {q.status === "draft" && (
                         <Button variant="ghost" size="icon" title="Convert to Invoice" onClick={() => handleConvertToInvoice(q)}>
-                          <Copy className="h-4 w-4 text-green-600" />
+                          <Receipt className="h-4 w-4 text-green-600" />
                         </Button>
                       )}
                     </TableCell>

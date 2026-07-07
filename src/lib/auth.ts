@@ -9,7 +9,9 @@ import type { NextRequest } from "next/server";
 import { AUTH_COOKIE } from "./auth-cookie";
 
 export { AUTH_COOKIE };
-const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days (browser)
+/** Long-lived session for installed PWA — behaves like a native app's one-time login. */
+export const PWA_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 days
 
 /** Resolve the JWT secret, failing loudly if it is not configured. */
 function getJwtSecret(): string {
@@ -31,8 +33,8 @@ export interface TokenPayload {
   features?: string[];
 }
 
-export function signToken(payload: TokenPayload): string {
-  return jwt.sign(payload, getJwtSecret(), { expiresIn: TOKEN_TTL_SECONDS });
+export function signToken(payload: TokenPayload, ttlSeconds: number = TOKEN_TTL_SECONDS): string {
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: ttlSeconds });
 }
 
 /** Verify a raw JWT string. Returns the payload or null when invalid/expired. */

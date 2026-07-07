@@ -89,7 +89,7 @@ export function ItemPicker({ onSelect, className }: ItemPickerProps) {
               className="h-9 pl-8"
             />
           </div>
-          <div className="mt-2 max-h-64 overflow-y-auto">
+          <div className="scrollbar-hide mt-2 max-h-64 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-6 text-sm text-gray-400">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...

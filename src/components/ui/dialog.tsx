@@ -37,6 +37,15 @@ export function Dialog({ children, open: controlledOpen, onOpenChange, onClose, 
     (child) => React.isValidElement(child) && (child.type === DialogContent || child.type === DialogTrigger)
   );
 
+  React.useEffect(() => {
+    if (!hasDialogContent && open) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [hasDialogContent, open]);
+
   if (!hasDialogContent && open) {
     // Legacy inline mode
     return (

@@ -19,6 +19,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
     const [mounted, setMounted] = React.useState(false);
     const [coords, setCoords] = React.useState({ top: 0, left: 0, width: 0 });
     const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const listRef = React.useRef<HTMLDivElement>(null);
 
     React.useImperativeHandle(ref, () => triggerRef.current as HTMLButtonElement);
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -43,7 +44,10 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
     React.useEffect(() => {
       if (!open) return;
       const close = () => setOpen(false);
-      const onScroll = () => setOpen(false);
+      const onScroll = (e: Event) => {
+        if (listRef.current?.contains(e.target as Node)) return;
+        setOpen(false);
+      };
       const onKey = (e: KeyboardEvent) => {
         if (e.key === "Escape") setOpen(false);
       };
@@ -96,9 +100,10 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
             <>
               <div className="fixed inset-0 z-[200]" onMouseDown={() => setOpen(false)} />
               <div
+                ref={listRef}
                 role="listbox"
                 style={{ position: "fixed", top: coords.top, left: coords.left, width: coords.width }}
-                className="z-[201] max-h-60 overflow-y-auto rounded-[20px] border border-slate-200/80 bg-white p-1.5 shadow-[0_8px_32px_rgba(15,23,42,0.12),0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-xl animate-in"
+                className="scrollbar-hide z-[201] max-h-60 overflow-y-auto rounded-[20px] border border-slate-200/80 bg-white p-1.5 shadow-[0_8px_32px_rgba(15,23,42,0.12),0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-xl animate-in"
               >
                 {options.length === 0 && (
                   <div className="px-3 py-2 text-sm text-slate-400">{placeholder || "No options"}</div>
@@ -223,7 +228,7 @@ function SelectContent({ children }: { children: React.ReactNode }) {
         pointerEvents: open ? "auto" : "none",
         transition: "opacity 150ms ease, transform 150ms ease",
       }}
-      className="absolute z-50 mt-2 w-full max-h-60 overflow-y-auto rounded-[20px] border border-slate-200/80 bg-white p-1.5 shadow-[0_8px_32px_rgba(15,23,42,0.12),0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-xl"
+      className="scrollbar-hide absolute z-50 mt-2 w-full max-h-60 overflow-y-auto rounded-[20px] border border-slate-200/80 bg-white p-1.5 shadow-[0_8px_32px_rgba(15,23,42,0.12),0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-xl"
     >
       {children}
     </div>

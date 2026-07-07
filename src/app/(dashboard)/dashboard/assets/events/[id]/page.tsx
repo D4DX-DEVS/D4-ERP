@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Asset, AssetEvent, AssetMovement, AssetPerson } from "@/types";
+import { Asset, AssetEvent, AssetMovement, AssetPerson, StudioBooking } from "@/types";
 import { getDocuments, getDocument, where, Timestamp } from "@/lib/firestore";
+import { itemBusyReason, type AvailabilityContext, type BusyReason } from "@/lib/asset-availability";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,6 +56,11 @@ export default function EventDetailPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
+  // Cross-availability inputs: commitments outside THIS event.
+  const [allOutMovements, setAllOutMovements] = useState<AssetMovement[]>([]);
+  const [allAssetEvents, setAllAssetEvents] = useState<(AssetEvent & { id: string })[]>([]);
+  const [studioBookings, setStudioBookings] = useState<StudioBooking[]>([]);
+
   // Batch OUT state
   const [pendingOutIds, setPendingOutIds] = useState<Set<string>>(new Set());
   const [submittingOut, setSubmittingOut] = useState(false);
@@ -66,13 +72,19 @@ export default function EventDetailPage() {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [eventData, assets, movements] = await Promise.all([
+      const [eventData, assets, movements, allOut, allEvents, bookings] = await Promise.all([
         getDocument<AssetEvent>("asset-events", id),
         getDocuments<Asset>("assets", [where("isActive", "!=", false)]),
         getDocuments<AssetMovement>("asset-movements", [where("eventId", "==", id)]),
+        getDocuments<AssetMovement>("asset-movements", [where("status", "==", "OUT")]),
+        getDocuments<AssetEvent>("asset-events", []),
+        getDocuments<StudioBooking>("studio_bookings", []),
       ]);
 
       if (eventData) setEvent(eventData);
+      setAllOutMovements(allOut);
+      setAllAssetEvents(allEvents);
+      setStudioBookings(bookings);
 
       const movMap = new Map<string, AssetMovement & { id: string }>();
       for (const m of movements) {
@@ -215,6 +227,26 @@ export default function EventDetailPage() {
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
+
+  // Assets committed elsewhere (studio booking or another event) during THIS
+  // event's window cannot be issued here.
+  const crossBusy = useMemo(() => {
+    const map = new Map<string, BusyReason>();
+    if (!event) return map;
+    const ctx: AvailabilityContext = {
+      outMovements: allOutMovements,
+      assetEvents: allAssetEvents,
+      studioBookings,
+      ignoreEventId: id,
+    };
+    const win = { kind: "event" as const, fromDate: event.fromDate, toDate: event.toDate };
+    for (const r of rows) {
+      if (r.movement) continue; // already tracked for this event
+      const res = itemBusyReason({ id: r.asset.id, kind: "asset" }, win, ctx);
+      if (res.busy && res.reason) map.set(r.asset.id, res.reason);
+    }
+    return map;
+  }, [event, rows, allOutMovements, allAssetEvents, studioBookings, id]);
 
   const tsToDateStr = (ts?: Timestamp) => {
     if (!ts?.seconds) return "—";
@@ -375,6 +407,7 @@ export default function EventDetailPage() {
                     const isOut = movement?.status === "OUT";
                     const isIn = movement?.status === "IN";
                     const isPendingOut = pendingOutIds.has(asset.id);
+                    const blockedReason = isAvailable ? crossBusy.get(asset.id) : undefined;
 
                     return (
                       <div key={asset.id}>
@@ -385,6 +418,11 @@ export default function EventDetailPage() {
                             <p className="text-sm font-medium truncate">{asset.name}</p>
                             {asset.productCode && <p className="text-xs text-gray-400 font-mono">#{asset.productCode}</p>}
                             {!asset.allowOutside && <p className="text-xs text-amber-600">Not allowed outside</p>}
+                            {blockedReason && (
+                              <p className="text-xs text-red-500">
+                                {blockedReason.type === "event" ? "Out to event" : "In studio booking"}: {blockedReason.name}
+                              </p>
+                            )}
                             {isOut && movement?.outByName && <p className="text-xs text-blue-600 mt-0.5">Issued by: {movement.outByName}</p>}
                             {isIn && (
                               <div className="mt-0.5 space-y-0.5">
@@ -398,7 +436,14 @@ export default function EventDetailPage() {
                           {/* OUT column */}
                           <div className="flex justify-center">
                             {isAvailable ? (
-                              asset.allowOutside ? (
+                              blockedReason ? (
+                                <span
+                                  title={`${blockedReason.type === "event" ? "Out to event" : "Reserved by studio booking"}: ${blockedReason.name}`}
+                                  className="w-7 h-7 rounded-full border-2 border-red-200 flex items-center justify-center opacity-60 cursor-not-allowed"
+                                >
+                                  <X className="w-3.5 h-3.5 text-red-400" />
+                                </span>
+                              ) : asset.allowOutside ? (
                                 <button onClick={() => togglePendingOut(asset.id)} title={isPendingOut ? "Remove" : "Add to issue list"}
                                   className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors ${isPendingOut ? "border-orange-400 bg-orange-50" : "border-gray-300 hover:border-orange-300 hover:bg-orange-50"}`}>
                                   {isPendingOut ? <CheckCircle2 className="w-4 h-4 text-orange-500" /> : <Circle className="w-3.5 h-3.5 text-gray-400" />}

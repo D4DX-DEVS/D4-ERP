@@ -446,8 +446,15 @@ export interface StudioBooking extends BaseDocument {
   contactNumber?: string;
   email?: string;
   eventName?: string;
-  /** Equipment allocated for this booking. */
+  /** @deprecated Superseded by `reservedItems`. Kept for backward compat; not written by the form. */
   requiredEquipment?: { equipmentId: string; name: string }[];
+  /**
+   * Assets / studio equipment reserved by this booking. Cross-checked against
+   * asset events and other bookings for availability. `kind` distinguishes the
+   * two pools: `asset` items also block asset-event checkout; `equipment` items
+   * only block other studio bookings.
+   */
+  reservedItems?: { itemId: string; name: string; kind: "asset" | "equipment" }[];
   /** Staff assigned to this booking. */
   assignedStaff?: { staffId: string; staffName: string }[];
   status: StudioBookingStatus;

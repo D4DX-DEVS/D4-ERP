@@ -193,7 +193,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   numberFormats: {
     quotation: "QTN-{COMP}/{YYYY}/{SEQ:3}",
     estimate: "EST-{COMP}-{YYYY}/{SEQ:3}",
-    invoice: "INV-{COMP}/{YYYY}/{SEQ:3}",
+    invoice: "D4-{SEQ:3}",
     receipt: "RCPT-{COMP}/{YYYY}/{SEQ:3}",
   },
 };
@@ -232,6 +232,13 @@ export function normalizeSettings(raw?: Partial<AppSettings> | null): AppSetting
     }
   }
 
+  const numberFormats = { ...DEFAULT_SETTINGS.numberFormats, ...(raw.numberFormats ?? {}) };
+  // ponytail: auto-upgrade the legacy hardcoded invoice format to the D4 series so
+  // existing settings docs pick it up without a manual edit. Custom formats are kept.
+  if (numberFormats.invoice === "INV-{COMP}/{YYYY}/{SEQ:3}") {
+    numberFormats.invoice = DEFAULT_SETTINGS.numberFormats.invoice;
+  }
+
   return {
     ...DEFAULT_SETTINGS,
     ...raw,
@@ -240,7 +247,7 @@ export function normalizeSettings(raw?: Partial<AppSettings> | null): AppSetting
     letterSettings: { ...DEFAULT_SETTINGS.letterSettings, ...(raw.letterSettings ?? {}) },
     workingHours: { ...DEFAULT_SETTINGS.workingHours, ...(raw.workingHours ?? {}) },
     attendanceRules: { ...DEFAULT_SETTINGS.attendanceRules, ...(raw.attendanceRules ?? {}) },
-    numberFormats: { ...DEFAULT_SETTINGS.numberFormats, ...(raw.numberFormats ?? {}) },
+    numberFormats,
     holidays: Array.isArray(raw.holidays) ? raw.holidays : [],
     weeklySchedule: schedule,
   };

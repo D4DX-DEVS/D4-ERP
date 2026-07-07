@@ -151,7 +151,7 @@ export function CommandSearch() {
         </div>
 
         {/* Results */}
-        <div ref={listRef} className="max-h-[340px] overflow-y-auto p-2">
+        <div ref={listRef} className="scrollbar-hide max-h-[340px] overflow-y-auto p-2">
           {filtered.length === 0 ? (
             <p className="px-3 py-8 text-center text-sm text-slate-400">No results found.</p>
           ) : (

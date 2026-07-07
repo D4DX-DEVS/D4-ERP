@@ -21,7 +21,7 @@ import { ItemPicker } from "@/components/ui/item-picker";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatCurrency, formatDate, getStatusColor, numberToWords } from "@/lib/utils";
-import { ArrowLeft, Copy, Download, Loader2, MessageCircle, Pencil, Plus, Printer, Send, Share2, Trash2, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft, Receipt, Download, Loader2, MessageCircle, Pencil, Plus, Printer, Send, Share2, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 
@@ -385,7 +385,7 @@ export default function QuotationDetailPage() {
           </Button>
           {!alreadyConverted && quotation.status !== "rejected" && quotation.status !== "expired" && (
             <Button variant="outline" onClick={() => setConfirmConvert(true)}>
-              <Copy className="h-4 w-4 mr-2 text-green-600" /> Convert to Invoice
+              <Receipt className="h-4 w-4 mr-2 text-green-600" /> Convert to Invoice
             </Button>
           )}
           <Button variant="outline" onClick={() => setShareOpen(true)}>

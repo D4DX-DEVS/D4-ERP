@@ -28,7 +28,12 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email,
+          password,
+          // Installed PWA → long-lived session (no daily re-login).
+          pwa: window.matchMedia("(display-mode: standalone)").matches,
+        }),
       });
 
       const data = await res.json();

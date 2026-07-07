@@ -27,7 +27,12 @@ export default function StaffLoginPage() {
       const res = await fetch("/api/auth/staff-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeCode: code, mobile }),
+        body: JSON.stringify({
+          employeeCode: code,
+          mobile,
+          // Installed PWA → long-lived session (no daily re-login).
+          pwa: window.matchMedia("(display-mode: standalone)").matches,
+        }),
       });
 
       const data = await res.json();

@@ -49,6 +49,7 @@ const TimePicker = React.forwardRef<HTMLButtonElement, TimePickerProps>(
     const [mounted, setMounted] = React.useState(false);
     const [coords, setCoords] = React.useState({ top: 0, left: 0, width: 0 });
     const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const panelRef = React.useRef<HTMLDivElement>(null);
 
     React.useImperativeHandle(ref, () => triggerRef.current as HTMLButtonElement);
     React.useEffect(() => setMounted(true), []);
@@ -82,7 +83,10 @@ const TimePicker = React.forwardRef<HTMLButtonElement, TimePickerProps>(
 
     React.useEffect(() => {
       if (!open) return;
-      const onScroll = () => setOpen(false);
+      const onScroll = (e: Event) => {
+        if (panelRef.current?.contains(e.target as Node)) return;
+        setOpen(false);
+      };
       const onResize = () => setOpen(false);
       const onKey = (e: KeyboardEvent) => {
         if (e.key === "Escape") setOpen(false);
@@ -161,6 +165,7 @@ const TimePicker = React.forwardRef<HTMLButtonElement, TimePickerProps>(
             <>
               <div className="fixed inset-0 z-[200]" onMouseDown={() => setOpen(false)} />
               <div
+                ref={panelRef}
                 role="dialog"
                 style={{ position: "fixed", top: coords.top, left: coords.left, width: coords.width }}
                 className="z-[201] rounded-[20px] border border-slate-200/80 bg-white p-2 shadow-[0_8px_32px_rgba(15,23,42,0.14),0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-xl animate-in"
@@ -171,7 +176,7 @@ const TimePicker = React.forwardRef<HTMLButtonElement, TimePickerProps>(
                     <div className="px-1 pb-1 text-center text-[11px] font-medium uppercase tracking-wide text-slate-400">
                       Hour
                     </div>
-                    <div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto pr-0.5">
+                    <div className="scrollbar-hide flex max-h-48 flex-col gap-0.5 overflow-y-auto pr-0.5">
                       {hours.map((h) => (
                         <button key={h} type="button" onClick={() => pickHour(h)} className={colBtn(current?.h12 === h)}>
                           {pad(h)}
@@ -185,7 +190,7 @@ const TimePicker = React.forwardRef<HTMLButtonElement, TimePickerProps>(
                     <div className="px-1 pb-1 text-center text-[11px] font-medium uppercase tracking-wide text-slate-400">
                       Min
                     </div>
-                    <div className="flex max-h-48 flex-col gap-0.5 overflow-y-auto pr-0.5">
+                    <div className="scrollbar-hide flex max-h-48 flex-col gap-0.5 overflow-y-auto pr-0.5">
                       {minutes.map((m) => (
                         <button
                           key={m}
