@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Staff, Department, Company, SalaryHistory, StatusHistory } from "@/types";
+import { Staff, Department, Company, SalaryHistory, StatusHistory, ContractHistory, ContractType } from "@/types";
 import { getDocument, getSubDocuments, createSubDocument, updateDocument, orderBy, Timestamp } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,7 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { getStatusColor, formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import { FEATURES, roleHasFeature } from "@/lib/permissions";
-import { getContractStatus, getDaysRemaining, CONTRACT_DURATIONS, type ContractStatus } from "@/lib/contract-utils";
+import { getContractStatus, getDaysRemaining, computeContractEndDate, CONTRACT_DURATIONS, type ContractStatus } from "@/lib/contract-utils";
 import { useAuthStore } from "@/store/auth-store";
 import { LetterGenerator } from "@/components/staff/letter-generator";
 import { EmployeeDocuments } from "@/components/staff/employee-documents";
@@ -36,6 +36,7 @@ import {
   FileText,
   History,
   User,
+  CalendarClock,
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
@@ -78,6 +79,14 @@ export default function StaffProfilePage() {
     endDate: "",
   });
 
+  const [contractHistory, setContractHistory] = useState<(ContractHistory & { id: string })[]>([]);
+  const [contractDialogOpen, setContractDialogOpen] = useState(false);
+  const [contractForm, setContractForm] = useState({
+    contractType: "permanent" as ContractType,
+    customEndDate: "",
+    reason: "",
+  });
+
   const fetchData = async () => {
     try {
       const staffData = await getDocument<Staff>("staff", staffId);
@@ -90,17 +99,19 @@ export default function StaffProfilePage() {
         Array.isArray(staffData.grantedFeatures) ? staffData.grantedFeatures : []
       );
 
-      const [dept, comp, salHist, statHist] = await Promise.all([
+      const [dept, comp, salHist, statHist, conHist] = await Promise.all([
         staffData.departmentId ? getDocument<Department>("departments", staffData.departmentId) : null,
         staffData.companyId ? getDocument<Company>("companies", staffData.companyId) : null,
         getSubDocuments<SalaryHistory>("staff", staffId, "salaryHistory", [orderBy("createdAt", "desc")]),
         getSubDocuments<StatusHistory>("staff", staffId, "statusHistory", [orderBy("createdAt", "desc")]),
+        getSubDocuments<ContractHistory>("staff", staffId, "contractHistory", [orderBy("createdAt", "desc")]),
       ]);
 
       setDepartment(dept);
       setCompany(comp);
       setSalaryHistory(salHist);
       setStatusHistory(statHist);
+      setContractHistory(conHist);
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to load staff profile");
@@ -170,6 +181,38 @@ export default function StaffProfilePage() {
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to update staff status");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleExtendContract = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!staff) return;
+    setSaving(true);
+    try {
+      const customEnd = contractForm.customEndDate ? new Date(contractForm.customEndDate) : undefined;
+      const newEnd = computeContractEndDate(new Date(), contractForm.contractType, customEnd);
+
+      await createSubDocument("staff", staffId, "contractHistory", {
+        previousEndDate: staff.contractEndDate || null,
+        newEndDate: newEnd ? Timestamp.fromDate(newEnd) : null,
+        contractType: contractForm.contractType,
+        reason: contractForm.reason,
+        extendedOn: Timestamp.now(),
+      });
+
+      await updateDocument("staff", staffId, {
+        contractType: contractForm.contractType,
+        contractEndDate: newEnd ? Timestamp.fromDate(newEnd) : null,
+      });
+
+      setContractDialogOpen(false);
+      toast("success", "Contract updated");
+      fetchData();
+    } catch (error) {
+      console.error("Error:", error);
+      toast("error", "Failed to update contract");
     } finally {
       setSaving(false);
     }
@@ -279,6 +322,13 @@ export default function StaffProfilePage() {
           <Button variant="outline" size="sm" onClick={() => setStatusDialogOpen(true)}>
             <AlertTriangle className="h-4 w-4 mr-1.5" />
             Status
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            setContractForm({ contractType: staff.contractType || "permanent", customEndDate: "", reason: "" });
+            setContractDialogOpen(true);
+          }}>
+            <CalendarClock className="h-4 w-4 mr-1.5" />
+            Contract
           </Button>
           {canEditFeatures && (
             <LetterGenerator
@@ -664,6 +714,56 @@ export default function StaffProfilePage() {
             <Button type="submit" disabled={saving} variant={statusForm.type === "termination" ? "destructive" : "default"}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Confirm {statusForm.type}
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* ───── Extend Contract Dialog ───── */}
+      <Dialog open={contractDialogOpen} onClose={() => setContractDialogOpen(false)}>
+        <DialogHeader>
+          <DialogTitle>Extend Contract</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleExtendContract} className="space-y-4">
+          <div className="rounded-lg bg-gray-50 p-3 text-sm">
+            <p className="text-gray-500">Current</p>
+            <p className="font-medium">
+              {contractTypeLabel}
+              {contractEndDate ? ` — ends ${formatDate(contractEndDate)}` : ""}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>New Contract Duration *</Label>
+            <Select
+              value={contractForm.contractType}
+              onChange={(e) => setContractForm({ ...contractForm, contractType: e.target.value as ContractType })}
+              options={CONTRACT_DURATIONS.map((d) => ({ value: d.value, label: d.label }))}
+            />
+          </div>
+          {contractForm.contractType === "custom" && (
+            <div className="space-y-2">
+              <Label>New End Date *</Label>
+              <DatePicker
+                value={contractForm.customEndDate}
+                onChange={(e) => setContractForm({ ...contractForm, customEndDate: e.target.value })}
+                min={new Date().toISOString().split("T")[0]}
+                required
+              />
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label>Reason *</Label>
+            <Textarea
+              value={contractForm.reason}
+              onChange={(e) => setContractForm({ ...contractForm, reason: e.target.value })}
+              required
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button type="button" variant="outline" onClick={() => setContractDialogOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Contract
             </Button>
           </div>
         </form>
