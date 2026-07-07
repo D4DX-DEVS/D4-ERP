@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Staff, Company, Department, Shift } from "@/types";
+import { Staff, Company, Department, Shift, ContractType } from "@/types";
 import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint, type QueryConstraint } from "@/lib/firestore";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { Pagination } from "@/components/ui/pagination";
 import { getStatusColor, formatCurrency, generateEmployeeCode } from "@/lib/utils";
+import { CONTRACT_DURATIONS, computeContractEndDate } from "@/lib/contract-utils";
 import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -86,7 +88,21 @@ export default function StaffPage() {
     status: "active" as "active" | "suspended" | "terminated" | "on-leave",
     shiftId: "",
     isActive: true,
+    jobDescription: "",
+    contractType: "permanent" as ContractType,
+    contractEndDate: "",
+    grantedFeatures: [] as string[],
   });
+
+  const setContractType = (type: ContractType) => {
+    const start = form.dateOfJoining ? new Date(form.dateOfJoining) : new Date();
+    const computed = computeContractEndDate(start, type);
+    setForm((f) => ({
+      ...f,
+      contractType: type,
+      contractEndDate: computed ? computed.toISOString().split("T")[0] : "",
+    }));
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -141,6 +157,10 @@ export default function StaffPage() {
         status: staff.status || "active",
         shiftId: staff.shiftId || "",
         isActive: staff.isActive,
+        jobDescription: staff.jobDescription || "",
+        contractType: staff.contractType || "permanent",
+        contractEndDate: staff.contractEndDate ? new Date(staff.contractEndDate.seconds * 1000).toISOString().split("T")[0] : "",
+        grantedFeatures: staff.grantedFeatures || [],
       });
     } else {
       setEditingId(null);
@@ -163,6 +183,10 @@ export default function StaffPage() {
         status: "active",
         shiftId: "",
         isActive: true,
+        jobDescription: "",
+        contractType: "permanent",
+        contractEndDate: "",
+        grantedFeatures: [],
       });
     }
     setFormStep(1);
@@ -175,9 +199,10 @@ export default function StaffPage() {
     try {
       const data = {
         ...form,
-        dateOfBirth: Timestamp.fromDate(new Date(form.dateOfBirth)),
-        dateOfJoining: Timestamp.fromDate(new Date(form.dateOfJoining)),
+        dateOfBirth: form.dateOfBirth ? Timestamp.fromDate(new Date(form.dateOfBirth)) : null,
+        dateOfJoining: form.dateOfJoining ? Timestamp.fromDate(new Date(form.dateOfJoining)) : null,
         currentSalary: form.currentSalary || form.baseSalary,
+        contractEndDate: form.contractEndDate ? Timestamp.fromDate(new Date(form.contractEndDate)) : null,
       };
       if (editingId) {
         await updateDocument("staff", editingId, data);
@@ -503,6 +528,35 @@ export default function StaffPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label>Job Description</Label>
+                <Textarea
+                  value={form.jobDescription}
+                  onChange={(e) => setForm({ ...form, jobDescription: e.target.value })}
+                  placeholder="Key responsibilities for this role..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Contract Duration</Label>
+                  <Select
+                    value={form.contractType}
+                    onChange={(e) => setContractType(e.target.value as ContractType)}
+                    options={CONTRACT_DURATIONS.map((d) => ({ value: d.value, label: d.label }))}
+                  />
+                </div>
+                {form.contractType !== "permanent" && (
+                  <div className="space-y-2">
+                    <Label>Contract End Date</Label>
+                    <DatePicker
+                      value={form.contractEndDate}
+                      onChange={(e) => setForm({ ...form, contractEndDate: e.target.value })}
+                      min={form.dateOfJoining || undefined}
+                    />
+                  </div>
+                )}
+              </div>
 
               <div className="border-t pt-4">
                 <h4 className="text-sm font-semibold mb-3">Address</h4>
