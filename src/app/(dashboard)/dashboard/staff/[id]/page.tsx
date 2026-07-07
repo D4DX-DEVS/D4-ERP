@@ -535,6 +535,47 @@ export default function StaffProfilePage() {
               )}
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Contract History</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => {
+                setContractForm({ contractType: staff.contractType || "permanent", customEndDate: "", reason: "" });
+                setContractDialogOpen(true);
+              }}>
+                <CalendarClock className="h-4 w-4 mr-1.5" />
+                Extend
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {contractHistory.length === 0 ? (
+                <div className="text-center py-8">
+                  <CalendarClock className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No contract changes recorded</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {contractHistory.map((h) => (
+                    <div key={h.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                      <div>
+                        <p className="text-sm font-medium">
+                          {CONTRACT_DURATIONS.find((d) => d.value === h.contractType)?.label || h.contractType}
+                        </p>
+                        <p className="text-xs text-gray-500">{h.reason}</p>
+                        <p className="text-xs text-gray-400">
+                          {h.extendedOn ? formatDate(new Date(h.extendedOn.seconds * 1000)) : ""}
+                        </p>
+                      </div>
+                      <div className="text-right text-xs text-gray-500">
+                        <p>{h.previousEndDate ? formatDate(new Date(h.previousEndDate.seconds * 1000)) : "—"}</p>
+                        <p>→ {h.newEndDate ? formatDate(new Date(h.newEndDate.seconds * 1000)) : "Permanent"}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
