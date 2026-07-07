@@ -19,7 +19,8 @@ import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { Pagination } from "@/components/ui/pagination";
 import { getStatusColor, formatCurrency, generateEmployeeCode } from "@/lib/utils";
 import { CONTRACT_DURATIONS, computeContractEndDate } from "@/lib/contract-utils";
-import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search } from "lucide-react";
+import { FEATURES, roleHasFeature } from "@/lib/permissions";
+import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search, Shield } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
@@ -101,6 +102,15 @@ export default function StaffPage() {
       ...f,
       contractType: type,
       contractEndDate: computed ? computed.toISOString().split("T")[0] : "",
+    }));
+  };
+
+  const toggleGrantedFeature = (key: string) => {
+    setForm((f) => ({
+      ...f,
+      grantedFeatures: f.grantedFeatures.includes(key)
+        ? f.grantedFeatures.filter((k) => k !== key)
+        : [...f.grantedFeatures, key],
     }));
   };
 
@@ -408,6 +418,13 @@ export default function StaffPage() {
           >
             2. Work & Address
           </button>
+          <button
+            type="button"
+            onClick={() => setFormStep(3)}
+            className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-colors ${formStep === 3 ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+          >
+            3. Permissions
+          </button>
         </div>
 
         <form onSubmit={handleSave} className="space-y-4">
@@ -582,6 +599,64 @@ export default function StaffPage() {
 
               <div className="flex justify-between pt-4 border-t">
                 <Button type="button" variant="outline" onClick={() => setFormStep(1)}>
+                  Back
+                </Button>
+                <Button type="button" onClick={() => setFormStep(3)}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Permissions */}
+          {formStep === 3 && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">
+                Features granted by the <span className="font-semibold">{form.role}</span> role are enabled automatically. Grant extra features below.
+              </p>
+              {form.role === "admin" ? (
+                <div className="text-center py-8">
+                  <Shield className="h-8 w-8 text-teal-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-600 font-medium">Admins have access to all features</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto">
+                  {FEATURES.map((f) => {
+                    const auto = roleHasFeature(form.role, f.key);
+                    const granted = form.grantedFeatures.includes(f.key);
+                    return (
+                      <label
+                        key={f.key}
+                        className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                          auto ? "bg-teal-50/50 border-teal-200" : granted ? "border-teal-500 bg-teal-50/30" : "hover:bg-gray-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={auto || granted}
+                          disabled={auto}
+                          onChange={() => toggleGrantedFeature(f.key)}
+                          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                        />
+                        <div>
+                          <p className="text-sm font-medium">
+                            {f.label}
+                            {auto && (
+                              <span className="ml-2 text-[10px] uppercase tracking-wider text-teal-600 bg-teal-100 px-1.5 py-0.5 rounded">
+                                Role default
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-gray-500">{f.description}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex justify-between pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => setFormStep(2)}>
                   Back
                 </Button>
                 <div className="flex gap-3">
