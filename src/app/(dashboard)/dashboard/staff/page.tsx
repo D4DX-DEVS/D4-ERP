@@ -391,8 +391,13 @@ export default function StaffPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Employee Code</Label>
-                  <Input value={form.employeeCode} disabled className="bg-gray-50 font-mono" />
+                  <Label>Employee Code *</Label>
+                  <Input
+                    value={form.employeeCode}
+                    onChange={(e) => setForm({ ...form, employeeCode: e.target.value })}
+                    className="font-mono"
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Role *</Label>
@@ -423,8 +428,8 @@ export default function StaffPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Email *</Label>
-                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+                  <Label>Email</Label>
+                  <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label>Mobile *</Label>
@@ -434,11 +439,11 @@ export default function StaffPage() {
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>Date of Birth *</Label>
-                  <DatePicker value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} required />
+                  <Label>Date of Birth</Label>
+                  <DatePicker value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Gender *</Label>
+                  <Label>Gender</Label>
                   <Select
                     value={form.gender}
                     onChange={(e) => setForm({ ...form, gender: e.target.value as Staff["gender"] })}
@@ -447,12 +452,11 @@ export default function StaffPage() {
                       { value: "Female", label: "Female" },
                       { value: "Other", label: "Other" },
                     ]}
-                    required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Date of Joining *</Label>
-                  <DatePicker value={form.dateOfJoining} onChange={(e) => setForm({ ...form, dateOfJoining: e.target.value })} required />
+                  <Label>Date of Joining</Label>
+                  <DatePicker value={form.dateOfJoining} onChange={(e) => setForm({ ...form, dateOfJoining: e.target.value })} />
                 </div>
               </div>
 
@@ -469,35 +473,33 @@ export default function StaffPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Company *</Label>
+                  <Label>Company</Label>
                   <Select
                     value={form.companyId}
                     onChange={(e) => setForm({ ...form, companyId: e.target.value })}
                     options={companies.map((c) => ({ value: c.id, label: c.name }))}
                     placeholder="Select company"
-                    required
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Department *</Label>
+                  <Label>Department</Label>
                   <Select
                     value={form.departmentId}
                     onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
                     options={departments.map((d) => ({ value: d.id, label: d.name }))}
                     placeholder="Select department"
-                    required
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Designation *</Label>
-                  <Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} required />
+                  <Label>Designation</Label>
+                  <Input value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Base Salary *</Label>
-                  <Input type="number" value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value), currentSalary: Number(e.target.value) })} required />
+                  <Label>Base Salary</Label>
+                  <Input type="number" value={form.baseSalary} onChange={(e) => setForm({ ...form, baseSalary: Number(e.target.value), currentSalary: Number(e.target.value) })} />
                 </div>
               </div>
 
