@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/ui/toast";
+import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
 
 const appIcon = "/favicon.png";
@@ -37,6 +38,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <PwaRegister />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
