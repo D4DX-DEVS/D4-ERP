@@ -166,7 +166,7 @@ export function EmployeeDocuments({ staffId, canManage = false, uploadedBy = "" 
             </div>
             <div className="space-y-1.5">
               <Label>Notes</Label>
-              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+              <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes" />
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => { setAdding(false); resetForm(); }} disabled={saving}>Cancel</Button>

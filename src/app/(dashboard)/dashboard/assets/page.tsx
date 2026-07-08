@@ -244,20 +244,20 @@ export default function AssetsPage() {
         <DialogHeader><DialogTitle>{editingId ? "Edit Asset" : "Add Asset"}</DialogTitle></DialogHeader>
         <form onSubmit={handleSave} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Name *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
+            <div className="space-y-2"><Label>Name *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Canon R5" required /></div>
             <div className="space-y-2"><Label>Category *</Label><Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} options={categoryOptions} placeholder={categoryOptions.length === 0 ? "No categories yet" : "Select category"} /></div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Brand</Label><Input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Model</Label><Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} /></div>
+            <div className="space-y-2"><Label>Brand</Label><Input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} placeholder="e.g. Canon" /></div>
+            <div className="space-y-2"><Label>Model</Label><Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder="e.g. R5" /></div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2"><Label>Serial Number *</Label><Input value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} required /></div>
+            <div className="space-y-2"><Label>Serial Number *</Label><Input value={form.serialNumber} onChange={(e) => setForm({ ...form, serialNumber: e.target.value })} placeholder="e.g. SN-00123" required /></div>
             <div className="space-y-2"><Label>Purchase Date</Label><DatePicker value={form.purchaseDate} onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2"><Label>Purchase Price</Label><Input type="number" min={0} value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: Number(e.target.value) })} /></div>
-            <div className="space-y-2"><Label>Current Value</Label><Input type="number" min={0} value={form.currentValue} onChange={(e) => setForm({ ...form, currentValue: Number(e.target.value) })} /></div>
+            <div className="space-y-2"><Label>Purchase Price</Label><Input type="number" min={0} value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: Number(e.target.value) })} placeholder="e.g. 150000" /></div>
+            <div className="space-y-2"><Label>Current Value</Label><Input type="number" min={0} value={form.currentValue} onChange={(e) => setForm({ ...form, currentValue: Number(e.target.value) })} placeholder="e.g. 120000" /></div>
             <div className="space-y-2"><Label>Status</Label><Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Asset["status"] })} options={[{ value: "available", label: "Available" }, { value: "assigned", label: "Assigned" }, { value: "maintenance", label: "Maintenance" }, { value: "retired", label: "Retired" }]} /></div>
           </div>
           {form.status === "assigned" && (
@@ -267,7 +267,7 @@ export default function AssetsPage() {
                 options={staffList.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` }))} placeholder="Select" />
             </div>
           )}
-          <div className="space-y-2"><Label>Notes</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+          <div className="space-y-2"><Label>Notes</Label><Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes" /></div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2"><Label>Product Code</Label><Input value={form.productCode} onChange={(e) => setForm({ ...form, productCode: e.target.value })} placeholder="SKU / Barcode" /></div>
             <div className="flex items-center gap-3 pt-6">
@@ -282,7 +282,7 @@ export default function AssetsPage() {
             </div>
             {!form.noWarranty && (
               <>
-                <div className="space-y-2"><Label>Warranty Details</Label><Input value={form.warrantyDetails} onChange={(e) => setForm({ ...form, warrantyDetails: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Warranty Details</Label><Input value={form.warrantyDetails} onChange={(e) => setForm({ ...form, warrantyDetails: e.target.value })} placeholder="e.g. 2 years, Canon India" /></div>
                 <div className="space-y-2"><Label>Warranty Expiry</Label><DatePicker value={form.warrantyExpiryDate} onChange={(e) => setForm({ ...form, warrantyExpiryDate: e.target.value })} /></div>
               </>
             )}

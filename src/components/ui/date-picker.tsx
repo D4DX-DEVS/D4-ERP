@@ -62,6 +62,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
     const [mounted, setMounted] = React.useState(false);
     const [coords, setCoords] = React.useState({ top: 0, left: 0, width: 0 });
     const triggerRef = React.useRef<HTMLButtonElement>(null);
+    const panelRef = React.useRef<HTMLDivElement>(null);
 
     React.useImperativeHandle(ref, () => triggerRef.current as HTMLButtonElement);
     React.useEffect(() => setMounted(true), []);
@@ -82,7 +83,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
-    const updateCoords = React.useCallback(() => {
+    const updateCoords = React.useCallback((panelHeight: number) => {
       const el = triggerRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
@@ -90,14 +91,29 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
       let left = r.left;
       if (left + panelWidth > window.innerWidth - 8) left = window.innerWidth - panelWidth - 8;
       if (left < 8) left = 8;
-      setCoords({ top: r.bottom + 6, left, width: panelWidth });
+
+      const spaceBelow = window.innerHeight - r.bottom;
+      const spaceAbove = r.top;
+      const openUpward = spaceBelow < panelHeight + 6 && spaceAbove > spaceBelow;
+      const top = openUpward ? Math.max(8, r.top - panelHeight - 6) : r.bottom + 6;
+
+      setCoords({ top, left, width: panelWidth });
     }, []);
 
     const toggle = () => {
       if (disabled) return;
-      if (!open) updateCoords();
+      if (!open) updateCoords(panelRef.current?.offsetHeight ?? 360);
       setOpen((o) => !o);
     };
+
+    // Re-measure against the panel's real height once it has rendered, so
+    // placement (below vs. above) accounts for its actual content — no
+    // hardcoded panel-height guess left in place once the DOM is available.
+    React.useLayoutEffect(() => {
+      if (!open || !panelRef.current) return;
+      updateCoords(panelRef.current.offsetHeight);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, yearPicker, mode, view]);
 
     React.useEffect(() => {
       if (!open) return;
@@ -195,6 +211,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
             <>
               <div className="fixed inset-0 z-[200]" onMouseDown={() => setOpen(false)} />
               <div
+                ref={panelRef}
                 role="dialog"
                 style={{ position: "fixed", top: coords.top, left: coords.left, width: coords.width }}
                 className="z-[201] rounded-[20px] border border-slate-200/80 bg-white p-3 shadow-[0_8px_32px_rgba(15,23,42,0.14),0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-xl animate-in"

@@ -212,7 +212,7 @@ export default function ShiftsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Grace (minutes)</Label>
-              <Input type="number" min={0} value={form.graceMinutes} onChange={(e) => setForm({ ...form, graceMinutes: Number(e.target.value) })} />
+              <Input type="number" min={0} value={form.graceMinutes} onChange={(e) => setForm({ ...form, graceMinutes: Number(e.target.value) })} placeholder="e.g. 10" />
             </div>
             <div className="space-y-2">
               <Label>Colour</Label>

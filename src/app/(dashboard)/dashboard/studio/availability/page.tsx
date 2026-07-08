@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader } from "@/components/ui/listing";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -101,8 +101,7 @@ export default function StudioAvailabilityPage() {
       <div className="flex flex-wrap gap-3 items-end">
         <div className="space-y-1.5">
           <Label>Date</Label>
-          <Input
-            type="date"
+          <DatePicker
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
             className="w-[170px]"

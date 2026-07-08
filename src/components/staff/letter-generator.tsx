@@ -188,35 +188,35 @@ export function LetterGenerator({
             </div>
             <div>
               <Label>Date</Label>
-              <Input value={vars.date} onChange={(e) => setVar("date", e.target.value)} />
+              <Input value={vars.date} onChange={(e) => setVar("date", e.target.value)} placeholder="e.g. 08 July 2026" />
             </div>
             <div>
               <Label>Employee Name</Label>
-              <Input value={vars.employeeName} onChange={(e) => setVar("employeeName", e.target.value)} />
+              <Input value={vars.employeeName} onChange={(e) => setVar("employeeName", e.target.value)} placeholder="e.g. Nihal K" />
             </div>
             <div>
               <Label>Designation</Label>
-              <Input value={vars.designation} onChange={(e) => setVar("designation", e.target.value)} />
+              <Input value={vars.designation} onChange={(e) => setVar("designation", e.target.value)} placeholder="e.g. Staff" />
             </div>
             <div>
               <Label>Department</Label>
-              <Input value={vars.department} onChange={(e) => setVar("department", e.target.value)} />
+              <Input value={vars.department} onChange={(e) => setVar("department", e.target.value)} placeholder="e.g. Operations" />
             </div>
             <div>
               <Label>Employee ID</Label>
-              <Input value={vars.employeeId} onChange={(e) => setVar("employeeId", e.target.value)} />
+              <Input value={vars.employeeId} onChange={(e) => setVar("employeeId", e.target.value)} placeholder="e.g. 03AGDL" />
             </div>
             <div>
               <Label>Joining Date</Label>
-              <Input value={vars.joiningDate} onChange={(e) => setVar("joiningDate", e.target.value)} />
+              <Input value={vars.joiningDate} onChange={(e) => setVar("joiningDate", e.target.value)} placeholder="e.g. 08 July 2026" />
             </div>
             <div>
               <Label>Last Working Date</Label>
-              <Input value={vars.lastWorkingDate} onChange={(e) => setVar("lastWorkingDate", e.target.value)} />
+              <Input value={vars.lastWorkingDate} onChange={(e) => setVar("lastWorkingDate", e.target.value)} placeholder="e.g. 08 July 2026" />
             </div>
             <div>
               <Label>Salary (CTC)</Label>
-              <Input value={vars.salary} onChange={(e) => setVar("salary", e.target.value)} />
+              <Input value={vars.salary} onChange={(e) => setVar("salary", e.target.value)} placeholder="e.g. 25,000" />
             </div>
           </div>
 

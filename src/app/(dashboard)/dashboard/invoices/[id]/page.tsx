@@ -897,7 +897,7 @@ export default function InvoiceDetailPage() {
           </div>
           <div className="space-y-2">
             <Label>Reference No</Label>
-            <Input value={payForm.referenceNo} onChange={(e) => setPayForm({ ...payForm, referenceNo: e.target.value })} />
+            <Input value={payForm.referenceNo} onChange={(e) => setPayForm({ ...payForm, referenceNo: e.target.value })} placeholder="e.g. Transaction / cheque no." />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t">
             <Button type="button" variant="outline" onClick={() => setPaymentOpen(false)}>Cancel</Button>
@@ -970,7 +970,7 @@ export default function InvoiceDetailPage() {
             {editForm.taxType === "gst" && (
               <div className="space-y-1">
                 <Label>GST Rate %</Label>
-                <Input type="number" value={editForm.gstRate} onChange={(e) => setEditForm({ ...editForm, gstRate: Number(e.target.value) })} />
+                <Input type="number" value={editForm.gstRate} onChange={(e) => setEditForm({ ...editForm, gstRate: Number(e.target.value) })} placeholder="e.g. 18" />
               </div>
             )}
           </div>

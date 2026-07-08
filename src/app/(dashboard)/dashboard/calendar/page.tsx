@@ -692,9 +692,9 @@ export default function CalendarPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Color</Label><Input type="color" value={form.color || "#3b82f6"} onChange={(e) => setForm({ ...form, color: e.target.value })} className="h-9 p-1" /></div>
-              <div><Label>Location</Label><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} /></div>
+              <div><Label>Location</Label><Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. Conference Room" /></div>
             </div>
-            <div><Label>Description</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+            <div><Label>Description</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional details" /></div>
             <Button onClick={handleSave} className="w-full">{editingId ? "Save Changes" : "Add Event"}</Button>
           </div>
         </DialogContent>

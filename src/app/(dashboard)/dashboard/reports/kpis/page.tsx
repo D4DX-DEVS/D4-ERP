@@ -151,11 +151,11 @@ export default function KPIManagementPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Current Value</Label>
-              <Input type="number" value={form.value} onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))} />
+              <Input type="number" value={form.value} onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))} placeholder="e.g. 80" />
             </div>
             <div className="space-y-2">
               <Label>Target</Label>
-              <Input type="number" value={form.target} onChange={(e) => setForm((p) => ({ ...p, target: e.target.value }))} />
+              <Input type="number" value={form.target} onChange={(e) => setForm((p) => ({ ...p, target: e.target.value }))} placeholder="e.g. 100" />
             </div>
           </div>
           <div className="space-y-2">

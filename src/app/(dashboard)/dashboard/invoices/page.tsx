@@ -375,7 +375,7 @@ export default function InvoicesPage() {
                   </div>
                   <div className="col-span-2">
                     <Label className="text-xs">Rate</Label>
-                    <Input type="number" value={item.rate} onChange={(e) => updateItem(idx, "rate", Number(e.target.value))} />
+                    <Input type="number" value={item.rate} onChange={(e) => updateItem(idx, "rate", Number(e.target.value))} placeholder="e.g. 5000" />
                   </div>
                   <div className="col-span-2">
                     <Label className="text-xs">Amount</Label>

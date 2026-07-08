@@ -561,7 +561,7 @@ export default function QuotationDetailPage() {
             {editForm.taxType === "gst" && (
               <div className="space-y-1">
                 <Label>GST Rate %</Label>
-                <Input type="number" value={editForm.gstRate} onChange={(e) => setEditForm({ ...editForm, gstRate: Number(e.target.value) })} />
+                <Input type="number" value={editForm.gstRate} onChange={(e) => setEditForm({ ...editForm, gstRate: Number(e.target.value) })} placeholder="e.g. 18" />
               </div>
             )}
           </div>

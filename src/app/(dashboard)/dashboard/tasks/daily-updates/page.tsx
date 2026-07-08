@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { getDocuments, where, orderBy } from "@/lib/firestore";
 import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/loading";
@@ -51,8 +51,7 @@ export default function DailyUpdatesPage() {
 
       <div className="flex items-center gap-4">
         <label className="text-sm font-medium text-slate-700">Date:</label>
-        <Input
-          type="date"
+        <DatePicker
           value={dateFilter}
           onChange={(e) => setDateFilter(e.target.value)}
           className="w-[170px]"

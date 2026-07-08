@@ -231,6 +231,7 @@ export default function CompaniesPage() {
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="e.g. D4 Media Pvt Ltd"
                 required
               />
             </div>
@@ -263,6 +264,7 @@ export default function CompaniesPage() {
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="hello@company.com"
                 required
               />
             </div>
@@ -271,6 +273,7 @@ export default function CompaniesPage() {
               <Input
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="+91 ..."
                 required
               />
             </div>
@@ -282,6 +285,7 @@ export default function CompaniesPage() {
               <Input
                 value={form.gstNumber}
                 onChange={(e) => setForm({ ...form, gstNumber: e.target.value })}
+                placeholder="22AAAAA0000A1Z5"
               />
             </div>
             <div className="space-y-2">
@@ -289,6 +293,7 @@ export default function CompaniesPage() {
               <Input
                 value={form.panNumber}
                 onChange={(e) => setForm({ ...form, panNumber: e.target.value })}
+                placeholder="AAAAA0000A"
                 required
               />
             </div>
@@ -299,6 +304,7 @@ export default function CompaniesPage() {
             <Textarea
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="Street, City, State, PIN"
               required
             />
           </div>
@@ -308,6 +314,7 @@ export default function CompaniesPage() {
             <Input
               value={form.website}
               onChange={(e) => setForm({ ...form, website: e.target.value })}
+              placeholder="https://company.com"
             />
           </div>
 
@@ -321,6 +328,7 @@ export default function CompaniesPage() {
                   onChange={(e) =>
                     setForm({ ...form, bankDetails: { ...form.bankDetails, bankName: e.target.value } })
                   }
+                  placeholder="e.g. HDFC Bank"
                 />
               </div>
               <div className="space-y-2">
@@ -330,6 +338,7 @@ export default function CompaniesPage() {
                   onChange={(e) =>
                     setForm({ ...form, bankDetails: { ...form.bankDetails, accountNo: e.target.value } })
                   }
+                  placeholder="e.g. 000123456789"
                 />
               </div>
               <div className="space-y-2">
@@ -339,6 +348,7 @@ export default function CompaniesPage() {
                   onChange={(e) =>
                     setForm({ ...form, bankDetails: { ...form.bankDetails, ifscCode: e.target.value } })
                   }
+                  placeholder="e.g. HDFC0001234"
                 />
               </div>
               <div className="space-y-2">
@@ -348,6 +358,7 @@ export default function CompaniesPage() {
                   onChange={(e) =>
                     setForm({ ...form, bankDetails: { ...form.bankDetails, branchName: e.target.value } })
                   }
+                  placeholder="e.g. Kozhikode Main"
                 />
               </div>
             </div>

@@ -269,7 +269,7 @@ export default function ClientsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>GST Number</Label>
-              <Input value={form.gstNumber} onChange={(e) => setForm({ ...form, gstNumber: e.target.value })} />
+              <Input value={form.gstNumber} onChange={(e) => setForm({ ...form, gstNumber: e.target.value })} placeholder="22AAAAA0000A1Z5" />
             </div>
             <div className="space-y-2">
               <Label>Category *</Label>
@@ -289,19 +289,19 @@ export default function ClientsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2 col-span-2">
                 <Label>Street</Label>
-                <Input value={form.address.street} onChange={(e) => setForm({ ...form, address: { ...form.address, street: e.target.value } })} />
+                <Input value={form.address.street} onChange={(e) => setForm({ ...form, address: { ...form.address, street: e.target.value } })} placeholder="e.g. 2nd Floor, MG Road" />
               </div>
               <div className="space-y-2">
                 <Label>City</Label>
-                <Input value={form.address.city} onChange={(e) => setForm({ ...form, address: { ...form.address, city: e.target.value } })} />
+                <Input value={form.address.city} onChange={(e) => setForm({ ...form, address: { ...form.address, city: e.target.value } })} placeholder="e.g. Kozhikode" />
               </div>
               <div className="space-y-2">
                 <Label>State</Label>
-                <Input value={form.address.state} onChange={(e) => setForm({ ...form, address: { ...form.address, state: e.target.value } })} />
+                <Input value={form.address.state} onChange={(e) => setForm({ ...form, address: { ...form.address, state: e.target.value } })} placeholder="e.g. Kerala" />
               </div>
               <div className="space-y-2">
                 <Label>Pincode</Label>
-                <Input value={form.address.pincode} onChange={(e) => setForm({ ...form, address: { ...form.address, pincode: e.target.value } })} />
+                <Input value={form.address.pincode} onChange={(e) => setForm({ ...form, address: { ...form.address, pincode: e.target.value } })} placeholder="e.g. 673001" />
               </div>
             </div>
           </div>

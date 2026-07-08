@@ -359,7 +359,7 @@ export default function QuotationsPage() {
                 {form.taxType === "gst" && (
                   <div>
                     <Label>GST Rate %</Label>
-                    <Input type="number" value={form.gstRate} onChange={(e) => setForm({ ...form, gstRate: Number(e.target.value) })} />
+                    <Input type="number" value={form.gstRate} onChange={(e) => setForm({ ...form, gstRate: Number(e.target.value) })} placeholder="e.g. 18" />
                   </div>
                 )}
               </div>

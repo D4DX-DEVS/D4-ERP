@@ -578,11 +578,11 @@ export default function TasksPage() {
         <form onSubmit={handleSave} className="space-y-4">
           <div className="space-y-2">
             <Label>Title *</Label>
-            <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+            <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Edit promo video" required />
           </div>
           <div className="space-y-2">
             <Label>Description</Label>
-            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional details" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

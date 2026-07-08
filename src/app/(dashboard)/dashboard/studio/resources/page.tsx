@@ -302,15 +302,15 @@ export default function StudioResourcesPage() {
         <div className="space-y-3">
           <div className="space-y-2">
             <Label>Name *</Label>
-            <Input value={studioForm.name} onChange={(e) => setStudioForm((p) => ({ ...p, name: e.target.value }))} />
+            <Input value={studioForm.name} onChange={(e) => setStudioForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Studio A" />
           </div>
           <div className="space-y-2">
             <Label>Location</Label>
-            <Input value={studioForm.location} onChange={(e) => setStudioForm((p) => ({ ...p, location: e.target.value }))} />
+            <Input value={studioForm.location} onChange={(e) => setStudioForm((p) => ({ ...p, location: e.target.value }))} placeholder="e.g. Kozhikode" />
           </div>
           <div className="space-y-2">
             <Label>Capacity</Label>
-            <Input type="number" min={0} value={studioForm.capacity} onChange={(e) => setStudioForm((p) => ({ ...p, capacity: e.target.value }))} />
+            <Input type="number" min={0} value={studioForm.capacity} onChange={(e) => setStudioForm((p) => ({ ...p, capacity: e.target.value }))} placeholder="e.g. 5" />
           </div>
           <div className="space-y-2">
             <Label>Facilities (comma-separated)</Label>
@@ -331,7 +331,7 @@ export default function StudioResourcesPage() {
         <div className="space-y-3">
           <div className="space-y-2">
             <Label>Name *</Label>
-            <Input value={eqForm.name} onChange={(e) => setEqForm((p) => ({ ...p, name: e.target.value }))} />
+            <Input value={eqForm.name} onChange={(e) => setEqForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Canon R5" />
           </div>
           <div className="space-y-2">
             <Label>Category</Label>
@@ -351,7 +351,7 @@ export default function StudioResourcesPage() {
           </div>
           <div className="space-y-2">
             <Label>Description</Label>
-            <Input value={eqForm.description} onChange={(e) => setEqForm((p) => ({ ...p, description: e.target.value }))} />
+            <Input value={eqForm.description} onChange={(e) => setEqForm((p) => ({ ...p, description: e.target.value }))} placeholder="Optional notes" />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">

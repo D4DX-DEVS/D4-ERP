@@ -83,11 +83,11 @@ export function QuickAddClient({ open, onClose, onCreated }: QuickAddClientProps
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Phone</Label>
-            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="9876543210" />
           </div>
           <div className="space-y-2">
             <Label>Email</Label>
-            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@company.com" />
           </div>
         </div>
         <div className="space-y-2">

@@ -206,7 +206,7 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>Company Name</Label>
-              <Input value={settings.companyName} onChange={(e) => setSettings({ ...settings, companyName: e.target.value })} />
+              <Input value={settings.companyName} onChange={(e) => setSettings({ ...settings, companyName: e.target.value })} placeholder="e.g. D4 Media" />
             </div>
             <div>
               <Label>Default Currency</Label>
@@ -221,7 +221,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <Label>Timezone</Label>
-              <Input value={settings.timezone} onChange={(e) => setSettings({ ...settings, timezone: e.target.value })} />
+              <Input value={settings.timezone} onChange={(e) => setSettings({ ...settings, timezone: e.target.value })} placeholder="e.g. Asia/Kolkata" />
             </div>
             <div>
               <Label>Financial Year Start (Month)</Label>
@@ -304,11 +304,11 @@ export default function SettingsPage() {
             </div>
             <div>
               <Label>Invoice Prefix</Label>
-              <Input value={settings.invoicePrefix} onChange={(e) => setSettings({ ...settings, invoicePrefix: e.target.value })} />
+              <Input value={settings.invoicePrefix} onChange={(e) => setSettings({ ...settings, invoicePrefix: e.target.value })} placeholder="e.g. INV-" />
             </div>
             <div>
               <Label>Quotation Prefix</Label>
-              <Input value={settings.quotationPrefix} onChange={(e) => setSettings({ ...settings, quotationPrefix: e.target.value })} />
+              <Input value={settings.quotationPrefix} onChange={(e) => setSettings({ ...settings, quotationPrefix: e.target.value })} placeholder="e.g. QT-" />
             </div>
             <div>
               <Label>Default GST Rate (%)</Label>
@@ -418,6 +418,7 @@ export default function SettingsPage() {
                 min={0}
                 value={settings.lateThresholdMinutes}
                 onChange={(e) => setSettings({ ...settings, lateThresholdMinutes: Number(e.target.value) })}
+                placeholder="e.g. 10"
               />
             </div>
             <Button type="button" variant="outline" onClick={applyDefaultToAll}>
@@ -486,6 +487,7 @@ export default function SettingsPage() {
                 step={0.5}
                 value={settings.attendanceRules.fullDayHours}
                 onChange={(e) => setSettings({ ...settings, attendanceRules: { ...settings.attendanceRules, fullDayHours: Number(e.target.value) } })}
+                placeholder="e.g. 8"
               />
             </div>
             <div>
@@ -496,6 +498,7 @@ export default function SettingsPage() {
                 step={0.5}
                 value={settings.attendanceRules.halfDayHours}
                 onChange={(e) => setSettings({ ...settings, attendanceRules: { ...settings.attendanceRules, halfDayHours: Number(e.target.value) } })}
+                placeholder="e.g. 4"
               />
             </div>
             <div>
@@ -506,6 +509,7 @@ export default function SettingsPage() {
                 step={0.5}
                 value={settings.attendanceRules.overtimeAfterHours}
                 onChange={(e) => setSettings({ ...settings, attendanceRules: { ...settings.attendanceRules, overtimeAfterHours: Number(e.target.value) } })}
+                placeholder="e.g. 9"
               />
             </div>
             <div className="flex items-end pb-2">
@@ -618,15 +622,15 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Casual Leave (days/year)</Label>
-              <Input type="number" min={0} value={settings.leavePolicy.casualLeave} onChange={(e) => setSettings({ ...settings, leavePolicy: { ...settings.leavePolicy, casualLeave: Number(e.target.value) } })} />
+              <Input type="number" min={0} value={settings.leavePolicy.casualLeave} onChange={(e) => setSettings({ ...settings, leavePolicy: { ...settings.leavePolicy, casualLeave: Number(e.target.value) } })} placeholder="e.g. 12" />
             </div>
             <div>
               <Label>Sick Leave (days/year)</Label>
-              <Input type="number" min={0} value={settings.leavePolicy.sickLeave} onChange={(e) => setSettings({ ...settings, leavePolicy: { ...settings.leavePolicy, sickLeave: Number(e.target.value) } })} />
+              <Input type="number" min={0} value={settings.leavePolicy.sickLeave} onChange={(e) => setSettings({ ...settings, leavePolicy: { ...settings.leavePolicy, sickLeave: Number(e.target.value) } })} placeholder="e.g. 7" />
             </div>
             <div>
               <Label>Earned Leave (days/year)</Label>
-              <Input type="number" min={0} value={settings.leavePolicy.earnedLeave} onChange={(e) => setSettings({ ...settings, leavePolicy: { ...settings.leavePolicy, earnedLeave: Number(e.target.value) } })} />
+              <Input type="number" min={0} value={settings.leavePolicy.earnedLeave} onChange={(e) => setSettings({ ...settings, leavePolicy: { ...settings.leavePolicy, earnedLeave: Number(e.target.value) } })} placeholder="e.g. 15" />
             </div>
           </div>
         </CardContent>

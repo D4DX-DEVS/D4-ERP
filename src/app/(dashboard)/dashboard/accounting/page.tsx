@@ -302,11 +302,11 @@ export default function AccountingPage() {
           </div>
           <div className="space-y-2">
             <Label>Reference No</Label>
-            <Input value={form.referenceNo} onChange={(e) => setForm({ ...form, referenceNo: e.target.value })} />
+            <Input value={form.referenceNo} onChange={(e) => setForm({ ...form, referenceNo: e.target.value })} placeholder="e.g. Invoice / cheque no." />
           </div>
           <div className="space-y-2">
             <Label>Description *</Label>
-            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
+            <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="What is this transaction for?" required />
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t">
             <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
@@ -324,7 +324,7 @@ export default function AccountingPage() {
         <form onSubmit={handleSaveCategory} className="space-y-4">
           <div className="space-y-2">
             <Label>Category Name *</Label>
-            <Input value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} required />
+            <Input value={catForm.name} onChange={(e) => setCatForm({ ...catForm, name: e.target.value })} placeholder="e.g. Rent" required />
           </div>
           <div className="space-y-2">
             <Label>Type *</Label>
