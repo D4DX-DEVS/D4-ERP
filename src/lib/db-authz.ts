@@ -26,6 +26,7 @@ export const WRITE_ROLES: Record<string, string[]> = {
   events: ["admin", "department-head"],
   department_reports: ["admin", "department-head"],
   custom_kpis: ["admin", "department-head"],
+  attendance_imports: ["admin", "department-head"],
 };
 
 /**

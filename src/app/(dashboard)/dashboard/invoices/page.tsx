@@ -346,7 +346,7 @@ export default function InvoicesPage() {
               <Label>Client *</Label>
               <Select value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}
                 options={clients.map((c) => ({ value: c.id, label: c.companyName }))} placeholder="Select" required
-                footerAction={{ label: "New Client", href: "/dashboard/clients" }} />
+                footerAction={{ label: "New Client", href: "/dashboard/clients?new=1" }} />
             </div>
             <div className="space-y-2">
               <Label>Due Date *</Label>

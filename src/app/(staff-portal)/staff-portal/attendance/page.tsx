@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
-import { ClockInOutCard } from "@/components/staff/clock-in-out-card";
 import { ClipboardEdit, Send } from "lucide-react";
 
 const CORRECTION_STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
@@ -75,8 +74,6 @@ export default function StaffAttendancePage() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold">Attendance</h1>
-
-      <ClockInOutCard />
 
       {/* Request Correction */}
       <Card>

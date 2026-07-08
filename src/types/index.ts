@@ -76,6 +76,8 @@ export interface Staff extends BaseDocument {
   role: StaffRole;
   isActive: boolean;
   shiftId?: string;
+  /** Employee code on the biometric device (ESSL etc.), used to match imported attendance. */
+  biometricId?: string;
   jobDescription?: string;
   contractType?: ContractType;
   contractEndDate?: Timestamp | null;
@@ -645,8 +647,10 @@ export interface Attendance extends BaseDocument {
   leaveRequestId?: string;
   correctionId?: string;
   shiftId?: string;
-  /** Source of the record — manual admin entry, self check-in, leave/holiday sync. */
-  source?: "self" | "manual" | "leave" | "holiday" | "correction";
+  /** Source of the record — manual admin entry, self check-in, leave/holiday sync, biometric import. */
+  source?: "self" | "manual" | "leave" | "holiday" | "correction" | "biometric";
+  /** Batch that created/updated this record via biometric import, for rollback. */
+  importBatchId?: string;
   isDeleted?: boolean;
   deletedAt?: Timestamp;
   deletedBy?: string;
@@ -661,6 +665,30 @@ export interface AttendanceSettings extends BaseDocument {
   fullDayHours: number;
   weeklyOff: string[];
   locationRequired: boolean;
+}
+
+// ==================== Attendance Import ====================
+export type AttendanceImportStatus = "completed" | "rolled-back";
+
+export interface AttendanceImportBatch extends BaseDocument {
+  uploadedBy: string;
+  uploadedByName?: string;
+  fileName: string;
+  fileUrl: string;
+  /** Parser that produced this batch, e.g. "essl-basic-work-duration". */
+  format: string;
+  dateRange: { start: Timestamp; end: Timestamp };
+  summary: {
+    totalRecords: number;
+    createdCount: number;
+    updatedCount: number;
+    skippedCount: number;
+    unmappedCount: number;
+    errorCount: number;
+  };
+  status: AttendanceImportStatus;
+  rolledBackAt?: Timestamp;
+  rolledBackBy?: string;
 }
 
 // ==================== Shift ====================

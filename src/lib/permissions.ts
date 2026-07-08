@@ -15,6 +15,7 @@ export type FeatureKey =
   | "calendar"
   | "clients"
   | "attendance-manage"
+  | "attendance-import"
   | "leaves-manage"
   | "accounting"
   | "invoices"
@@ -86,6 +87,12 @@ export const FEATURES: FeatureMeta[] = [
     key: "attendance-manage",
     label: "Attendance Management",
     description: "Manage attendance and corrections.",
+    defaultRoles: ["admin", "department-head"],
+  },
+  {
+    key: "attendance-import",
+    label: "Attendance Import",
+    description: "Upload biometric attendance reports (ESSL etc.) and import records.",
     defaultRoles: ["admin", "department-head"],
   },
   {

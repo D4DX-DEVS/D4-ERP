@@ -118,6 +118,7 @@ export const navigationModules: NavModule[] = [
     roles: ["admin", "department-head", "accounts"],
     items: [
       { label: "Attendance", href: "/dashboard/attendance", roles: ["admin", "department-head"] },
+      { label: "Import Attendance", href: "/dashboard/attendance/import", icon: FileText, roles: ["admin", "department-head"], feature: "attendance-import" },
       { label: "Corrections", href: "/dashboard/attendance/corrections", icon: ClipboardCheck, roles: ["admin", "department-head"] },
       { label: "Shifts", href: "/dashboard/attendance/shifts", icon: Hourglass, roles: ["admin"] },
       { label: "Attendance Reports", href: "/dashboard/attendance/reports", icon: BarChart3, roles: ["admin", "department-head", "accounts"] },

@@ -330,7 +330,7 @@ export default function QuotationsPage() {
                     <SelectContent>
                       {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
                       <a
-                        href="/dashboard/clients"
+                        href="/dashboard/clients?new=1"
                         className="flex items-center gap-2 rounded-xl border-t border-slate-100 mt-1 px-3 py-2.5 text-sm font-medium text-teal-700 hover:bg-teal-50 transition-colors"
                       >
                         <Plus className="h-3.5 w-3.5" />

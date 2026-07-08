@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Client } from "@/types";
 import { createDocument, updateDocument, deleteDocument, search as searchConstraint } from "@/lib/firestore";
 import { useAuthStore } from "@/store/auth-store";
@@ -103,6 +103,15 @@ export default function ClientsPage() {
     }
     setDialogOpen(true);
   };
+
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      handleOpen();
+      router.replace("/dashboard/clients");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

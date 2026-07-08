@@ -72,6 +72,7 @@ export default function StaffPage() {
   const [formStep, setFormStep] = useState(1);
   const [form, setForm] = useState({
     employeeCode: "",
+    biometricId: "",
     firstName: "",
     lastName: "",
     email: "",
@@ -150,6 +151,7 @@ export default function StaffPage() {
       setEditingId(staff.id);
       setForm({
         employeeCode: staff.employeeCode,
+        biometricId: staff.biometricId || "",
         firstName: staff.firstName,
         lastName: staff.lastName,
         email: staff.email,
@@ -176,6 +178,7 @@ export default function StaffPage() {
       setEditingId(null);
       setForm({
         employeeCode: generateEmployeeCode(),
+        biometricId: "",
         firstName: "",
         lastName: "",
         email: "",
@@ -464,6 +467,16 @@ export default function StaffPage() {
                     required
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Biometric ID</Label>
+                <Input
+                  value={form.biometricId}
+                  onChange={(e) => setForm({ ...form, biometricId: e.target.value })}
+                  className="font-mono"
+                  placeholder="Employee code on the biometric device (e.g. ESSL), if different"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
