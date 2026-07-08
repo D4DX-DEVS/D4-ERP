@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageLoader } from "@/components/ui/loading";
 import { ListingHeader, ListingPanel, ListingStatCard, ListingStatGrid } from "@/components/ui/listing";
+import { CommentsSection } from "@/components/ui/comments-section";
 import { formatDate, getStatusColor } from "@/lib/utils";
 import { ArrowLeft, CheckCircle2, CircleDashed, Eye, TimerReset } from "lucide-react";
 
@@ -120,6 +121,10 @@ export default function MyTaskDetailPage() {
           </div>
         </ListingPanel>
       </div>
+
+      <ListingPanel title="Progress Updates" description="Leave a note for your coordinator or check their feedback.">
+        <CommentsSection entityType="task" entityId={task.id} />
+      </ListingPanel>
     </div>
   );
 }

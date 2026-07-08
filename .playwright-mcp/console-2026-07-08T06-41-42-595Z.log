@@ -1,0 +1,57 @@
+[     214ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[     239ms] [LOG] [HMR] connected @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[    1210ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   23521ms] [LOG] [Fast Refresh] done in 22415ms @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   23627ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   37882ms] [LOG] [Fast Refresh] done in 14358ms @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   37985ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   50905ms] [ERROR] In HTML, %s cannot be a descendant of <%s>.
+This will cause a hydration error.%s <form> form 
+
+  ...
+    <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+      <RedirectBoundary>
+        <RedirectErrorBoundary router={{...}}>
+          <InnerLayoutRouter url="/dashboard..." tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} ...>
+            <SegmentViewNode type="page" pagePath="(dashboard...">
+              <SegmentTrieNode>
+              <ClientPageRoot Component={function TasksPage} serverProvidedParams={{...}}>
+                <TasksPage params={Promise} searchParams={Promise}>
+                  <div className="space-y-6">
+                    <ListingHeader>
+                    <ListingStatGrid>
+                    <div>
+                    <div>
+                    <div>
+                    <Dialog open={true} onClose={function onClose}>
+                      <div className="fixed inse...">
+                        <div>
+                        <div className="erp-dialog...">
+                          <button>
+                          <DialogHeader>
+>                         <form onSubmit={function handleSave} className="space-y-4">
+                            <div>
+                            <div>
+                            <div>
+                            <div>
+                            <div>
+                            <div>
+                            <div className="border-t pt-4">
+                              <CommentsSection entityType="task" entityId="6a4cb399ad...">
+                                <div className={undefined}>
+                                  <h4>
+                                  <div>
+>                                 <form onSubmit={function handleSubmit} className="flex flex-col gap-2">
+                            ...
+                    ...
+            ...
+          ...
+ @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:3272
+[   50905ms] [ERROR] <%s> cannot contain a nested %s.
+See this log for the ancestor stack trace. form <form> @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:3272
+[   52391ms] [LOG] [Fast Refresh] done in 14508ms @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   52497ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   84823ms] [LOG] [Fast Refresh] done in 32331ms @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   84928ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   85622ms] [LOG] [Fast Refresh] done in 796ms @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431
+[   85730ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3001/_next/static/chunks/node_modules_next_dist_115brz8._.js:2431

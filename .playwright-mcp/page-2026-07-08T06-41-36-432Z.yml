@@ -1,0 +1,329 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e79]:
+    - complementary [ref=e80]:
+      - generic [ref=e81]:
+        - generic [ref=e82]:
+          - link "D4 Media ERP Media ERP Admin Console" [ref=e83] [cursor=pointer]:
+            - /url: /dashboard
+            - img "D4 Media ERP" [ref=e85]
+            - generic [ref=e86]:
+              - paragraph [ref=e87]: Media ERP
+              - paragraph [ref=e88]: Admin Console
+          - generic [ref=e89]: Live
+        - generic [ref=e91]:
+          - img [ref=e93]
+          - generic [ref=e96]:
+            - paragraph [ref=e97]: Operations overview
+            - paragraph [ref=e98]: Teams, finance, and controls.
+      - navigation [ref=e99]:
+        - link "Dashboard" [ref=e100] [cursor=pointer]:
+          - /url: /dashboard
+          - img [ref=e102]
+          - generic [ref=e107]: Dashboard
+        - generic [ref=e108]:
+          - button "Organization" [ref=e109]:
+            - img [ref=e111]
+            - generic [ref=e115]: Organization
+            - img [ref=e116]
+          - generic [ref=e118]:
+            - link "Companies" [ref=e119] [cursor=pointer]:
+              - /url: /dashboard/companies
+              - generic [ref=e120]: Companies
+            - link "Departments" [ref=e121] [cursor=pointer]:
+              - /url: /dashboard/departments
+              - generic [ref=e122]: Departments
+        - generic [ref=e123]:
+          - button "People" [ref=e124]:
+            - img [ref=e126]
+            - generic [ref=e131]: People
+            - img [ref=e132]
+          - generic [ref=e134]:
+            - link "Staff" [ref=e135] [cursor=pointer]:
+              - /url: /dashboard/staff
+              - generic [ref=e136]: Staff
+            - link "Leave Requests" [ref=e137] [cursor=pointer]:
+              - /url: /dashboard/leaves
+              - generic [ref=e138]: Leave Requests
+            - link "Payroll" [ref=e139] [cursor=pointer]:
+              - /url: /dashboard/payroll
+              - generic [ref=e140]: Payroll
+        - generic [ref=e141]:
+          - button "Attendance" [ref=e142]:
+            - img [ref=e144]
+            - generic [ref=e147]: Attendance
+            - img [ref=e148]
+          - generic [ref=e150]:
+            - link "Attendance" [ref=e151] [cursor=pointer]:
+              - /url: /dashboard/attendance
+              - generic [ref=e152]: Attendance
+            - link "Import Attendance" [ref=e153] [cursor=pointer]:
+              - /url: /dashboard/attendance/import
+              - generic [ref=e154]: Import Attendance
+            - link "Corrections" [ref=e155] [cursor=pointer]:
+              - /url: /dashboard/attendance/corrections
+              - generic [ref=e156]: Corrections
+            - link "Shifts" [ref=e157] [cursor=pointer]:
+              - /url: /dashboard/attendance/shifts
+              - generic [ref=e158]: Shifts
+            - link "Attendance Reports" [ref=e159] [cursor=pointer]:
+              - /url: /dashboard/attendance/reports
+              - generic [ref=e160]: Attendance Reports
+        - generic [ref=e161]:
+          - button "Work" [ref=e162]:
+            - img [ref=e164]
+            - generic [ref=e167]: Work
+            - img [ref=e168]
+          - generic [ref=e170]:
+            - link "Task Board" [ref=e171] [cursor=pointer]:
+              - /url: /dashboard/tasks
+              - generic [ref=e172]: Task Board
+            - link "Daily Updates" [ref=e173] [cursor=pointer]:
+              - /url: /dashboard/tasks/daily-updates
+              - generic [ref=e174]: Daily Updates
+            - link "Work Logs" [ref=e175] [cursor=pointer]:
+              - /url: /dashboard/tasks/work-logs
+              - generic [ref=e176]: Work Logs
+            - link "Performance" [ref=e177] [cursor=pointer]:
+              - /url: /dashboard/tasks/performance
+              - generic [ref=e178]: Performance
+            - link "Team Calendar" [ref=e179] [cursor=pointer]:
+              - /url: /dashboard/calendar
+              - generic [ref=e180]: Team Calendar
+        - generic [ref=e181]:
+          - button "Events" [ref=e182]:
+            - img [ref=e184]
+            - generic [ref=e190]: Events
+            - img [ref=e191]
+          - generic [ref=e193]:
+            - link "Dashboard" [ref=e194] [cursor=pointer]:
+              - /url: /dashboard/events
+              - generic [ref=e195]: Dashboard
+            - link "All Events" [ref=e196] [cursor=pointer]:
+              - /url: /dashboard/events/list
+              - generic [ref=e197]: All Events
+            - link "Event Calendar" [ref=e198] [cursor=pointer]:
+              - /url: /dashboard/events/calendar
+              - generic [ref=e199]: Event Calendar
+            - link "Reports" [ref=e200] [cursor=pointer]:
+              - /url: /dashboard/events/reports
+              - generic [ref=e201]: Reports
+        - generic [ref=e202]:
+          - button "Studio" [ref=e203]:
+            - img [ref=e205]
+            - generic [ref=e210]: Studio
+            - img [ref=e211]
+          - generic [ref=e213]:
+            - link "Dashboard" [ref=e214] [cursor=pointer]:
+              - /url: /dashboard/studio
+              - generic [ref=e215]: Dashboard
+            - link "Bookings" [ref=e216] [cursor=pointer]:
+              - /url: /dashboard/studio/bookings
+              - generic [ref=e217]: Bookings
+            - link "Calendar" [ref=e218] [cursor=pointer]:
+              - /url: /dashboard/studio/calendar
+              - generic [ref=e219]: Calendar
+            - link "Timeline" [ref=e220] [cursor=pointer]:
+              - /url: /dashboard/studio/timeline
+              - generic [ref=e221]: Timeline
+            - link "Availability" [ref=e222] [cursor=pointer]:
+              - /url: /dashboard/studio/availability
+              - generic [ref=e223]: Availability
+            - link "Resources" [ref=e224] [cursor=pointer]:
+              - /url: /dashboard/studio/resources
+              - generic [ref=e225]: Resources
+            - link "Reports" [ref=e226] [cursor=pointer]:
+              - /url: /dashboard/studio/reports
+              - generic [ref=e227]: Reports
+        - generic [ref=e228]:
+          - button "Assets" [ref=e229]:
+            - img [ref=e231]
+            - generic [ref=e235]: Assets
+            - img [ref=e236]
+          - generic [ref=e238]:
+            - link "Asset List" [ref=e239] [cursor=pointer]:
+              - /url: /dashboard/assets
+              - generic [ref=e240]: Asset List
+            - link "Movements" [ref=e241] [cursor=pointer]:
+              - /url: /dashboard/assets/movements
+              - generic [ref=e242]: Movements
+            - link "Availability" [ref=e243] [cursor=pointer]:
+              - /url: /dashboard/assets/availability
+              - generic [ref=e244]: Availability
+            - link "Events" [ref=e245] [cursor=pointer]:
+              - /url: /dashboard/assets/events
+              - generic [ref=e246]: Events
+            - link "Categories" [ref=e247] [cursor=pointer]:
+              - /url: /dashboard/assets/categories
+              - generic [ref=e248]: Categories
+            - link "Persons" [ref=e249] [cursor=pointer]:
+              - /url: /dashboard/assets/persons
+              - generic [ref=e250]: Persons
+            - link "Reports" [ref=e251] [cursor=pointer]:
+              - /url: /dashboard/assets/reports
+              - generic [ref=e252]: Reports
+        - generic [ref=e253]:
+          - button "Finance" [ref=e254]:
+            - img [ref=e256]
+            - generic [ref=e258]: Finance
+            - img [ref=e259]
+          - generic [ref=e261]:
+            - link "Accounting" [ref=e262] [cursor=pointer]:
+              - /url: /dashboard/accounting
+              - generic [ref=e263]: Accounting
+            - link "Item Master" [ref=e264] [cursor=pointer]:
+              - /url: /dashboard/items
+              - generic [ref=e265]: Item Master
+            - generic [ref=e266]:
+              - button "Sales" [ref=e267]:
+                - img [ref=e268]
+                - generic [ref=e271]: Sales
+                - img [ref=e272]
+              - generic [ref=e274]:
+                - link "Clients" [ref=e275] [cursor=pointer]:
+                  - /url: /dashboard/clients
+                  - generic [ref=e276]: Clients
+                - link "Quotations" [ref=e277] [cursor=pointer]:
+                  - /url: /dashboard/quotations
+                  - generic [ref=e278]: Quotations
+                - link "Invoices" [ref=e279] [cursor=pointer]:
+                  - /url: /dashboard/invoices
+                  - generic [ref=e280]: Invoices
+            - generic [ref=e281]:
+              - button "Reports" [ref=e282]:
+                - img [ref=e283]
+                - generic [ref=e285]: Reports
+                - img [ref=e286]
+              - generic [ref=e288]:
+                - link "Overview" [ref=e289] [cursor=pointer]:
+                  - /url: /dashboard/reports
+                  - generic [ref=e290]: Overview
+                - link "Department Reports" [ref=e291] [cursor=pointer]:
+                  - /url: /dashboard/reports/department
+                  - generic [ref=e292]: Department Reports
+                - link "Company Report" [ref=e293] [cursor=pointer]:
+                  - /url: /dashboard/reports/company
+                  - generic [ref=e294]: Company Report
+                - link "KPI Management" [ref=e295] [cursor=pointer]:
+                  - /url: /dashboard/reports/kpis
+                  - generic [ref=e296]: KPI Management
+                - link "Productivity" [ref=e297] [cursor=pointer]:
+                  - /url: /dashboard/reports/productivity
+                  - generic [ref=e298]: Productivity
+        - generic [ref=e299]:
+          - button "System" [ref=e300]:
+            - img [ref=e302]
+            - generic [ref=e305]: System
+            - img [ref=e306]
+          - generic [ref=e308]:
+            - link "Notifications" [ref=e309] [cursor=pointer]:
+              - /url: /dashboard/notifications
+              - generic [ref=e310]: Notifications
+            - link "Banners" [ref=e311] [cursor=pointer]:
+              - /url: /dashboard/banners
+              - generic [ref=e312]: Banners
+            - link "WhatsApp" [ref=e313] [cursor=pointer]:
+              - /url: /dashboard/whatsapp
+              - generic [ref=e314]: WhatsApp
+            - link "Audit Log" [ref=e315] [cursor=pointer]:
+              - /url: /dashboard/audit-log
+              - generic [ref=e316]: Audit Log
+            - link "Settings" [ref=e317] [cursor=pointer]:
+              - /url: /dashboard/settings
+              - generic [ref=e318]: Settings
+      - generic [ref=e320]:
+        - paragraph [ref=e321]: Admin User
+        - paragraph [ref=e322]: admin
+    - generic [ref=e323]:
+      - banner [ref=e324]:
+        - generic [ref=e325]:
+          - generic [ref=e326]:
+            - generic [ref=e328]: Admin Workspace
+            - generic [ref=e329]:
+              - generic [ref=e330]:
+                - heading "Executive overview" [level=1] [ref=e331]
+                - generic [ref=e332]: Wednesday, 8 July
+              - paragraph [ref=e333]: Track operations, people, and finance from one place. Welcome back, Admin.
+          - generic [ref=e334]:
+            - button "Search... Ctrl K" [ref=e335] [cursor=pointer]:
+              - img [ref=e336]
+              - generic [ref=e339]: Search...
+              - generic [ref=e340]: Ctrl K
+            - button [ref=e341] [cursor=pointer]:
+              - img [ref=e342]
+            - generic [ref=e346]:
+              - img "D4 Admin" [ref=e348]
+              - generic [ref=e349]:
+                - paragraph [ref=e350]: Admin User
+                - paragraph [ref=e351]: admin
+            - button "Logout" [ref=e352] [cursor=pointer]:
+              - img [ref=e353]
+      - main [ref=e356]:
+        - generic [ref=e358]:
+          - generic [ref=e359]:
+            - heading "Dashboard" [level=1] [ref=e360]
+            - paragraph [ref=e361]: Welcome back, Admin. Here's your overview.
+          - generic [ref=e362]:
+            - generic [ref=e365]:
+              - generic [ref=e366]:
+                - paragraph [ref=e367]: Total Staff
+                - paragraph [ref=e368]: —
+              - img [ref=e370]
+            - generic [ref=e377]:
+              - generic [ref=e378]:
+                - paragraph [ref=e379]: Companies
+                - paragraph [ref=e380]: —
+              - img [ref=e382]
+            - generic [ref=e388]:
+              - generic [ref=e389]:
+                - paragraph [ref=e390]: Clients
+                - paragraph [ref=e391]: —
+              - img [ref=e393]
+            - generic [ref=e400]:
+              - generic [ref=e401]:
+                - paragraph [ref=e402]: Pending Leaves
+                - paragraph [ref=e403]: —
+              - img [ref=e405]
+            - generic [ref=e409]:
+              - generic [ref=e410]:
+                - paragraph [ref=e411]: Invoices
+                - paragraph [ref=e412]: —
+              - img [ref=e414]
+            - generic [ref=e419]:
+              - generic [ref=e420]:
+                - paragraph [ref=e421]: Active Tasks
+                - paragraph [ref=e422]: —
+              - img [ref=e424]
+            - generic [ref=e429]:
+              - generic [ref=e430]:
+                - paragraph [ref=e431]: Monthly Income
+                - paragraph [ref=e432]: —
+              - img [ref=e434]
+            - generic [ref=e439]:
+              - generic [ref=e440]:
+                - paragraph [ref=e441]: Monthly Expense
+                - paragraph [ref=e442]: —
+              - img [ref=e444]
+          - generic [ref=e447]:
+            - generic [ref=e448]:
+              - heading "Recent Leave Requests" [level=3] [ref=e450]
+              - paragraph [ref=e452]: Loading...
+            - generic [ref=e453]:
+              - heading "Quick Overview" [level=3] [ref=e455]
+              - generic [ref=e457]:
+                - generic [ref=e458]:
+                  - generic [ref=e459]: Active Staff
+                  - generic [ref=e460]: —
+                - generic [ref=e461]:
+                  - generic [ref=e462]: Active Clients
+                  - generic [ref=e463]: —
+                - generic [ref=e464]:
+                  - generic [ref=e465]: Open Tasks
+                  - generic [ref=e466]: —
+  - button "Open Next.js Dev Tools" [ref=e71] [cursor=pointer]:
+    - generic [ref=e74]:
+      - text: Compiling
+      - generic [ref=e75]:
+        - generic [ref=e76]: .
+        - generic [ref=e77]: .
+        - generic [ref=e78]: .
+  - alert [ref=e70]

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Task, Staff } from "@/types";
+import { Task, Staff, Department } from "@/types";
 import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { PageLoader } from "@/components/ui/loading";
 import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
+import { CommentsSection } from "@/components/ui/comments-section";
 import { formatDate, cn } from "@/lib/utils";
 import { Plus, Loader2, Pencil, Trash2, CheckSquare, Square, X, CalendarClock, ListTodo, Loader, CheckCircle2, LayoutGrid, Rows3, Search } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
@@ -58,6 +59,7 @@ export default function TasksPage() {
   const { toast } = useToast();
   const [tasks, setTasks] = useState<TaskDoc[]>([]);
   const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
+  const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -69,6 +71,9 @@ export default function TasksPage() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | Task["status"]>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | Task["priority"]>("all");
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
+  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [overdueOnly, setOverdueOnly] = useState(false);
 
   const [form, setForm] = useState(emptyForm);
   const [subtasks, setSubtasks] = useState<{ title: string; isCompleted: boolean }[]>([]);
@@ -76,12 +81,14 @@ export default function TasksPage() {
 
   const fetchData = async () => {
     try {
-      const [taskList, staff] = await Promise.all([
+      const [taskList, staff, depts] = await Promise.all([
         getDocuments<Task>("tasks", [orderBy("createdAt", "desc")]),
         getDocuments<Staff>("staff", [where("isActive", "==", true)]),
+        getDocuments<Department>("departments", [where("isActive", "==", true)]),
       ]);
       setTasks(taskList);
       setStaffList(staff);
+      setDepartments(depts);
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to load tasks");
@@ -208,25 +215,29 @@ export default function TasksPage() {
   if (loading) return <PageLoader />;
 
   const todayKey = new Date().toISOString().split("T")[0];
-  const stats = {
-    total: tasks.length,
-    inProgress: tasks.filter((t) => t.status === "in-progress").length,
-    overdue: tasks.filter(
-      (t) => t.status !== "done" && t.dueDate && new Date(t.dueDate.seconds * 1000).toISOString().split("T")[0] < todayKey
-    ).length,
-    done: tasks.filter((t) => t.status === "done").length,
-  };
+  const isOverdue = (t: TaskDoc) =>
+    t.status !== "done" && !!t.dueDate && new Date(t.dueDate.seconds * 1000).toISOString().split("T")[0] < todayKey;
 
   const q = query.trim().toLowerCase();
   const filteredTasks = tasks.filter((t) => {
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
+    if (assigneeFilter !== "all" && t.assigneeId !== assigneeFilter) return false;
+    if (departmentFilter !== "all" && t.departmentId !== departmentFilter) return false;
+    if (overdueOnly && !isOverdue(t)) return false;
     if (q) {
       const haystack = `${t.title} ${t.description ?? ""} ${t.assigneeName ?? ""} ${(t.tags ?? []).join(" ")}`.toLowerCase();
       if (!haystack.includes(q)) return false;
     }
     return true;
   });
+
+  const stats = {
+    total: filteredTasks.length,
+    inProgress: filteredTasks.filter((t) => t.status === "in-progress").length,
+    overdue: filteredTasks.filter(isOverdue).length,
+    done: filteredTasks.filter((t) => t.status === "done").length,
+  };
 
   return (
     <div className="space-y-6">
@@ -247,69 +258,91 @@ export default function TasksPage() {
         <ListingStatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Completed" value={stats.done} toneClassName="bg-emerald-50 text-emerald-700" />
       </ListingStatGrid>
 
-      {/* View switcher + filters */}
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="inline-flex rounded-full border border-slate-200/90 bg-white/80 p-1 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-          {VIEWS.map((v) => {
-            const Icon = v.icon;
-            const active = view === v.id;
-            return (
-              <button
-                key={v.id}
-                type="button"
-                onClick={() => setView(v.id)}
-                className={cn(
-                  "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all",
-                  active
-                    ? "bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-500 text-white shadow-[0_10px_24px_rgba(15,118,110,0.24)]"
-                    : "text-slate-600 hover:text-slate-950"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {v.label}
-              </button>
-            );
-          })}
-        </div>
+      {/* View switcher */}
+      <div className="inline-flex rounded-full border border-slate-200/90 bg-white/80 p-1 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+        {VIEWS.map((v) => {
+          const Icon = v.icon;
+          const active = view === v.id;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => setView(v.id)}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all",
+                active
+                  ? "bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-500 text-white shadow-[0_10px_24px_rgba(15,118,110,0.24)]"
+                  : "text-slate-600 hover:text-slate-950"
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
 
-        {view === "table" && (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                placeholder="Search tasks…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="w-auto min-w-[200px] pl-9"
-              />
-            </div>
-            <Select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as "all" | Task["status"])}
-              className="w-auto min-w-[150px]"
-              options={[{ value: "all", label: "All statuses" }, ...statusColumns.map((c) => ({ value: c.key, label: c.label }))]}
-            />
-            <Select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value as "all" | Task["priority"])}
-              className="w-auto min-w-[150px]"
-              options={[
-                { value: "all", label: "All priorities" },
-                { value: "low", label: "Low" },
-                { value: "medium", label: "Medium" },
-                { value: "high", label: "High" },
-                { value: "urgent", label: "Urgent" },
-              ]}
-            />
-          </div>
-        )}
+      {/* Filters — apply to both Board and Table views */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            placeholder="Search tasks…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-auto min-w-[200px] pl-9"
+          />
+        </div>
+        <Select
+          value={assigneeFilter}
+          onChange={(e) => setAssigneeFilter(e.target.value)}
+          className="w-auto min-w-[170px]"
+          options={[
+            { value: "all", label: "All staff" },
+            ...staffList.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` })),
+          ]}
+        />
+        <Select
+          value={departmentFilter}
+          onChange={(e) => setDepartmentFilter(e.target.value)}
+          className="w-auto min-w-[170px]"
+          options={[{ value: "all", label: "All departments" }, ...departments.map((d) => ({ value: d.id, label: d.name }))]}
+        />
+        <Select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as "all" | Task["status"])}
+          className="w-auto min-w-[150px]"
+          options={[{ value: "all", label: "All statuses" }, ...statusColumns.map((c) => ({ value: c.key, label: c.label }))]}
+        />
+        <Select
+          value={priorityFilter}
+          onChange={(e) => setPriorityFilter(e.target.value as "all" | Task["priority"])}
+          className="w-auto min-w-[150px]"
+          options={[
+            { value: "all", label: "All priorities" },
+            { value: "low", label: "Low" },
+            { value: "medium", label: "Medium" },
+            { value: "high", label: "High" },
+            { value: "urgent", label: "Urgent" },
+          ]}
+        />
+        <button
+          type="button"
+          onClick={() => setOverdueOnly((v) => !v)}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-medium transition-colors",
+            overdueOnly ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-600 hover:border-red-200"
+          )}
+        >
+          <CalendarClock className="h-3.5 w-3.5" /> Overdue only
+        </button>
       </div>
 
       {view === "board" ? (
       /* Kanban Board */
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {statusColumns.map((col) => {
-          const colTasks = tasks.filter((t) => t.status === col.key);
+          const colTasks = filteredTasks.filter((t) => t.status === col.key);
           const isOver = dragOverCol === col.key;
           return (
             <div
@@ -426,7 +459,7 @@ export default function TasksPage() {
       ) : (
       /* Table View */
       <div className="space-y-2">
-        <p className="px-1 text-xs text-slate-500">{filteredTasks.length} of {tasks.length} tasks</p>
+        <p className="px-1 text-xs text-slate-500">Showing {filteredTasks.length} of {tasks.length} tasks</p>
         <Table>
           <TableHeader>
             <TableRow>
@@ -629,6 +662,12 @@ export default function TasksPage() {
             </div>
           </div>
         </form>
+
+        {editingId && (
+          <div className="mt-4 border-t pt-4">
+            <CommentsSection entityType="task" entityId={editingId} />
+          </div>
+        )}
       </Dialog>
 
       <ConfirmDialog

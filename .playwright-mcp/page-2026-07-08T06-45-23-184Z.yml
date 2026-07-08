@@ -1,0 +1,161 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e2]:
+    - complementary [ref=f4e3]:
+      - generic [ref=f4e4]:
+        - generic [ref=f4e5]:
+          - generic [ref=f4e6]: D4
+          - generic [ref=f4e7]:
+            - paragraph [ref=f4e8]: Staff portal
+            - paragraph [ref=f4e9]: Your workspace
+        - generic [ref=f4e10]:
+          - paragraph [ref=f4e11]: Staff Member
+          - paragraph [ref=f4e12]: staff
+          - paragraph [ref=f4e13]: Quick access to attendance, leave, profile, and tasks.
+      - navigation [ref=f4e14]:
+        - link "Home" [ref=f4e15] [cursor=pointer]:
+          - /url: /staff-portal
+          - img [ref=f4e17]
+          - generic [ref=f4e20]: Home
+        - link "Apply Leave" [ref=f4e21] [cursor=pointer]:
+          - /url: /staff-portal/leave
+          - img [ref=f4e23]
+          - generic [ref=f4e25]: Apply Leave
+        - link "My Leaves" [ref=f4e26] [cursor=pointer]:
+          - /url: /staff-portal/my-leaves
+          - img [ref=f4e28]
+          - generic [ref=f4e31]: My Leaves
+        - link "My Tasks" [ref=f4e32] [cursor=pointer]:
+          - /url: /staff-portal/my-tasks
+          - img [ref=f4e34]
+          - generic [ref=f4e37]: My Tasks
+        - link "Work Log" [ref=f4e41] [cursor=pointer]:
+          - /url: /staff-portal/work-log
+          - img [ref=f4e43]
+          - generic [ref=f4e46]: Work Log
+        - link "Attendance" [ref=f4e47] [cursor=pointer]:
+          - /url: /staff-portal/attendance
+          - img [ref=f4e49]
+          - generic [ref=f4e52]: Attendance
+        - link "Holidays" [ref=f4e53] [cursor=pointer]:
+          - /url: /staff-portal/holidays
+          - img [ref=f4e55]
+          - generic [ref=f4e59]: Holidays
+        - link "Calendar" [ref=f4e60] [cursor=pointer]:
+          - /url: /staff-portal/calendar
+          - img [ref=f4e62]
+          - generic [ref=f4e64]: Calendar
+        - link "Alerts" [ref=f4e65] [cursor=pointer]:
+          - /url: /staff-portal/notifications
+          - img [ref=f4e67]
+          - generic [ref=f4e70]: Alerts
+        - link "Profile" [ref=f4e71] [cursor=pointer]:
+          - /url: /staff-portal/profile
+          - img [ref=f4e73]
+          - generic [ref=f4e76]: Profile
+      - button "Exit portal" [ref=f4e78] [cursor=pointer]:
+        - text: Exit portal
+        - img [ref=f4e79]
+    - generic [ref=f4e82]:
+      - banner [ref=f4e83]:
+        - generic [ref=f4e84]:
+          - generic [ref=f4e85]:
+            - paragraph [ref=f4e86]: Home
+            - generic [ref=f4e87]:
+              - heading "Home" [level=1] [ref=f4e216]
+              - paragraph [ref=f4e89]: Welcome back, Staff. Everything you need for your day is organized here.
+          - generic [ref=f4e90]:
+            - generic [ref=f4e91]:
+              - generic [ref=f4e92]: SM
+              - generic [ref=f4e93]:
+                - paragraph [ref=f4e94]: Staff Member
+                - paragraph [ref=f4e95]: staff
+            - button [ref=f4e96] [cursor=pointer]:
+              - img [ref=f4e97]
+      - main [ref=f4e100]:
+        - generic [ref=f4e217]:
+          - generic [ref=f4e218]:
+            - generic [ref=f4e219]:
+              - heading "Uyirezhuth Padana Shilpasala- Thanima" [level=1] [ref=f4e220]
+              - paragraph [ref=f4e221]: Task detail page with status controls and full assignment context.
+            - link "Back to tasks" [ref=f4e223] [cursor=pointer]:
+              - /url: /staff-portal/my-tasks
+              - button "Back to tasks" [ref=f4e224]:
+                - img [ref=f4e225]
+                - text: Back to tasks
+          - generic [ref=f4e227]:
+            - generic [ref=f4e229]:
+              - img [ref=f4e231]
+              - generic [ref=f4e240]:
+                - paragraph [ref=f4e241]: Status
+                - paragraph [ref=f4e242]: todo
+                - paragraph [ref=f4e243]: Current workflow stage
+            - generic [ref=f4e245]:
+              - img [ref=f4e247]
+              - generic [ref=f4e250]:
+                - paragraph [ref=f4e251]: Priority
+                - paragraph [ref=f4e252]: medium
+                - paragraph [ref=f4e253]: Work urgency
+            - generic [ref=f4e255]:
+              - img [ref=f4e257]
+              - generic [ref=f4e260]:
+                - paragraph [ref=f4e261]: Due Date
+                - paragraph [ref=f4e262]: 13 Jun 2026
+                - paragraph [ref=f4e263]: Scheduled deadline
+            - generic [ref=f4e265]:
+              - img [ref=f4e267]
+              - generic [ref=f4e270]:
+                - paragraph [ref=f4e271]: Subtasks
+                - paragraph [ref=f4e272]: "0"
+                - paragraph [ref=f4e273]: Checklist items
+          - generic [ref=f4e274]:
+            - generic [ref=f4e275]:
+              - generic [ref=f4e277]:
+                - heading "Task Summary" [level=3] [ref=f4e278]
+                - paragraph [ref=f4e279]: Core task description, tagging, and timeline.
+              - generic [ref=f4e281]:
+                - generic [ref=f4e282]:
+                  - paragraph [ref=f4e283]: Status
+                  - generic [ref=f4e285]: todo
+                - generic [ref=f4e286]:
+                  - paragraph [ref=f4e287]: Priority
+                  - generic [ref=f4e289]: medium
+                - generic [ref=f4e290]:
+                  - paragraph [ref=f4e291]: Due Date
+                  - generic [ref=f4e292]: 13 Jun 2026
+                - generic [ref=f4e293]:
+                  - paragraph [ref=f4e294]: Completed At
+                  - generic [ref=f4e295]: —
+                - generic [ref=f4e297]:
+                  - paragraph [ref=f4e298]: Description
+                  - generic [ref=f4e299]: "Uyirezhuth Padana Shilpasala Date: June 13, 14 Saturday, Sunday Place: i Rise, Feroke Time: 9.30 am- * Video Recording * Photography"
+                - generic [ref=f4e301]:
+                  - paragraph [ref=f4e302]: Tags
+                  - generic [ref=f4e303]: —
+            - generic [ref=f4e304]:
+              - generic [ref=f4e306]:
+                - heading "Task Actions" [level=3] [ref=f4e307]
+                - paragraph [ref=f4e308]: Advance the task without leaving the detail page.
+              - generic [ref=f4e310]:
+                - button "Start Task" [ref=f4e311] [cursor=pointer]
+                - button "Mark Done" [ref=f4e312] [cursor=pointer]
+          - generic [ref=f4e313]:
+            - generic [ref=f4e315]:
+              - heading "Progress Updates" [level=3] [ref=f4e316]
+              - paragraph [ref=f4e317]: Leave a note for your coordinator or check their feedback.
+            - generic [ref=f4e319]:
+              - heading "Comments" [level=4] [ref=f4e320]
+              - paragraph [ref=f4e321]: No comments yet.
+              - generic [ref=f4e323]:
+                - textbox "Write a comment..." [ref=f4e324]
+                - button "Attach file" [ref=f4e325]:
+                  - img [ref=f4e326]
+                - button [disabled] [ref=f4e328]:
+                  - img [ref=f4e329]
+  - button "Open Next.js Dev Tools" [ref=f4e208] [cursor=pointer]:
+    - generic [ref=f4e333]:
+      - text: Compiling
+      - generic [ref=f4e334]:
+        - generic [ref=f4e335]: .
+        - generic [ref=f4e336]: .
+        - generic [ref=f4e337]: .
+  - alert [ref=f4e114]

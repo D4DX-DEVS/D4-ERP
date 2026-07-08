@@ -1,0 +1,477 @@
+- generic [active] [ref=f2e1]:
+  - generic [ref=f2e2]:
+    - complementary [ref=f2e3]:
+      - generic [ref=f2e4]:
+        - generic [ref=f2e5]:
+          - link "D4 Media ERP Media ERP Admin Console" [ref=f2e6] [cursor=pointer]:
+            - /url: /dashboard
+            - img "D4 Media ERP" [ref=f2e8]
+            - generic [ref=f2e9]:
+              - paragraph [ref=f2e10]: Media ERP
+              - paragraph [ref=f2e11]: Admin Console
+          - generic [ref=f2e12]: Live
+        - generic [ref=f2e14]:
+          - img [ref=f2e16]
+          - generic [ref=f2e19]:
+            - paragraph [ref=f2e20]: Operations overview
+            - paragraph [ref=f2e21]: Teams, finance, and controls.
+      - navigation [ref=f2e22]:
+        - link "Dashboard" [ref=f2e23] [cursor=pointer]:
+          - /url: /dashboard
+          - img [ref=f2e25]
+          - generic [ref=f2e30]: Dashboard
+        - generic [ref=f2e31]:
+          - button "Organization" [ref=f2e32]:
+            - img [ref=f2e34]
+            - generic [ref=f2e38]: Organization
+            - img [ref=f2e39]
+          - generic [ref=f2e41]:
+            - link "Companies" [ref=f2e42] [cursor=pointer]:
+              - /url: /dashboard/companies
+              - generic [ref=f2e43]: Companies
+            - link "Departments" [ref=f2e44] [cursor=pointer]:
+              - /url: /dashboard/departments
+              - generic [ref=f2e45]: Departments
+        - generic [ref=f2e46]:
+          - button "People" [ref=f2e47]:
+            - img [ref=f2e49]
+            - generic [ref=f2e54]: People
+            - img [ref=f2e55]
+          - generic [ref=f2e57]:
+            - link "Staff" [ref=f2e58] [cursor=pointer]:
+              - /url: /dashboard/staff
+              - generic [ref=f2e59]: Staff
+            - link "Leave Requests" [ref=f2e60] [cursor=pointer]:
+              - /url: /dashboard/leaves
+              - generic [ref=f2e61]: Leave Requests
+            - link "Payroll" [ref=f2e62] [cursor=pointer]:
+              - /url: /dashboard/payroll
+              - generic [ref=f2e63]: Payroll
+        - generic [ref=f2e64]:
+          - button "Attendance" [ref=f2e65]:
+            - img [ref=f2e67]
+            - generic [ref=f2e70]: Attendance
+            - img [ref=f2e71]
+          - generic [ref=f2e73]:
+            - link "Attendance" [ref=f2e74] [cursor=pointer]:
+              - /url: /dashboard/attendance
+              - generic [ref=f2e75]: Attendance
+            - link "Import Attendance" [ref=f2e76] [cursor=pointer]:
+              - /url: /dashboard/attendance/import
+              - generic [ref=f2e77]: Import Attendance
+            - link "Corrections" [ref=f2e78] [cursor=pointer]:
+              - /url: /dashboard/attendance/corrections
+              - generic [ref=f2e79]: Corrections
+            - link "Shifts" [ref=f2e80] [cursor=pointer]:
+              - /url: /dashboard/attendance/shifts
+              - generic [ref=f2e81]: Shifts
+            - link "Attendance Reports" [ref=f2e82] [cursor=pointer]:
+              - /url: /dashboard/attendance/reports
+              - generic [ref=f2e83]: Attendance Reports
+        - generic [ref=f2e84]:
+          - button "Work" [ref=f2e85]:
+            - img [ref=f2e87]
+            - generic [ref=f2e90]: Work
+            - img [ref=f2e91]
+          - generic [ref=f2e94]:
+            - link "Task Board" [ref=f2e95] [cursor=pointer]:
+              - /url: /dashboard/tasks
+              - generic [ref=f2e96]: Task Board
+            - link "Daily Updates" [ref=f2e97] [cursor=pointer]:
+              - /url: /dashboard/tasks/daily-updates
+              - generic [ref=f2e98]: Daily Updates
+            - link "Work Logs" [ref=f2e99] [cursor=pointer]:
+              - /url: /dashboard/tasks/work-logs
+              - generic [ref=f2e100]: Work Logs
+            - link "Performance" [ref=f2e101] [cursor=pointer]:
+              - /url: /dashboard/tasks/performance
+              - generic [ref=f2e102]: Performance
+            - link "Team Calendar" [ref=f2e103] [cursor=pointer]:
+              - /url: /dashboard/calendar
+              - generic [ref=f2e104]: Team Calendar
+        - generic [ref=f2e105]:
+          - button "Events" [ref=f2e106]:
+            - img [ref=f2e108]
+            - generic [ref=f2e114]: Events
+            - img [ref=f2e115]
+          - generic [ref=f2e117]:
+            - link "Dashboard" [ref=f2e118] [cursor=pointer]:
+              - /url: /dashboard/events
+              - generic [ref=f2e119]: Dashboard
+            - link "All Events" [ref=f2e120] [cursor=pointer]:
+              - /url: /dashboard/events/list
+              - generic [ref=f2e121]: All Events
+            - link "Event Calendar" [ref=f2e122] [cursor=pointer]:
+              - /url: /dashboard/events/calendar
+              - generic [ref=f2e123]: Event Calendar
+            - link "Reports" [ref=f2e124] [cursor=pointer]:
+              - /url: /dashboard/events/reports
+              - generic [ref=f2e125]: Reports
+        - generic [ref=f2e126]:
+          - button "Studio" [ref=f2e127]:
+            - img [ref=f2e129]
+            - generic [ref=f2e134]: Studio
+            - img [ref=f2e135]
+          - generic [ref=f2e137]:
+            - link "Dashboard" [ref=f2e138] [cursor=pointer]:
+              - /url: /dashboard/studio
+              - generic [ref=f2e139]: Dashboard
+            - link "Bookings" [ref=f2e140] [cursor=pointer]:
+              - /url: /dashboard/studio/bookings
+              - generic [ref=f2e141]: Bookings
+            - link "Calendar" [ref=f2e142] [cursor=pointer]:
+              - /url: /dashboard/studio/calendar
+              - generic [ref=f2e143]: Calendar
+            - link "Timeline" [ref=f2e144] [cursor=pointer]:
+              - /url: /dashboard/studio/timeline
+              - generic [ref=f2e145]: Timeline
+            - link "Availability" [ref=f2e146] [cursor=pointer]:
+              - /url: /dashboard/studio/availability
+              - generic [ref=f2e147]: Availability
+            - link "Resources" [ref=f2e148] [cursor=pointer]:
+              - /url: /dashboard/studio/resources
+              - generic [ref=f2e149]: Resources
+            - link "Reports" [ref=f2e150] [cursor=pointer]:
+              - /url: /dashboard/studio/reports
+              - generic [ref=f2e151]: Reports
+        - generic [ref=f2e152]:
+          - button "Assets" [ref=f2e153]:
+            - img [ref=f2e155]
+            - generic [ref=f2e159]: Assets
+            - img [ref=f2e160]
+          - generic [ref=f2e162]:
+            - link "Asset List" [ref=f2e163] [cursor=pointer]:
+              - /url: /dashboard/assets
+              - generic [ref=f2e164]: Asset List
+            - link "Movements" [ref=f2e165] [cursor=pointer]:
+              - /url: /dashboard/assets/movements
+              - generic [ref=f2e166]: Movements
+            - link "Availability" [ref=f2e167] [cursor=pointer]:
+              - /url: /dashboard/assets/availability
+              - generic [ref=f2e168]: Availability
+            - link "Events" [ref=f2e169] [cursor=pointer]:
+              - /url: /dashboard/assets/events
+              - generic [ref=f2e170]: Events
+            - link "Categories" [ref=f2e171] [cursor=pointer]:
+              - /url: /dashboard/assets/categories
+              - generic [ref=f2e172]: Categories
+            - link "Persons" [ref=f2e173] [cursor=pointer]:
+              - /url: /dashboard/assets/persons
+              - generic [ref=f2e174]: Persons
+            - link "Reports" [ref=f2e175] [cursor=pointer]:
+              - /url: /dashboard/assets/reports
+              - generic [ref=f2e176]: Reports
+        - generic [ref=f2e177]:
+          - button "Finance" [ref=f2e178]:
+            - img [ref=f2e180]
+            - generic [ref=f2e182]: Finance
+            - img [ref=f2e183]
+          - generic [ref=f2e185]:
+            - link "Accounting" [ref=f2e186] [cursor=pointer]:
+              - /url: /dashboard/accounting
+              - generic [ref=f2e187]: Accounting
+            - link "Item Master" [ref=f2e188] [cursor=pointer]:
+              - /url: /dashboard/items
+              - generic [ref=f2e189]: Item Master
+            - generic [ref=f2e190]:
+              - button "Sales" [ref=f2e191]:
+                - img [ref=f2e192]
+                - generic [ref=f2e195]: Sales
+                - img [ref=f2e196]
+              - generic [ref=f2e198]:
+                - link "Clients" [ref=f2e199] [cursor=pointer]:
+                  - /url: /dashboard/clients
+                  - generic [ref=f2e200]: Clients
+                - link "Quotations" [ref=f2e201] [cursor=pointer]:
+                  - /url: /dashboard/quotations
+                  - generic [ref=f2e202]: Quotations
+                - link "Invoices" [ref=f2e203] [cursor=pointer]:
+                  - /url: /dashboard/invoices
+                  - generic [ref=f2e204]: Invoices
+            - generic [ref=f2e205]:
+              - button "Reports" [ref=f2e206]:
+                - img [ref=f2e207]
+                - generic [ref=f2e209]: Reports
+                - img [ref=f2e210]
+              - generic [ref=f2e212]:
+                - link "Overview" [ref=f2e213] [cursor=pointer]:
+                  - /url: /dashboard/reports
+                  - generic [ref=f2e214]: Overview
+                - link "Department Reports" [ref=f2e215] [cursor=pointer]:
+                  - /url: /dashboard/reports/department
+                  - generic [ref=f2e216]: Department Reports
+                - link "Company Report" [ref=f2e217] [cursor=pointer]:
+                  - /url: /dashboard/reports/company
+                  - generic [ref=f2e218]: Company Report
+                - link "KPI Management" [ref=f2e219] [cursor=pointer]:
+                  - /url: /dashboard/reports/kpis
+                  - generic [ref=f2e220]: KPI Management
+                - link "Productivity" [ref=f2e221] [cursor=pointer]:
+                  - /url: /dashboard/reports/productivity
+                  - generic [ref=f2e222]: Productivity
+        - generic [ref=f2e223]:
+          - button "System" [ref=f2e224]:
+            - img [ref=f2e226]
+            - generic [ref=f2e229]: System
+            - img [ref=f2e230]
+          - generic [ref=f2e232]:
+            - link "Notifications" [ref=f2e233] [cursor=pointer]:
+              - /url: /dashboard/notifications
+              - generic [ref=f2e234]: Notifications
+            - link "Banners" [ref=f2e235] [cursor=pointer]:
+              - /url: /dashboard/banners
+              - generic [ref=f2e236]: Banners
+            - link "WhatsApp" [ref=f2e237] [cursor=pointer]:
+              - /url: /dashboard/whatsapp
+              - generic [ref=f2e238]: WhatsApp
+            - link "Audit Log" [ref=f2e239] [cursor=pointer]:
+              - /url: /dashboard/audit-log
+              - generic [ref=f2e240]: Audit Log
+            - link "Settings" [ref=f2e241] [cursor=pointer]:
+              - /url: /dashboard/settings
+              - generic [ref=f2e242]: Settings
+      - generic [ref=f2e244]:
+        - paragraph [ref=f2e245]: Admin User
+        - paragraph [ref=f2e246]: admin
+    - generic [ref=f2e247]:
+      - banner [ref=f2e248]:
+        - generic [ref=f2e249]:
+          - generic [ref=f2e250]:
+            - generic [ref=f2e251]:
+              - generic [ref=f2e252]: Admin Workspace
+              - generic [ref=f2e253]:
+                - img [ref=f2e254]
+                - generic [ref=f2e256]: Tasks
+            - generic [ref=f2e257]:
+              - generic [ref=f2e258]:
+                - heading "Task board" [level=1] [ref=f2e259]
+                - generic [ref=f2e260]: Wednesday, 8 July
+              - paragraph [ref=f2e261]: Coordinate deliverables across departments. Welcome back, Admin.
+          - generic [ref=f2e262]:
+            - button "Search... Ctrl K" [ref=f2e263] [cursor=pointer]:
+              - img [ref=f2e264]
+              - generic [ref=f2e267]: Search...
+              - generic [ref=f2e268]: Ctrl K
+            - button [ref=f2e269] [cursor=pointer]:
+              - img [ref=f2e270]
+            - generic [ref=f2e274]:
+              - img "D4 Admin" [ref=f2e276]
+              - generic [ref=f2e277]:
+                - paragraph [ref=f2e278]: Admin User
+                - paragraph [ref=f2e279]: admin
+            - button "Logout" [ref=f2e280] [cursor=pointer]:
+              - img [ref=f2e281]
+      - main [ref=f2e284]:
+        - generic [ref=f2e299]:
+          - generic [ref=f2e300]:
+            - generic [ref=f2e301]:
+              - heading "Task Board" [level=1] [ref=f2e302]
+              - paragraph [ref=f2e303]: Coordinate deliverables across your team — drag cards between columns to update status.
+            - button "New Task" [ref=f2e305] [cursor=pointer]:
+              - img [ref=f2e306]
+              - text: New Task
+          - generic [ref=f2e307]:
+            - generic [ref=f2e309]:
+              - img [ref=f2e311]
+              - generic [ref=f2e314]:
+                - paragraph [ref=f2e315]: Total Tasks
+                - paragraph [ref=f2e316]: "4"
+            - generic [ref=f2e318]:
+              - img [ref=f2e320]
+              - generic [ref=f2e325]:
+                - paragraph [ref=f2e326]: In Progress
+                - paragraph [ref=f2e327]: "1"
+            - generic [ref=f2e329]:
+              - img [ref=f2e331]
+              - generic [ref=f2e335]:
+                - paragraph [ref=f2e336]: Overdue
+                - paragraph [ref=f2e337]: "1"
+            - generic [ref=f2e339]:
+              - img [ref=f2e341]
+              - generic [ref=f2e344]:
+                - paragraph [ref=f2e345]: Completed
+                - paragraph [ref=f2e346]: "2"
+          - generic [ref=f2e347]:
+            - button "Board" [ref=f2e348]:
+              - img [ref=f2e349]
+              - text: Board
+            - button "Table" [ref=f2e354]:
+              - img [ref=f2e355]
+              - text: Table
+          - generic [ref=f2e357]:
+            - generic [ref=f2e358]:
+              - img
+              - textbox "Search tasks…" [ref=f2e359]
+            - button "All staff" [ref=f2e360]:
+              - generic [ref=f2e361]: All staff
+              - img [ref=f2e362]
+            - button "All departments" [ref=f2e364]:
+              - generic [ref=f2e365]: All departments
+              - img [ref=f2e366]
+            - button "All statuses" [ref=f2e368]:
+              - generic [ref=f2e369]: All statuses
+              - img [ref=f2e370]
+            - button "All priorities" [ref=f2e372]:
+              - generic [ref=f2e373]: All priorities
+              - img [ref=f2e374]
+            - button "Overdue only" [ref=f2e376]:
+              - img [ref=f2e377]
+              - text: Overdue only
+          - generic [ref=f2e381]:
+            - generic [ref=f2e382]:
+              - generic [ref=f2e383]:
+                - heading "To Do" [level=3] [ref=f2e386]
+                - generic [ref=f2e387]: "1"
+              - generic [ref=f2e390] [cursor=pointer]:
+                - generic [ref=f2e391]:
+                  - heading "Uyirezhuth Padana Shilpasala- Thanima" [level=4] [ref=f2e392]
+                  - generic [ref=f2e393]: medium
+                - paragraph [ref=f2e394]: "Uyirezhuth Padana Shilpasala Date: June 13, 14 Saturday, Sunday Place: i Rise, Feroke Time: 9.30 am- * Video Recording * Photography"
+                - generic [ref=f2e395]:
+                  - generic [ref=f2e396]:
+                    - generic [ref=f2e397]: S
+                    - generic [ref=f2e398]: Staff Member
+                  - generic [ref=f2e399]:
+                    - img [ref=f2e400]
+                    - text: 13 Jun 2026
+            - generic [ref=f2e404]:
+              - generic [ref=f2e405]:
+                - heading "In Progress" [level=3] [ref=f2e408]
+                - generic [ref=f2e409]: "1"
+              - generic [ref=f2e412] [cursor=pointer]:
+                - generic [ref=f2e413]:
+                  - heading "coearthvuideo editing" [level=4] [ref=f2e414]
+                  - generic [ref=f2e415]: urgent
+                - paragraph [ref=f2e416]: co edit
+                - generic [ref=f2e418]:
+                  - generic [ref=f2e419]:
+                    - img [ref=f2e420]
+                    - text: Subtasks
+                  - generic [ref=f2e423]: 0/2
+                - generic [ref=f2e426]: "#urgent"
+                - generic [ref=f2e427]:
+                  - generic [ref=f2e428]:
+                    - generic [ref=f2e429]: A
+                    - generic [ref=f2e430]: Ahemmed Ramees
+                  - generic [ref=f2e431]:
+                    - img [ref=f2e432]
+                    - text: 09 Jul 2026
+            - generic [ref=f2e436]:
+              - generic [ref=f2e437]:
+                - heading "Review" [level=3] [ref=f2e440]
+                - generic [ref=f2e441]: "0"
+              - generic [ref=f2e443]: Drop tasks here
+            - generic [ref=f2e444]:
+              - generic [ref=f2e445]:
+                - heading "Done" [level=3] [ref=f2e448]
+                - generic [ref=f2e449]: "2"
+              - generic [ref=f2e450]:
+                - generic [ref=f2e452] [cursor=pointer]:
+                  - generic [ref=f2e453]:
+                    - heading "SIO WORK" [level=4] [ref=f2e454]
+                    - generic [ref=f2e455]: medium
+                  - generic [ref=f2e457]:
+                    - generic [ref=f2e458]:
+                      - img [ref=f2e459]
+                      - text: Subtasks
+                    - generic [ref=f2e462]: 0/2
+                  - generic [ref=f2e465]: "#urgent"
+                  - generic [ref=f2e466]:
+                    - generic [ref=f2e467]:
+                      - generic [ref=f2e468]: S
+                      - generic [ref=f2e469]: Shahid Ameen
+                    - generic [ref=f2e470]:
+                      - img [ref=f2e471]
+                      - text: 11 Jun 2026
+                - generic [ref=f2e476] [cursor=pointer]:
+                  - generic [ref=f2e477]:
+                    - heading "Thanima" [level=4] [ref=f2e478]
+                    - generic [ref=f2e479]: high
+                  - generic [ref=f2e481]: "#urgent"
+                  - generic [ref=f2e482]:
+                    - generic [ref=f2e483]:
+                      - generic [ref=f2e484]: J
+                      - generic [ref=f2e485]: JAHAR SWDIK
+                    - generic [ref=f2e486]:
+                      - img [ref=f2e487]
+                      - text: 15 May 2026
+          - generic [ref=f2e501]:
+            - button [ref=f2e502] [cursor=pointer]:
+              - img [ref=f2e503]
+            - heading "Edit Task" [level=2] [ref=f2e507]
+            - generic [ref=f2e508]:
+              - generic [ref=f2e509]:
+                - text: Title *
+                - textbox [ref=f2e510]: coearthvuideo editing
+              - generic [ref=f2e511]:
+                - text: Description
+                - textbox [ref=f2e512]: co edit
+              - generic [ref=f2e513]:
+                - generic [ref=f2e514]:
+                  - text: Assignee *
+                  - button "Ahemmed Ramees" [ref=f2e515]:
+                    - generic [ref=f2e516]: Ahemmed Ramees
+                    - img [ref=f2e517]
+                - generic [ref=f2e519]:
+                  - text: Priority
+                  - button "Urgent" [ref=f2e520]:
+                    - generic [ref=f2e521]: Urgent
+                    - img [ref=f2e522]
+              - generic [ref=f2e524]:
+                - generic [ref=f2e525]:
+                  - text: Status
+                  - button "In Progress" [ref=f2e526]:
+                    - generic [ref=f2e527]: In Progress
+                    - img [ref=f2e528]
+                - generic [ref=f2e530]:
+                  - text: Due Date *
+                  - button "09 Jul 2026" [ref=f2e531]:
+                    - generic [ref=f2e532]: 09 Jul 2026
+                    - img [ref=f2e533]
+              - generic [ref=f2e535]:
+                - text: Subtasks
+                - generic [ref=f2e536]:
+                  - generic [ref=f2e537]:
+                    - button [ref=f2e538] [cursor=pointer]:
+                      - img [ref=f2e539]
+                    - generic [ref=f2e541]: photo frame
+                    - button [ref=f2e542] [cursor=pointer]:
+                      - img [ref=f2e543]
+                  - generic [ref=f2e546]:
+                    - button [ref=f2e547] [cursor=pointer]:
+                      - img [ref=f2e548]
+                    - generic [ref=f2e550]: file transfer
+                    - button [ref=f2e551] [cursor=pointer]:
+                      - img [ref=f2e552]
+                - generic [ref=f2e555]:
+                  - textbox "Add a subtask" [ref=f2e556]
+                  - button "Add" [ref=f2e557] [cursor=pointer]
+              - generic [ref=f2e558]:
+                - text: Tags (comma-separated)
+                - textbox "design, urgent" [ref=f2e559]: urgent
+              - generic [ref=f2e560]:
+                - button "Delete" [ref=f2e561] [cursor=pointer]:
+                  - img [ref=f2e562]
+                  - text: Delete
+                - generic [ref=f2e565]:
+                  - button "Cancel" [ref=f2e566] [cursor=pointer]
+                  - button "Save Changes" [ref=f2e567] [cursor=pointer]:
+                    - img [ref=f2e568]
+                    - text: Save Changes
+            - generic [ref=f2e572]:
+              - heading "Comments" [level=4] [ref=f2e573]
+              - paragraph [ref=f2e574]: No comments yet.
+              - generic [ref=f2e576]:
+                - textbox "Write a comment..." [ref=f2e577]
+                - button "Attach file" [ref=f2e578]:
+                  - img [ref=f2e579]
+                - button [disabled] [ref=f2e581]:
+                  - img [ref=f2e582]
+  - button "Open Next.js Dev Tools" [ref=f2e491] [cursor=pointer]:
+    - generic [ref=f2e494]:
+      - text: Compiling
+      - generic [ref=f2e495]:
+        - generic [ref=f2e496]: .
+        - generic [ref=f2e497]: .
+        - generic [ref=f2e498]: .
+  - alert [ref=f2e298]

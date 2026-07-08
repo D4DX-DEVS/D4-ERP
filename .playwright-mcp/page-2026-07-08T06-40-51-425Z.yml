@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - paragraph [ref=e7]: D4 Media ERP
+      - generic [ref=e8]:
+        - heading "Admin operations with a cleaner, calmer control room." [level=1] [ref=e9]
+        - paragraph [ref=e10]: Review teams, finance, attendance, and system controls from one polished workspace designed for quick scanning and decisive action.
+      - generic [ref=e11]:
+        - generic [ref=e12]:
+          - img [ref=e13]
+          - heading "Role-secured access" [level=2] [ref=e16]
+          - paragraph [ref=e17]: Admin, department, and accounts views stay properly segmented.
+        - generic [ref=e18]:
+          - img [ref=e19]
+          - heading "Unified workflow" [level=2] [ref=e22]
+          - paragraph [ref=e23]: The same visual system carries through pages, lists, and task surfaces.
+    - generic [ref=e24]:
+      - generic [ref=e25]:
+        - img [ref=e28]
+        - heading "Admin sign in" [level=3] [ref=e32]
+        - paragraph [ref=e33]: Access finance, operations, and team controls from a single dashboard.
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - text: Email
+          - textbox "Email" [ref=e37]:
+            - /placeholder: admin@d4media.in
+        - generic [ref=e38]:
+          - text: Password
+          - generic [ref=e39]:
+            - textbox "Password" [ref=e40]:
+              - /placeholder: ••••••••
+            - button [ref=e41]:
+              - img [ref=e42]
+        - button "Continue to dashboard" [ref=e45] [cursor=pointer]:
+          - text: Continue to dashboard
+          - img [ref=e46]
+        - generic [ref=e48]:
+          - paragraph [ref=e49]: Signing in as staff instead?
+          - link "Open staff portal" [ref=e50] [cursor=pointer]:
+            - /url: /staff-login
+            - text: Open staff portal
+            - img [ref=e51]
+  - button "Open Next.js Dev Tools" [ref=e58] [cursor=pointer]:
+    - img [ref=e59]
