@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   QueryConstraint,
   orderBy,
@@ -10,6 +10,7 @@ import {
 interface PaginationState<T> {
   data: (T & { id: string })[];
   loading: boolean;
+  refreshing: boolean;
   totalCount: number;
   page: number;
   pageSize: number;
@@ -39,9 +40,14 @@ export function usePagination<T>(
   const constraintKey = JSON.stringify(constraints);
   const stableConstraints = useMemo(() => constraints, [constraintKey]);
 
+  // ponytail: `loading` = first load only; refetches (search, filter, paging) set
+  // `refreshing` so pages don't unmount the whole view (and their search input) mid-type.
+  const hasLoadedRef = useRef(false);
+
   const [state, setState] = useState<PaginationState<T>>({
     data: [],
     loading: true,
+    refreshing: false,
     totalCount: 0,
     page: 0,
     pageSize,
@@ -52,7 +58,7 @@ export function usePagination<T>(
 
   const fetchPage = useCallback(
     async (pageNum: number) => {
-      setState((prev) => ({ ...prev, loading: true }));
+      setState((prev) => ({ ...prev, refreshing: true }));
       try {
         const allConstraints: QueryConstraint[] = [
           ...stableConstraints,
@@ -68,9 +74,11 @@ export function usePagination<T>(
 
         const totalPages = result.totalPages;
 
+        hasLoadedRef.current = true;
         setState({
           data: result.data,
           loading: false,
+          refreshing: false,
           totalCount: result.total,
           page: pageNum,
           pageSize,
@@ -80,7 +88,7 @@ export function usePagination<T>(
         });
       } catch (error) {
         console.error("Pagination error:", error);
-        setState((prev) => ({ ...prev, loading: false }));
+        setState((prev) => ({ ...prev, loading: false, refreshing: false }));
       }
     },
     [collectionName, stableConstraints, orderByField, orderDirection, pageSize]
@@ -90,7 +98,11 @@ export function usePagination<T>(
     let isMounted = true;
 
     async function loadInitialPage() {
-      setState((prev) => ({ ...prev, loading: true }));
+      setState((prev) =>
+        hasLoadedRef.current
+          ? { ...prev, refreshing: true }
+          : { ...prev, loading: true }
+      );
 
       try {
         const allConstraints: QueryConstraint[] = [
@@ -109,9 +121,11 @@ export function usePagination<T>(
 
         const totalPages = result.totalPages;
 
+        hasLoadedRef.current = true;
         setState({
           data: result.data,
           loading: false,
+          refreshing: false,
           totalCount: result.total,
           page: 0,
           pageSize,
@@ -123,7 +137,7 @@ export function usePagination<T>(
         console.error("Pagination error:", error);
 
         if (isMounted) {
-          setState((prev) => ({ ...prev, loading: false }));
+          setState((prev) => ({ ...prev, loading: false, refreshing: false }));
         }
       }
     }
