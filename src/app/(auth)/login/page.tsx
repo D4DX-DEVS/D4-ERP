@@ -54,11 +54,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="mesh-bg relative min-h-screen overflow-hidden px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+    <div className="mesh-bg relative h-screen overflow-hidden px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
       <div className="ambient-orb absolute right-[8%] top-[12%] h-40 w-40 rounded-full bg-teal-300/20 blur-3xl" />
       <div className="ambient-orb absolute bottom-[10%] left-[6%] h-52 w-52 rounded-full bg-amber-300/20 blur-3xl" />
 
-      <div className="page-frame grid min-h-[calc(100vh-2.5rem)] items-center gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:gap-8">
+      <div className="page-frame grid h-full items-center gap-6 lg:grid-cols-[1.08fr_0.92fr] lg:gap-8">
         <section className="glass-panel hidden rounded-[36px] px-8 py-10 text-slate-950 lg:block">
           <p className="eyebrow">D4 Media ERP</p>
           <div className="mt-6 max-w-xl space-y-5">
