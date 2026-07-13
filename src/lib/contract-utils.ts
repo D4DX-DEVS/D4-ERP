@@ -18,6 +18,7 @@ export interface ContractDuration {
 /** Listed in the order shown in the UI. */
 export const CONTRACT_DURATIONS: ContractDuration[] = [
   { value: "3-months", label: "3 Months", months: 3 },
+  { value: "4-months", label: "4 Months", months: 4 },
   { value: "6-months", label: "6 Months", months: 6 },
   { value: "12-months", label: "1 Year", months: 12 },
   { value: "24-months", label: "2 Years", months: 24 },

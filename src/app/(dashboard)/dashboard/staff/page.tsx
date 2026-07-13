@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Staff, Company, Department, Shift, ContractType } from "@/types";
+import { Staff, Company, Department, Shift, ContractType, EmploymentType } from "@/types";
 import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint, type QueryConstraint } from "@/lib/firestore";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,35 @@ import { FEATURES, roleHasFeature } from "@/lib/permissions";
 import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search, Shield } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+
+const EMPLOYMENT_TYPES: { value: EmploymentType; label: string }[] = [
+  { value: "permanent", label: "Permanent (no contract)" },
+  { value: "staff", label: "Staff (fixed-term contract)" },
+  { value: "intern", label: "Intern (short-term contract)" },
+];
+
+// Which contract durations are offered per employment type.
+const DURATIONS_BY_TYPE: Record<Exclude<EmploymentType, "permanent">, ContractType[]> = {
+  staff: ["12-months", "24-months", "36-months", "custom"],
+  intern: ["3-months", "4-months", "6-months", "12-months", "custom"],
+};
+
+// Existing staff saved before employmentType existed: infer from their contract.
+function inferEmploymentType(staff: Staff): EmploymentType {
+  if (staff.employmentType) return staff.employmentType;
+  return staff.contractType && staff.contractType !== "permanent" ? "staff" : "permanent";
+}
+
+function employmentBadge(type: EmploymentType): string {
+  switch (type) {
+    case "permanent":
+      return "bg-emerald-50 text-emerald-700";
+    case "staff":
+      return "bg-blue-50 text-blue-700";
+    case "intern":
+      return "bg-amber-50 text-amber-700";
+  }
+}
 
 export default function StaffPage() {
   const { toast } = useToast();
@@ -91,6 +120,7 @@ export default function StaffPage() {
     shiftId: "",
     isActive: true,
     jobDescription: "",
+    employmentType: "permanent" as EmploymentType,
     contractType: "permanent" as ContractType,
     contractEndDate: "",
     grantedFeatures: [] as string[],
@@ -102,6 +132,23 @@ export default function StaffPage() {
     setForm((f) => ({
       ...f,
       contractType: type,
+      contractEndDate: computed ? computed.toISOString().split("T")[0] : "",
+    }));
+  };
+
+  // Switching category picks a sensible default contract term. Permanent clears it.
+  const setEmploymentType = (type: EmploymentType) => {
+    if (type === "permanent") {
+      setForm((f) => ({ ...f, employmentType: type, contractType: "permanent", contractEndDate: "" }));
+      return;
+    }
+    const defaultDuration: ContractType = type === "staff" ? "12-months" : "4-months";
+    const start = form.dateOfJoining ? new Date(form.dateOfJoining) : new Date();
+    const computed = computeContractEndDate(start, defaultDuration);
+    setForm((f) => ({
+      ...f,
+      employmentType: type,
+      contractType: defaultDuration,
       contractEndDate: computed ? computed.toISOString().split("T")[0] : "",
     }));
   };
@@ -170,6 +217,7 @@ export default function StaffPage() {
         shiftId: staff.shiftId || "",
         isActive: staff.isActive,
         jobDescription: staff.jobDescription || "",
+        employmentType: inferEmploymentType(staff),
         contractType: staff.contractType || "permanent",
         contractEndDate: staff.contractEndDate ? new Date(staff.contractEndDate.seconds * 1000).toISOString().split("T")[0] : "",
         grantedFeatures: staff.grantedFeatures || [],
@@ -197,6 +245,7 @@ export default function StaffPage() {
         shiftId: "",
         isActive: true,
         jobDescription: "",
+        employmentType: "permanent",
         contractType: "permanent",
         contractEndDate: "",
         grantedFeatures: [],
@@ -360,6 +409,9 @@ export default function StaffPage() {
                       <div>
                         <p className="font-medium">{staff.firstName} {staff.lastName}</p>
                         <p className="text-xs text-gray-500">{staff.email}</p>
+                        <Badge variant={employmentBadge(inferEmploymentType(staff))} className="mt-1">
+                          {EMPLOYMENT_TYPES.find((t) => t.value === inferEmploymentType(staff))?.label.split(" (")[0]}
+                        </Badge>
                       </div>
                     </TableCell>
                     <TableCell className="font-mono text-sm">{staff.employeeCode}</TableCell>
@@ -578,24 +630,37 @@ export default function StaffPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Contract Duration</Label>
+                  <Label>Employment Type</Label>
                   <Select
-                    value={form.contractType}
-                    onChange={(e) => setContractType(e.target.value as ContractType)}
-                    options={CONTRACT_DURATIONS.map((d) => ({ value: d.value, label: d.label }))}
+                    value={form.employmentType}
+                    onChange={(e) => setEmploymentType(e.target.value as EmploymentType)}
+                    options={EMPLOYMENT_TYPES}
                   />
                 </div>
-                {form.contractType !== "permanent" && (
+                {form.employmentType !== "permanent" && (
                   <div className="space-y-2">
-                    <Label>Contract End Date</Label>
-                    <DatePicker
-                      value={form.contractEndDate}
-                      onChange={(e) => setForm({ ...form, contractEndDate: e.target.value })}
-                      min={form.dateOfJoining || undefined}
+                    <Label>Contract Duration</Label>
+                    <Select
+                      value={form.contractType}
+                      onChange={(e) => setContractType(e.target.value as ContractType)}
+                      options={CONTRACT_DURATIONS.filter((d) =>
+                        DURATIONS_BY_TYPE[form.employmentType as Exclude<EmploymentType, "permanent">].includes(d.value)
+                      ).map((d) => ({ value: d.value, label: d.label }))}
                     />
                   </div>
                 )}
               </div>
+              {form.employmentType !== "permanent" && (
+                <div className="space-y-2">
+                  <Label>Contract End Date</Label>
+                  <DatePicker
+                    value={form.contractEndDate}
+                    onChange={(e) => setForm({ ...form, contractEndDate: e.target.value })}
+                    min={form.dateOfJoining || undefined}
+                  />
+                  <p className="text-[11px] text-gray-400">Auto-filled from duration; adjust for a custom end date.</p>
+                </div>
+              )}
 
               <div className="border-t pt-4">
                 <h4 className="text-sm font-semibold mb-3">Address</h4>

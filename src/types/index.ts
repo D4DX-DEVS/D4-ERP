@@ -44,12 +44,17 @@ export type Gender = "Male" | "Female" | "Other";
 
 export type ContractType =
   | "3-months"
+  | "4-months"
   | "6-months"
   | "12-months"
   | "24-months"
   | "36-months"
   | "permanent"
   | "custom";
+
+// Employment category. Permanent staff have no contract end date (joining date only);
+// staff and interns are contract-based with an end date.
+export type EmploymentType = "permanent" | "staff" | "intern";
 
 export interface Staff extends BaseDocument {
   employeeCode: string;
@@ -79,6 +84,7 @@ export interface Staff extends BaseDocument {
   /** Employee code on the biometric device (ESSL etc.), used to match imported attendance. */
   biometricId?: string;
   jobDescription?: string;
+  employmentType?: EmploymentType;
   contractType?: ContractType;
   contractEndDate?: Timestamp | null;
   /** Extra feature keys granted to this employee beyond their role defaults. */

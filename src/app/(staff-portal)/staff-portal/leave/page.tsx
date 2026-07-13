@@ -11,7 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, CheckCircle } from "lucide-react";
+import { Loader2, CheckCircle, AlertTriangle } from "lucide-react";
+
+// Staff can take up to 2 CL days per request without escalation; longer CL
+// requests need explicit Admin / Department Head sign-off.
+const CL_MAX_WITHOUT_APPROVAL = 2;
 
 export default function ApplyLeavePage() {
   const { user } = useAuthStore();
@@ -29,6 +33,15 @@ export default function ApplyLeavePage() {
     endTime: "",
     reason: "",
   });
+
+  const requestedDays = (() => {
+    if (form.type !== "leave" || !form.startDate) return 0;
+    if (form.isHalfDay) return 0.5;
+    const start = new Date(form.startDate);
+    const end = new Date(form.endDate || form.startDate);
+    return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
+  })();
+  const exceedsClCap = form.leaveType === "CL" && requestedDays > CL_MAX_WITHOUT_APPROVAL;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,6 +113,9 @@ export default function ApplyLeavePage() {
                     { value: "CO", label: "Compensatory Off" },
                     { value: "LOP", label: "Loss of Pay" },
                   ]} />
+                {form.leaveType === "SL" && (
+                  <p className="text-[11px] text-rose-600">Attach a medical report — approved by your coordinator. Up to 15 days/year.</p>
+                )}
               </div>
             )}
 
@@ -156,6 +172,17 @@ export default function ApplyLeavePage() {
                   <Label>End Time</Label>
                   <TimePicker value={form.endTime} onChange={(e) => setForm({ ...form, endTime: e.target.value })} />
                 </div>
+              </div>
+            )}
+
+            {exceedsClCap && (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>
+                  You&apos;re requesting <b>{requestedDays} days</b> of Casual Leave. Up to {CL_MAX_WITHOUT_APPROVAL} days
+                  is standard — longer CL needs Admin / Department Head approval. You can still submit; it will be
+                  reviewed before approval.
+                </p>
               </div>
             )}
 

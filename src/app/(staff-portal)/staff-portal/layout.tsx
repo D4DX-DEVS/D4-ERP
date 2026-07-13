@@ -16,6 +16,7 @@ import {
   Clock,
   FileText,
   Home,
+  LayoutGrid,
   LogOut,
   Pencil,
   User,
@@ -37,12 +38,27 @@ const navItems = [
   { href: "/staff-portal/profile", label: "Profile", icon: User },
 ];
 
+// Standard 5-slot app bottom bar: 4 primary tabs + "More" sheet for the rest.
+const mobileTabs = [
+  { href: "/staff-portal", label: "Home", icon: Home },
+  { href: "/staff-portal/leave", label: "Leave", icon: CalendarDays },
+  { href: "/staff-portal/my-tasks", label: "Tasks", icon: ClipboardList },
+  { href: "/staff-portal/attendance", label: "Attendance", icon: Clock },
+];
+
+const moreItems = navItems.filter((item) => !mobileTabs.some((tab) => tab.href === item.href));
+
 export default function StaffPortalLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
   const [unread, setUnread] = useState(0);
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [pathname]);
 
   const currentItem = navItems.find((item) => pathname === item.href) ?? navItems[0];
 
@@ -181,29 +197,86 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
         </main>
       </div>
 
-      <nav className="glass-panel fixed bottom-4 left-1/2 z-30 flex w-[min(calc(100%-1.5rem),720px)] -translate-x-1/2 gap-1 overflow-x-auto rounded-[28px] px-2 py-2 lg:hidden">
-        <div className="flex min-w-full justify-between gap-1">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
+      {/* More sheet */}
+      {moreOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMoreOpen(false)}>
+          <div className="absolute inset-0 bg-slate-950/40" />
+          <div
+            className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-white px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 shadow-[0_-16px_40px_rgba(15,23,42,0.18)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200" />
+            <div className="grid grid-cols-3 gap-2">
+              {moreItems.map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3 text-xs font-medium",
+                      isActive ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-600"
+                    )}
+                  >
+                    <span className="relative">
+                      <item.icon className="h-5 w-5" />
+                      {item.href === "/staff-portal/notifications" && unread > 0 && (
+                        <span className="absolute -right-2 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{unread}</span>
+                      )}
+                    </span>
+                    <span className="whitespace-nowrap">{item.label}</span>
+                  </Link>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => router.push("/staff-portal/logout")}
+                className="flex flex-col items-center gap-1.5 rounded-2xl bg-rose-50 px-2 py-3 text-xs font-medium text-rose-600"
+              >
+                <LogOut className="h-5 w-5" />
+                <span className="whitespace-nowrap">Exit Portal</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Standard app bottom bar */}
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/80 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
+        <div className="grid grid-cols-5">
+          {mobileTabs.map((item) => {
+            const isActive = pathname === item.href && !moreOpen;
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setMoreOpen(false)}
                 className={cn(
-                  "flex min-w-[72px] flex-1 flex-col items-center gap-1 rounded-[18px] px-2 py-2 text-[11px] font-medium transition-colors",
-                  isActive ? "bg-slate-950 text-white" : "text-slate-500"
+                  "flex flex-col items-center gap-1 pb-1.5 pt-2 text-[10px] font-medium transition-colors",
+                  isActive ? "text-emerald-600" : "text-slate-400"
                 )}
               >
-                <span className="relative">
-                  <item.icon className={cn("h-4.5 w-4.5", isActive ? "text-white" : "text-slate-400")} />
-                  {item.href === "/staff-portal/notifications" && unread > 0 && (
-                    <span className="absolute -right-2 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">{unread}</span>
-                  )}
-                </span>
-                <span>{item.label}</span>
+                <item.icon className="h-5 w-5" />
+                <span className="whitespace-nowrap">{item.label}</span>
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setMoreOpen((open) => !open)}
+            className={cn(
+              "flex flex-col items-center gap-1 pb-1.5 pt-2 text-[10px] font-medium transition-colors",
+              moreOpen || moreItems.some((item) => pathname === item.href) ? "text-emerald-600" : "text-slate-400"
+            )}
+          >
+            <span className="relative">
+              <LayoutGrid className="h-5 w-5" />
+              {unread > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[8px] font-bold text-white">{unread}</span>
+              )}
+            </span>
+            <span className="whitespace-nowrap">More</span>
+          </button>
         </div>
       </nav>
     </div>

@@ -83,10 +83,10 @@ describe("getContractStatus", () => {
 });
 
 describe("CONTRACT_DURATIONS", () => {
-  it("includes all 7 preset values in UI order", () => {
+  it("includes all 8 preset values in UI order", () => {
     const values = CONTRACT_DURATIONS.map((d) => d.value);
     expect(values).toEqual([
-      "3-months", "6-months", "12-months", "24-months", "36-months", "permanent", "custom",
+      "3-months", "4-months", "6-months", "12-months", "24-months", "36-months", "permanent", "custom",
     ]);
   });
 });
