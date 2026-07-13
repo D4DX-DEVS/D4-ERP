@@ -24,6 +24,7 @@ interface UsePaginationOptions {
   orderByField?: string;
   orderDirection?: "asc" | "desc";
   constraints?: QueryConstraint[];
+  initialPage?: number;
 }
 
 export function usePagination<T>(
@@ -35,7 +36,12 @@ export function usePagination<T>(
     orderByField = "createdAt",
     orderDirection = "desc",
     constraints = [],
+    initialPage = 0,
   } = options;
+
+  // ponytail: initialPage only applies to the first fetch (e.g. restoring page
+  // from the URL); later reruns (search/filter changes) reset to page 0.
+  const usedInitialPageRef = useRef(false);
 
   const constraintKey = JSON.stringify(constraints);
   const stableConstraints = useMemo(() => constraints, [constraintKey]);
@@ -98,6 +104,9 @@ export function usePagination<T>(
     let isMounted = true;
 
     async function loadInitialPage() {
+      const startPage = usedInitialPageRef.current ? 0 : initialPage;
+      usedInitialPageRef.current = true;
+
       setState((prev) =>
         hasLoadedRef.current
           ? { ...prev, refreshing: true }
@@ -114,7 +123,7 @@ export function usePagination<T>(
           collectionName,
           allConstraints,
           pageSize,
-          0
+          startPage
         );
 
         if (!isMounted) return;
@@ -127,11 +136,11 @@ export function usePagination<T>(
           loading: false,
           refreshing: false,
           totalCount: result.total,
-          page: 0,
+          page: startPage,
           pageSize,
           totalPages,
-          hasNext: totalPages > 1,
-          hasPrev: false,
+          hasNext: startPage < totalPages - 1,
+          hasPrev: startPage > 0,
         });
       } catch (error) {
         console.error("Pagination error:", error);

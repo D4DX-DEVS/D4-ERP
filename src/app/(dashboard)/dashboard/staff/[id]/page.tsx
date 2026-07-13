@@ -38,7 +38,6 @@ import {
   User,
   CalendarClock,
 } from "lucide-react";
-import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 
 type TabKey = "overview" | "salary" | "access" | "documents";
@@ -265,11 +264,9 @@ export default function StaffProfilePage() {
     <div className="space-y-6">
       {/* Header with profile summary */}
       <div className="flex items-start gap-4">
-        <Link href="/dashboard/staff">
-          <Button variant="ghost" size="icon" className="mt-1">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </Link>
+        <Button variant="ghost" size="icon" className="mt-1" onClick={() => router.back()}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
 
         <div className="flex-1 flex items-center gap-4">
           {/* Avatar */}

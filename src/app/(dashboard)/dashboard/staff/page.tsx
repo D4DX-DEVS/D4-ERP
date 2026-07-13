@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Staff, Company, Department, Shift, ContractType, EmploymentType } from "@/types";
 import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint, type QueryConstraint } from "@/lib/firestore";
 import { useToast } from "@/components/ui/toast";
@@ -56,6 +56,9 @@ function employmentBadge(type: EmploymentType): string {
 export default function StaffPage() {
   const { toast } = useToast();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const initialPage = Number(searchParams.get("page")) || 0;
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
   const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
   const [shifts, setShifts] = useState<(Shift & { id: string })[]>([]);
@@ -96,7 +99,19 @@ export default function StaffPage() {
     orderByField: "createdAt",
     orderDirection: "desc",
     constraints,
+    initialPage,
   });
+
+  // ponytail: keep ?page= in sync so the back button from a staff detail page
+  // returns to the same page instead of resetting to page 1.
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (page > 0) params.set("page", String(page));
+    else params.delete("page");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const [formStep, setFormStep] = useState(1);
   const [form, setForm] = useState({
