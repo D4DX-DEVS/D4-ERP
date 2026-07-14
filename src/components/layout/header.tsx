@@ -114,7 +114,7 @@ export function Header() {
           <div className="flex items-center gap-2 rounded-2xl border border-white/70 bg-white/70 px-2 py-1.5 shadow-[0_10px_20px_rgba(15,23,42,0.06)] backdrop-blur-md">
             <div className="relative flex h-9 w-9 shrink-0 items-center justify-center bg-transparent text-xs font-semibold text-white">
               <Image
-                src="/favicon.png"
+                src="/favicon.svg"
                 alt="D4 Admin"
                 fill
                 sizes="36px"

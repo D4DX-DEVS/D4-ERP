@@ -5,7 +5,7 @@ import { PwaRegister } from "@/components/pwa-register";
 import { PwaInstallBanner } from "@/components/pwa-install-banner";
 import "./globals.css";
 
-const appIcon = "/favicon.png";
+const appIcon = "/favicon.svg";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

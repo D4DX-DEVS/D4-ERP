@@ -148,7 +148,7 @@ export function Sidebar() {
             <Link href="/dashboard" className="flex items-center gap-2.5" onClick={closeSidebar}>
               <div className="relative h-10 w-10 shrink-0 bg-transparent">
                 <Image
-                  src="/favicon.png"
+                  src="/favicon.svg"
                   alt="D4 Media ERP"
                   fill
                   sizes="40px"
