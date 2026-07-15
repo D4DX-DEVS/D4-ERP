@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import { hasFeature } from "@/lib/permissions";
 import { navigationModules, type NavModule, type NavItem } from "@/lib/navigation";
+import { useNavConfigStore } from "@/store/nav-config-store";
 import { ChevronDown, Menu, Sparkles, X } from "lucide-react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 
@@ -32,14 +33,16 @@ function saveExpandedState(state: Record<string, boolean>) {
 export function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuthStore();
+  const { config, fetchConfig } = useNavConfigStore();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  // Load persisted expanded state once on mount
+  // Load persisted expanded state and config once on mount
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setExpanded(loadExpandedState());
-  }, []);
+    fetchConfig();
+  }, [fetchConfig]);
 
   // Auto-expand the section containing the active route
   useEffect(() => {
@@ -100,27 +103,50 @@ export function Sidebar() {
       .sort((a, b) => b.length - a.length)[0];
   }, [allHrefs, pathname]);
 
-  // Role-based visibility
+  // Role-based visibility with config overrides
   const isVisible = useCallback(
-    (roles: string[], feature?: string) => {
+    (roles: string[], feature?: string, href?: string) => {
       if (!user?.role) return false;
-      if (roles.includes(user.role)) return true;
-      if (feature && hasFeature(user, feature as Parameters<typeof hasFeature>[1])) return true;
-      return false;
+
+      // Admin always has full access
+      if (user.role === "admin") return true;
+
+      // Baseline role/feature check
+      const baselineVisible = roles.includes(user.role) || (feature && hasFeature(user, feature as Parameters<typeof hasFeature>[1]));
+      if (!baselineVisible) return false;
+
+      // Apply config-based filters if config is loaded
+      if (config && href) {
+        // Check staff override first (allow/deny)
+        if (config.staffOverrides?.[user.staffId]) {
+          const override = config.staffOverrides[user.staffId];
+          if (override.deny?.includes(href)) return false;
+          if (override.allow?.includes(href)) return true;
+        }
+
+        // Check role menu list
+        const roleMenuItems = config.roleMenus?.[user.role];
+        if (roleMenuItems) {
+          return roleMenuItems.includes(href);
+        }
+      }
+
+      return baselineVisible;
     },
-    [user]
+    [user, config]
   );
 
   const visibleModules = useMemo(() => {
     return navigationModules.filter((mod) => {
-      if (isVisible(mod.roles, mod.feature)) return true;
+      if (mod.href && isVisible(mod.roles, mod.feature, mod.href)) return true;
+      if (!mod.href && isVisible(mod.roles, mod.feature)) return true;
       // Module with no matching role/feature still shows if any child item is visible
       // (e.g. staff granted "studio-booking" under the merged Bookings module).
       const children = [
         ...(mod.items ?? []),
         ...(mod.subGroups?.flatMap((sg) => sg.items) ?? []),
       ];
-      return children.some((item) => isVisible(item.roles, item.feature));
+      return children.some((item) => isVisible(item.roles, item.feature, item.href));
     });
   }, [isVisible]);
 
@@ -236,7 +262,7 @@ function ModuleItem({
   pathname: string;
   onToggle: (key: string) => void;
   onNavigate: () => void;
-  isVisible: (roles: string[], feature?: string) => boolean;
+  isVisible: (roles: string[], feature?: string, href?: string) => boolean;
 }) {
   const hasChildren = !!(mod.items?.length || mod.subGroups?.length);
   const isExpanded = expanded[mod.id] ?? false;
@@ -308,7 +334,7 @@ function ModuleItem({
       >
         <div className="ml-4 border-l border-slate-200/80 pl-2 pt-0.5 space-y-0.5">
           {/* Flat items */}
-          {mod.items?.filter((item) => isVisible(item.roles, item.feature)).map((item) => (
+          {mod.items?.filter((item) => isVisible(item.roles, item.feature, item.href)).map((item) => (
             <NavLink
               key={item.href}
               item={item}
@@ -319,7 +345,7 @@ function ModuleItem({
 
           {/* Sub-groups */}
           {mod.subGroups?.map((sg) => {
-            const visibleItems = sg.items.filter((item) => isVisible(item.roles, item.feature));
+            const visibleItems = sg.items.filter((item) => isVisible(item.roles, item.feature, item.href));
             if (visibleItems.length === 0) return null;
             const sgKey = `${mod.id}:${sg.label}`;
             const sgExpanded = expanded[sgKey] ?? false;

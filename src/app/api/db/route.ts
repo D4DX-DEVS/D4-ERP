@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getModel } from "@/models";
 import { getAuthUser } from "@/lib/auth";
-import { authorize, sanitizeDoc, MAX_QUERY_LIMIT } from "@/lib/db-authz";
+import {
+  authorize,
+  sanitizeDoc,
+  MAX_QUERY_LIMIT,
+  isReadAction,
+  scopeFilter,
+  DEPT_SCOPED_BY_FIELD,
+  DEPT_SCOPED_BY_STAFF,
+} from "@/lib/db-authz";
+import type { TokenPayload } from "@/lib/auth";
 
 // ── Timestamp helpers ─────────────────────────────────────────────────────────
 
@@ -154,6 +163,83 @@ async function writeAuditLog(
   }
 }
 
+// ── Server-side scoping helpers ───────────────────────────────────────────────
+
+/** Department id of a dept-head caller (from their staff doc; token has no dept). */
+async function callerDepartmentId(user: TokenPayload): Promise<string | null> {
+  try {
+    const Staff = getModel("staff");
+    const doc = (await Staff.findById(user.uid).select("departmentId").lean()) as {
+      departmentId?: string;
+    } | null;
+    return doc?.departmentId || null;
+  } catch {
+    return null;
+  }
+}
+
+async function deptStaffIds(departmentId: string): Promise<string[]> {
+  const Staff = getModel("staff");
+  const docs = (await Staff.find({ departmentId }).select("_id").lean()) as { _id: object }[];
+  return docs.map((d) => d._id.toString());
+}
+
+/** AND a role-based scope into a read filter. Returns the (possibly wrapped) filter. */
+async function applyReadScope(
+  user: TokenPayload,
+  collectionName: string,
+  filter: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const needsDept =
+    user.role === "department-head" &&
+    (collectionName in DEPT_SCOPED_BY_FIELD || DEPT_SCOPED_BY_STAFF.has(collectionName));
+  const deptId = needsDept ? await callerDepartmentId(user) : null;
+  const staffIds =
+    needsDept && deptId && DEPT_SCOPED_BY_STAFF.has(collectionName)
+      ? await deptStaffIds(deptId)
+      : null;
+  const scope = scopeFilter(user, collectionName, deptId, staffIds);
+  if (!scope) return filter;
+  return Object.keys(filter).length ? { $and: [filter, scope] } : scope;
+}
+
+/**
+ * Guard writes to leaveRequests (2-step approval): dept heads may only decide
+ * the deptHead step on own-dept docs; staff may only cancel their own pending
+ * request. Admin/accounts unrestricted. Returns error message or null.
+ */
+async function guardRequestUpdate(
+  user: TokenPayload,
+  id: string,
+  data: Record<string, unknown>
+): Promise<string | null> {
+  if (user.role === "admin") return null;
+  const Model = getModel("leaveRequests");
+  const doc = (await Model.findById(id).lean()) as Record<string, unknown> | null;
+  if (!doc) return null; // let the update no-op
+  const allowedKeys = (keys: string[]) =>
+    Object.keys(data).every((k) => keys.includes(k) || k === "updatedAt");
+
+  if (user.role === "department-head") {
+    const deptId = await callerDepartmentId(user);
+    if (doc.departmentId && deptId && doc.departmentId !== deptId) {
+      return "You may only act on requests from your own department.";
+    }
+    if (!allowedKeys(["deptHead", "status"])) {
+      return "Department heads may only decide the department step.";
+    }
+    return null;
+  }
+  if (user.role === "staff") {
+    if (doc.staffId !== user.uid) return "You may only modify your own requests.";
+    const cancelOnly = allowedKeys(["status"]) && data.status === "cancelled";
+    if (!cancelOnly) return "You may only cancel your own pending request.";
+    if (doc.status !== "pending") return "Request already finalised.";
+    return null;
+  }
+  return null;
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -187,7 +273,8 @@ export async function POST(req: NextRequest) {
       // ── FIND (getDocuments) ──────────────────────────────────────────────
       case "find": {
         const { constraints = [] } = body;
-        const { filter, sort, limit: lim } = buildQuery(constraints);
+        const { filter: rawFilter, sort, limit: lim } = buildQuery(constraints);
+        const filter = await applyReadScope(user, collectionName, rawFilter);
         let q = Model.find(filter);
         if (Object.keys(sort).length) q = q.sort(sort);
         q = q.limit(Math.min(lim || MAX_QUERY_LIMIT, MAX_QUERY_LIMIT));
@@ -221,6 +308,12 @@ export async function POST(req: NextRequest) {
       case "update": {
         const { id, data: rawData } = body;
         const data = tsToDate(rawData) as Record<string, unknown>;
+        if (collectionName === "leaveRequests") {
+          const deniedUpdate = await guardRequestUpdate(user, id, data);
+          if (deniedUpdate) {
+            return NextResponse.json({ error: deniedUpdate }, { status: 403 });
+          }
+        }
         data.updatedAt = new Date();
         await Model.findByIdAndUpdate(id, { $set: data });
         writeAuditLog("update", collectionName, id, `Updated ${collectionName} record`, auditUser, { newData: rawData });
@@ -283,7 +376,8 @@ export async function POST(req: NextRequest) {
       // ── COUNT ───────────────────────────────────────────────────────────
       case "count": {
         const { constraints = [] } = body;
-        const { filter } = buildQuery(constraints);
+        const { filter: rawFilter } = buildQuery(constraints);
+        const filter = await applyReadScope(user, collectionName, rawFilter);
         const total = await Model.countDocuments(filter);
         return NextResponse.json({ total });
       }
@@ -291,7 +385,8 @@ export async function POST(req: NextRequest) {
       // ── PAGINATE ────────────────────────────────────────────────────────
       case "paginate": {
         const { constraints = [], pageSize = 25, page = 0 } = body;
-        const { filter, sort } = buildQuery(constraints);
+        const { filter: rawFilter, sort } = buildQuery(constraints);
+        const filter = await applyReadScope(user, collectionName, rawFilter);
         const total = await Model.countDocuments(filter);
         let q = Model.find(filter);
         if (Object.keys(sort).length) q = q.sort(sort);

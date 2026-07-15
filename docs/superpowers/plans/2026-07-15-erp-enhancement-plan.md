@@ -174,7 +174,7 @@ Widget keys registered in one map in the dashboard page (`"stats" | "income-expe
 Sweep every dashboard page that lists staff-related data; for `role === "department-head"` add `where("departmentId", "==", user.departmentId)`:
 - staff, leaves/requests, attendance (+ reports/corrections), tasks (+ work-logs, daily-updates, performance), calendar dept scope, department reports.
 
-**Create** `src/lib/scope.ts` — `deptScope(user): QueryConstraint[]` helper returning `[]` for admin, `[where("departmentId","==",user.departmentId)]` for dept head. Use it in all the above pages so the rule is one line per page.
+> Simplification (2026-07-15): server-side scoping (3c) filters every read for dept heads/staff regardless of what pages query, so the client-side sweep + `scope.ts` helper are unnecessary — pages get correctly scoped data automatically. Client `where()` filters remain only where pages already have them. `tasks` is dept-scoped for dept heads server-side; Phase 10's public board applies to the staff role (unscoped for tasks) — if dept heads must also see cross-dept tasks, remove `tasks` from `DEPT_SCOPED_BY_FIELD` then.
 
 ### 3c. Server-side enforcement — /api/db route guard (GPT #16, adopted; corrected 2026-07-15)
 

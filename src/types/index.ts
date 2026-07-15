@@ -1059,6 +1059,20 @@ export interface CompanyReport extends BaseDocument {
   status: ReportStatus;
 }
 
+// ==================== Navigation Config ====================
+/**
+ * Admin-configurable navigation & dashboard visibility (settings collection,
+ * single doc keyed `navigationConfig`). Missing role/entry = code defaults.
+ */
+export interface NavigationConfig extends BaseDocument {
+  /** role → allowed nav item hrefs. */
+  roleMenus?: Partial<Record<StaffRole, string[]>>;
+  /** staffId → per-person overrides on top of their role menu. */
+  staffOverrides?: Record<string, { allow?: string[]; deny?: string[] }>;
+  /** role → visible dashboard widget keys, in display order. */
+  dashboardWidgets?: Partial<Record<StaffRole, string[]>>;
+}
+
 // ==================== Auth ====================
 export interface AuthUser {
   uid: string;

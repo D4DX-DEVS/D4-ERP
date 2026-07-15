@@ -56,6 +56,63 @@ export type NavModule = {
   items?: NavItem[];
 };
 
+export interface FlatNavItem {
+  href: string;
+  label: string;
+  moduleId: string;
+  moduleLabel: string;
+  subGroup?: string;
+  roles: string[];
+}
+
+export function getAllNavItems(): FlatNavItem[] {
+  const items: FlatNavItem[] = [];
+
+  for (const mod of navigationModules) {
+    // Module's direct href
+    if (mod.href) {
+      items.push({
+        href: mod.href,
+        label: mod.label,
+        moduleId: mod.id,
+        moduleLabel: mod.label,
+        roles: mod.roles,
+      });
+    }
+
+    // Flat items
+    if (mod.items) {
+      for (const item of mod.items) {
+        items.push({
+          href: item.href,
+          label: item.label,
+          moduleId: mod.id,
+          moduleLabel: mod.label,
+          roles: item.roles,
+        });
+      }
+    }
+
+    // SubGroup items
+    if (mod.subGroups) {
+      for (const sg of mod.subGroups) {
+        for (const item of sg.items) {
+          items.push({
+            href: item.href,
+            label: item.label,
+            moduleId: mod.id,
+            moduleLabel: mod.label,
+            subGroup: sg.label,
+            roles: item.roles,
+          });
+        }
+      }
+    }
+  }
+
+  return items;
+}
+
 export const navigationModules: NavModule[] = [
   // ─── My Portal (staff-only: shown when staff accesses dashboard via feature) ─
   {
@@ -224,6 +281,7 @@ export const navigationModules: NavModule[] = [
       { label: "Banners", href: "/dashboard/banners", icon: ImageIcon, roles: ["admin"] },
       { label: "WhatsApp", href: "/dashboard/whatsapp", icon: MessageSquare, roles: ["admin"] },
       { label: "Audit Log", href: "/dashboard/audit-log", icon: Shield, roles: ["admin"] },
+      { label: "Navigation", href: "/dashboard/settings/navigation", icon: Settings, roles: ["admin"] },
       { label: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["admin"] },
     ],
   },

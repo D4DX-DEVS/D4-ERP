@@ -89,3 +89,63 @@ export function sanitizeDoc(d: Record<string, unknown>): Record<string, unknown>
   }
   return d;
 }
+
+// ==================== Department / own-record scoping ====================
+// Server-side enforcement: client-side where() filters are UI convenience only.
+
+/**
+ * Collections a department-head may only read within their own department,
+ * keyed by the field that carries the department id.
+ */
+export const DEPT_SCOPED_BY_FIELD: Record<string, string> = {
+  staff: "departmentId",
+  leaveRequests: "departmentId",
+  tasks: "departmentId",
+  work_logs: "departmentId",
+  department_reports: "departmentId",
+};
+
+/**
+ * Collections scoped for dept heads via membership (doc.staffId must belong
+ * to a staff member of their department) because the docs carry no departmentId.
+ */
+export const DEPT_SCOPED_BY_STAFF = new Set(["attendance", "payroll"]);
+
+/** Collections where a `staff` role user may only read their own records. */
+export const OWN_SCOPED_FOR_STAFF: Record<string, string> = {
+  leaveRequests: "staffId",
+  attendance: "staffId",
+  payroll: "staffId",
+  employee_documents: "staffId",
+};
+
+export function isReadAction(action: string): boolean {
+  return action === "find" || action === "count" || action === "paginate";
+}
+
+/**
+ * Returns a Mongo filter fragment to AND into read queries, or null when no
+ * scoping applies. `deptStaffIds` is only consulted for membership-scoped
+ * collections (pass the department's staff ids).
+ */
+export function scopeFilter(
+  user: TokenPayload,
+  collectionName: string,
+  departmentId: string | null,
+  deptStaffIds: string[] | null
+): Record<string, unknown> | null {
+  if (user.role === "admin" || user.role === "accounts") return null;
+  if (user.role === "department-head") {
+    const field = DEPT_SCOPED_BY_FIELD[collectionName];
+    if (field && departmentId) return { [field]: departmentId };
+    if (DEPT_SCOPED_BY_STAFF.has(collectionName) && deptStaffIds) {
+      return { staffId: { $in: deptStaffIds } };
+    }
+    return null;
+  }
+  if (user.role === "staff") {
+    const field = OWN_SCOPED_FOR_STAFF[collectionName];
+    if (field) return { [field]: user.uid };
+  }
+  return null;
+}
