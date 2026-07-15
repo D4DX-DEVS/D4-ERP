@@ -14,7 +14,7 @@ import {
 import { logAudit } from "@/lib/audit";
 import { getAppSettings } from "@/lib/settings";
 import { useAuthStore } from "@/store/auth-store";
-import type { CalendarEvent, LeaveRequest, Task, EventType, EventPriority, EventScope, RecurrenceFrequency } from "@/types";
+import type { CalendarEvent, LeaveRequest, Task, EventType, EventPriority, EventScope, RecurrenceFrequency, ManagedEvent, StudioBooking } from "@/types";
 import type { Holiday } from "@/lib/settings";
 import {
   EVENT_CATEGORIES,
@@ -90,12 +90,44 @@ const emptyForm: FormState = {
   recurrenceInterval: "1", recurrenceUntil: "",
 };
 
+// Unified calendar item with source tracking and optional href for navigation
+type UnifiedCalendarItem = CalendarItem & {
+  source: "event" | "leave" | "task" | "holiday" | "booking";
+  href?: string;
+  itemSource?: "calendar-event" | "managed-event" | "studio-booking";
+};
+
+// Studio conflict detection
+const hasStudioConflict = (
+  bookings: (StudioBooking & { id: string })[],
+  year: number,
+  month: number,
+  day: number
+): boolean => {
+  const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const dayBookings = bookings.filter((b) => b.date === dateStr);
+  if (dayBookings.length < 2) return false;
+
+  for (let i = 0; i < dayBookings.length; i++) {
+    for (let j = i + 1; j < dayBookings.length; j++) {
+      const b1 = dayBookings[i];
+      const b2 = dayBookings[j];
+      const start1 = b1.startTime.localeCompare(b2.endTime) < 0;
+      const end1 = b1.endTime.localeCompare(b2.startTime) > 0;
+      if (start1 && end1) return true;
+    }
+  }
+  return false;
+};
+
 export default function CalendarPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { toast } = useToast();
 
   const [events, setEvents] = useState<(CalendarEvent & { id: string })[]>([]);
+  const [managedEvents, setManagedEvents] = useState<(ManagedEvent & { id: string })[]>([]);
+  const [studioBookings, setStudioBookings] = useState<(StudioBooking & { id: string })[]>([]);
   const [leaves, setLeaves] = useState<(LeaveRequest & { id: string })[]>([]);
   const [tasks, setTasks] = useState<(Task & { id: string })[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -103,14 +135,18 @@ export default function CalendarPage() {
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
+  const [createType, setCreateType] = useState<"calendar" | "event" | "studio" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
-  const [selected, setSelected] = useState<CalendarItem | null>(null);
+  const [selected, setSelected] = useState<UnifiedCalendarItem | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ id: string; mode: "archive" | "delete" } | null>(null);
   const [showArchived, setShowArchived] = useState(false);
   const [showExport, setShowExport] = useState(false);
 
-  // Filters
+  // Filters for unified calendar sources
+  const [showCalendar, setShowCalendar] = useState(true);
+  const [showEvents, setShowEvents] = useState(true);
+  const [showStudio, setShowStudio] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<Set<string>>(new Set());
   const [scopeFilter, setScopeFilter] = useState<Set<EventScope>>(new Set());
   const [showLeaves, setShowLeaves] = useState(true);
@@ -120,18 +156,21 @@ export default function CalendarPage() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [eventData, leaveData, taskData, settings] = await Promise.all([
+      const [eventData, managedEventData, studioData, leaveData, taskData, settings] = await Promise.all([
         getDocuments<CalendarEvent>("calendar_events"),
+        getDocuments<ManagedEvent>("events"),
+        getDocuments<StudioBooking>("studio_bookings"),
         getDocuments<LeaveRequest>("leave_requests", [where("status", "==", "approved")]),
         getDocuments<Task>("tasks"),
         getAppSettings(),
       ]);
       setEvents(eventData);
+      setManagedEvents(managedEventData);
+      setStudioBookings(studioData);
       setLeaves(leaveData);
       setTasks(taskData);
       setHolidays(settings.holidays);
     } catch (error) {
-      console.error("Error:", error);
       toast("error", "Failed to load calendar");
     } finally {
       setLoading(false);
@@ -154,16 +193,76 @@ export default function CalendarPage() {
   const rangeEnd = dayStart(new Date(year, month, daysInMonth + (6 - new Date(year, month, daysInMonth).getDay())));
 
   // Build the unified, filtered item list for the visible window.
-  // (React Compiler memoizes this automatically.)
-  const buildItems = (): CalendarItem[] => {
-    const list: CalendarItem[] = [];
-    for (const e of events) {
-      if (e.isArchived) continue;
-      list.push(...eventToItems(e, rangeStart, rangeEnd));
+  const buildItems = (): UnifiedCalendarItem[] => {
+    const list: UnifiedCalendarItem[] = [];
+
+    // Calendar events (original)
+    if (showCalendar) {
+      for (const e of events) {
+        if (e.isArchived) continue;
+        const items = eventToItems(e, rangeStart, rangeEnd);
+        for (const it of items) {
+          list.push({ ...it, itemSource: "calendar-event" } as UnifiedCalendarItem);
+        }
+      }
     }
-    if (showLeaves) for (const l of leaves) { const it = leaveToItem(l); if (it) list.push(it); }
-    if (showTasks) for (const t of tasks) { const it = taskToItem(t); if (it) list.push(it); }
-    if (showHolidays) for (const h of holidays) list.push(holidayToItem(h));
+
+    // Managed events (Events module) — map string dates to CalendarItem
+    if (showEvents) {
+      for (const e of managedEvents) {
+        const start = new Date(e.startDate);
+        const end = new Date(e.endDate);
+        if (start.getTime() <= rangeEnd.getTime() && end.getTime() >= rangeStart.getTime()) {
+          list.push({
+            key: `managed-event-${e.id}`,
+            id: e.id,
+            title: e.title,
+            source: "booking",
+            type: "event",
+            start,
+            end,
+            isAllDay: true,
+            color: "#9333ea",
+            editable: false,
+            href: `/dashboard/events/${e.id}`,
+            itemSource: "managed-event",
+            raw: undefined,
+          } as UnifiedCalendarItem);
+        }
+      }
+    }
+
+    // Studio bookings — map YYYY-MM-DD + time to CalendarItem
+    if (showStudio) {
+      for (const b of studioBookings) {
+        const start = new Date(`${b.date}T${b.startTime}`);
+        const end = new Date(`${b.date}T${b.endTime}`);
+        if (start.getTime() <= rangeEnd.getTime() && end.getTime() >= rangeStart.getTime()) {
+          list.push({
+            key: `studio-booking-${b.id}`,
+            id: b.id,
+            title: `${b.startTime} ${b.studioName}`,
+            source: "booking",
+            type: "studio",
+            start,
+            end,
+            isAllDay: false,
+            startTime: b.startTime,
+            endTime: b.endTime,
+            color: "#f97316",
+            editable: false,
+            href: `/dashboard/studio/bookings`,
+            itemSource: "studio-booking",
+            raw: undefined,
+          } as UnifiedCalendarItem);
+        }
+      }
+    }
+
+    // Leaves, tasks, holidays (existing)
+    if (showLeaves) for (const l of leaves) { const it = leaveToItem(l); if (it) list.push({ ...it, itemSource: "calendar-event" }); }
+    if (showTasks) for (const t of tasks) { const it = taskToItem(t); if (it) list.push({ ...it, itemSource: "calendar-event" }); }
+    if (showHolidays) for (const h of holidays) list.push({ ...holidayToItem(h), itemSource: "calendar-event" });
 
     return list.filter((it) => {
       const key = it.source === "task" ? "task" : it.type;
@@ -189,17 +288,31 @@ export default function CalendarPage() {
     user ? { uid: user.uid, firstName: user.firstName, lastName: user.lastName } : null;
 
   // ── Form helpers ────────────────────────────────────────────────────────────
-  const openCreate = (day?: number) => {
-    const base = day ? `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}` : "";
-    setEditingId(null);
-    setForm({ ...emptyForm, startDate: base, endDate: base });
-    setSelected(null);
-    setShowForm(true);
+  const openCreate = (day?: number, type?: "calendar" | "event" | "studio") => {
+    if (type) {
+      setCreateType(type);
+      if (type === "calendar") {
+        const base = day ? `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}` : "";
+        setEditingId(null);
+        setForm({ ...emptyForm, startDate: base, endDate: base });
+        setSelected(null);
+        setShowForm(true);
+      } else if (type === "event") {
+        router.push("/dashboard/events/list");
+      } else if (type === "studio") {
+        router.push("/dashboard/studio/bookings");
+      }
+    } else {
+      // Show type chooser dialog
+      setCreateType(null);
+      setSelected(null);
+    }
   };
 
   const openEdit = (e: CalendarEvent & { id: string }) => {
     const toKey = (ts?: { seconds?: number }) =>
       ts?.seconds ? new Date(ts.seconds * 1000).toISOString().slice(0, 10) : "";
+    setCreateType("calendar");
     setEditingId(e.id);
     setForm({
       title: e.title,
@@ -294,6 +407,7 @@ export default function CalendarPage() {
       setShowForm(false);
       setForm(emptyForm);
       setEditingId(null);
+      setCreateType(null);
       fetchAll();
     } catch (error) {
       console.error("Error:", error);
@@ -443,7 +557,7 @@ export default function CalendarPage() {
               </div>
             )}
           </div>
-          <Button onClick={() => openCreate()}><Plus className="h-4 w-4 mr-2" /> Add Event</Button>
+          <Button onClick={() => { setCreateType(null); setShowForm(true); }}><Plus className="h-4 w-4 mr-2" /> Add</Button>
         </div>
       </div>
 
@@ -472,6 +586,18 @@ export default function CalendarPage() {
             >
               Tasks
             </button>
+            <button
+              onClick={() => toggleSet(categoryFilter, "event", setCategoryFilter)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border ${categoryFilter.has("event") ? "bg-purple-100 text-purple-700 border-transparent" : "bg-white text-gray-500"}`}
+            >
+              Events
+            </button>
+            <button
+              onClick={() => toggleSet(categoryFilter, "studio", setCategoryFilter)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border ${categoryFilter.has("studio") ? "bg-orange-100 text-orange-700 border-transparent" : "bg-white text-gray-500"}`}
+            >
+              Studio
+            </button>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs text-gray-400 mr-1">Scope:</span>
@@ -485,6 +611,7 @@ export default function CalendarPage() {
               </button>
             ))}
             <span className="text-xs text-gray-400 ml-3 mr-1">Sources:</span>
+            <button onClick={() => setShowCalendar((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showCalendar ? "bg-blue-100 text-blue-700 border-transparent" : "bg-white text-gray-400"}`}>Calendar</button>
             <button onClick={() => setShowLeaves((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showLeaves ? "bg-amber-100 text-amber-700 border-transparent" : "bg-white text-gray-400"}`}>Leaves</button>
             <button onClick={() => setShowTasks((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showTasks ? "bg-red-100 text-red-700 border-transparent" : "bg-white text-gray-400"}`}>Tasks</button>
             <button onClick={() => setShowHolidays((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showHolidays ? "bg-green-100 text-green-700 border-transparent" : "bg-white text-gray-400"}`}>Holidays</button>
@@ -511,26 +638,37 @@ export default function CalendarPage() {
             ))}
             {cells.map((day, i) => {
               const dayItems = day ? itemsForDay(items, new Date(year, month, day)) : [];
+              const hasConflict = day ? hasStudioConflict(studioBookings, year, month, day) : false;
               return (
                 <div
                   key={i}
                   onClick={() => day && openCreate(day)}
-                  className={`bg-white p-1 min-h-[92px] ${!day ? "bg-gray-50" : "cursor-pointer hover:bg-gray-50"} ${day && isToday(day) ? "ring-2 ring-blue-500 ring-inset" : ""}`}
+                  className={`bg-white p-1 min-h-[92px] ${!day ? "bg-gray-50" : "cursor-pointer hover:bg-gray-50"} ${day && isToday(day) ? "ring-2 ring-blue-500 ring-inset" : ""} ${hasConflict ? "ring-2 ring-red-500 ring-inset" : ""}`}
                 >
                   {day && (
                     <>
                       <span className={`text-xs ${isToday(day) ? "bg-blue-500 text-white rounded-full px-1.5 py-0.5" : "text-gray-700"}`}>{day}</span>
                       <div className="mt-1 space-y-0.5">
                         {dayItems.slice(0, 3).map((it) => {
+                          const unified = it as UnifiedCalendarItem;
                           const meta = categoryMeta(it.type);
                           const spanStart = sameDay(it.start, new Date(year, month, day)) || day === 1;
+                          let bgColor = it.color ? it.color + "22" : undefined;
+                          let txtColor = it.color || undefined;
+                          if (unified.itemSource === "managed-event") {
+                            bgColor = "#9333ea22";
+                            txtColor = "#9333ea";
+                          } else if (unified.itemSource === "studio-booking") {
+                            bgColor = "#f9731622";
+                            txtColor = "#f97316";
+                          }
                           return (
                             <div
                               key={it.key}
                               className={`text-[10px] px-1 rounded truncate cursor-pointer ${meta.bar} ${!sameDay(it.start, it.end) ? "border-l-2 border-current" : ""}`}
-                              style={it.color ? { backgroundColor: it.color + "22", color: it.color } : undefined}
+                              style={{ backgroundColor: bgColor, color: txtColor }}
                               title={it.title}
-                              onClick={(ev) => { ev.stopPropagation(); setSelected(it); }}
+                              onClick={(ev) => { ev.stopPropagation(); setSelected(unified); }}
                             >
                               {!it.isAllDay && it.startTime ? `${it.startTime} ` : ""}
                               {spanStart ? it.title : `↳ ${it.title}`}
@@ -610,8 +748,20 @@ export default function CalendarPage() {
         </CardContent>
       </Card>
 
+      {/* Type chooser dialog */}
+      <Dialog open={!showForm && createType === null} onOpenChange={(o) => !o && setCreateType(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Create New</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Button onClick={() => openCreate(undefined, "calendar")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Calendar Event</span><span className="text-xs text-gray-400">Team meeting, holiday, all-day</span></div></Button>
+            <Button variant="outline" onClick={() => openCreate(undefined, "event")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Event (Managed)</span><span className="text-xs text-gray-400">Conference, webinar, project</span></div></Button>
+            <Button variant="outline" onClick={() => openCreate(undefined, "studio")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Studio Booking</span><span className="text-xs text-gray-400">Video, photo, production</span></div></Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Add / Edit form */}
-      <Dialog open={showForm} onOpenChange={(o) => { setShowForm(o); if (!o) { setEditingId(null); setForm(emptyForm); } }}>
+      <Dialog open={showForm && createType === "calendar"} onOpenChange={(o) => { setShowForm(o); if (!o) { setEditingId(null); setForm(emptyForm); setCreateType(null); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editingId ? "Edit Event" : "Add Event"}</DialogTitle></DialogHeader>
           <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
@@ -709,23 +859,23 @@ export default function CalendarPage() {
               <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant={categoryMeta(selected.type).badge}>{categoryMeta(selected.type).label}</Badge>
-                  {selected.priority && <Badge variant={PRIORITY_BADGE[selected.priority]}>{selected.priority}</Badge>}
-                  {selected.scope && <Badge variant="bg-gray-100 text-gray-600">{selected.scope}</Badge>}
-                  {selected.source !== "event" && <Badge variant="bg-gray-100 text-gray-500">{selected.source}</Badge>}
+                  {selected.itemSource === "calendar-event" && selected.priority && <Badge variant={PRIORITY_BADGE[selected.priority]}>{selected.priority}</Badge>}
+                  {selected.itemSource === "calendar-event" && selected.scope && <Badge variant="bg-gray-100 text-gray-600">{selected.scope}</Badge>}
+                  <Badge variant={selected.itemSource === "managed-event" ? "bg-purple-100 text-purple-700" : selected.itemSource === "studio-booking" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}>{selected.itemSource === "managed-event" ? "Event" : selected.itemSource === "studio-booking" ? "Studio" : "Calendar"}</Badge>
                 </div>
                 <p className="flex items-center gap-2 text-gray-600">
                   <Clock className="h-4 w-4" />
                   {formatDate(selected.start)}{!sameDay(selected.start, selected.end) ? ` → ${formatDate(selected.end)}` : ""}
                   {!selected.isAllDay && selected.startTime ? ` · ${selected.startTime}${selected.endTime ? ` - ${selected.endTime}` : ""}` : " · All day"}
                 </p>
-                {selected.location && <p className="flex items-center gap-2 text-gray-600"><MapPin className="h-4 w-4" />{selected.location}</p>}
-                {selected.raw?.recurrence && selected.raw.recurrence.frequency !== "none" && (
+                {selected.itemSource === "calendar-event" && selected.location && <p className="flex items-center gap-2 text-gray-600"><MapPin className="h-4 w-4" />{selected.location}</p>}
+                {selected.itemSource === "calendar-event" && selected.raw?.recurrence && selected.raw.recurrence.frequency !== "none" && (
                   <p className="flex items-center gap-2 text-gray-600"><Repeat className="h-4 w-4" />Repeats {selected.raw.recurrence.frequency}</p>
                 )}
-                {selected.description && <p className="text-gray-600 whitespace-pre-wrap">{selected.description}</p>}
+                {selected.itemSource === "calendar-event" && selected.description && <p className="text-gray-600 whitespace-pre-wrap">{selected.description}</p>}
 
                 <div className="flex items-center gap-2 pt-2 border-t flex-wrap">
-                  {selected.source === "event" && selected.raw ? (
+                  {selected.itemSource === "calendar-event" && selected.raw ? (
                     <>
                       <Button size="sm" onClick={() => router.push(`/dashboard/calendar/event/${selected.id}`)}><ExternalLink className="h-4 w-4 mr-1" /> Open</Button>
                       <Button size="sm" variant="outline" onClick={() => openEdit(selected.raw!)}><Pencil className="h-4 w-4 mr-1" /> Edit</Button>
@@ -733,7 +883,7 @@ export default function CalendarPage() {
                       <Button size="sm" variant="outline" onClick={() => setConfirmDialog({ id: selected.id, mode: "archive" })} className="text-red-500"><Archive className="h-4 w-4 mr-1" /> Archive</Button>
                     </>
                   ) : (
-                    selected.href && <Link href={selected.href}><Button size="sm" variant="outline" onClick={() => setSelected(null)}><ExternalLink className="h-4 w-4 mr-1" /> Open source</Button></Link>
+                    selected.href && <Link href={selected.href}><Button size="sm" variant="outline" onClick={() => setSelected(null)}><ExternalLink className="h-4 w-4 mr-1" /> Open</Button></Link>
                   )}
                 </div>
               </div>

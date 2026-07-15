@@ -197,7 +197,7 @@ export const navigationModules: NavModule[] = [
         items: [
           { label: "Dashboard", href: "/dashboard/events", roles: ["admin", "department-head"], feature: "events" },
           { label: "All Events", href: "/dashboard/events/list", roles: ["admin", "department-head"], feature: "events" },
-          { label: "Event Calendar", href: "/dashboard/events/calendar", icon: Calendar, roles: ["admin", "department-head"], feature: "events" },
+          { label: "Event Calendar", href: "/dashboard/calendar", icon: Calendar, roles: ["admin", "department-head"], feature: "events" },
           { label: "Reports", href: "/dashboard/events/reports", icon: BarChart3, roles: ["admin", "department-head"], feature: "events" },
         ],
       },
@@ -207,7 +207,7 @@ export const navigationModules: NavModule[] = [
         items: [
           { label: "Dashboard", href: "/dashboard/studio", roles: ["admin", "department-head"], feature: "studio-booking" },
           { label: "Bookings", href: "/dashboard/studio/bookings", roles: ["admin", "department-head"], feature: "studio-booking" },
-          { label: "Calendar", href: "/dashboard/studio/calendar", icon: Calendar, roles: ["admin", "department-head"], feature: "studio-booking" },
+          { label: "Calendar", href: "/dashboard/calendar", icon: Calendar, roles: ["admin", "department-head"], feature: "studio-booking" },
           { label: "Timeline", href: "/dashboard/studio/timeline", roles: ["admin", "department-head"], feature: "studio-booking" },
           { label: "Availability", href: "/dashboard/studio/availability", roles: ["admin", "department-head"], feature: "studio-booking" },
           { label: "Resources", href: "/dashboard/studio/resources", roles: ["admin"], feature: "studio-manage" },
