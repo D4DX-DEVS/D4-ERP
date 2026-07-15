@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocument, getDocuments, where, orderBy } from "@/lib/firestore";
 import { getAppSettings, isNonWorkingDay, AppSettings } from "@/lib/settings";
@@ -203,26 +204,24 @@ export default function StaffPortalHome() {
       )}
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-2 gap-3">
-        <Link href="/staff-portal/my-leaves" className="block active:scale-[0.98] transition-transform">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <CalendarDays className="h-6 w-6 mx-auto text-orange-500 mb-2" />
-              <p className="text-2xl font-bold">{pendingLeaves}</p>
-              <p className="text-xs text-gray-500">Pending Leaves</p>
-            </CardContent>
-          </Card>
-        </Link>
-        <Link href="/staff-portal/my-tasks" className="block active:scale-[0.98] transition-transform">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <ClipboardList className="h-6 w-6 mx-auto text-blue-500 mb-2" />
-              <p className="text-2xl font-bold">{pendingTasks.length}</p>
-              <p className="text-xs text-gray-500">Active Tasks</p>
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
+      <StatGrid cols={2}>
+        <StatCard
+          title="Pending Leaves"
+          value={pendingLeaves}
+          icon={CalendarDays}
+          color="text-orange-600"
+          bg="bg-orange-50"
+          href="/staff-portal/my-leaves"
+        />
+        <StatCard
+          title="Active Tasks"
+          value={pendingTasks.length}
+          icon={ClipboardList}
+          color="text-blue-600"
+          bg="bg-blue-50"
+          href="/staff-portal/my-tasks"
+        />
+      </StatGrid>
 
       {/* Attendance This Year */}
       <Card>

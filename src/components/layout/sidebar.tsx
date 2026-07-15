@@ -112,7 +112,16 @@ export function Sidebar() {
   );
 
   const visibleModules = useMemo(() => {
-    return navigationModules.filter((mod) => isVisible(mod.roles, mod.feature));
+    return navigationModules.filter((mod) => {
+      if (isVisible(mod.roles, mod.feature)) return true;
+      // Module with no matching role/feature still shows if any child item is visible
+      // (e.g. staff granted "studio-booking" under the merged Bookings module).
+      const children = [
+        ...(mod.items ?? []),
+        ...(mod.subGroups?.flatMap((sg) => sg.items) ?? []),
+      ];
+      return children.some((item) => isVisible(item.roles, item.feature));
+    });
   }, [isVisible]);
 
   return (

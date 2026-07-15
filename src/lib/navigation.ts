@@ -85,19 +85,7 @@ export const navigationModules: NavModule[] = [
     href: "/dashboard",
   },
 
-  // ─── Organization ────────────────────────────────────────────────────
-  {
-    id: "organization",
-    label: "Organization",
-    icon: Building2,
-    roles: ["admin"],
-    items: [
-      { label: "Companies", href: "/dashboard/companies", icon: Building2, roles: ["admin"] },
-      { label: "Departments", href: "/dashboard/departments", icon: Layers, roles: ["admin"] },
-    ],
-  },
-
-  // ─── People (HRMS) ──────────────────────────────────────────────────
+  // ─── People (HRMS: staff, leaves, payroll, attendance) ──────────────
   {
     id: "people",
     label: "People",
@@ -108,20 +96,18 @@ export const navigationModules: NavModule[] = [
       { label: "Leave Requests", href: "/dashboard/leaves", roles: ["admin", "department-head"] },
       { label: "Payroll", href: "/dashboard/payroll", roles: ["admin", "accounts"] },
     ],
-  },
-
-  // ─── Attendance ──────────────────────────────────────────────────────
-  {
-    id: "attendance",
-    label: "Attendance",
-    icon: Clock,
-    roles: ["admin", "department-head", "accounts"],
-    items: [
-      { label: "Attendance", href: "/dashboard/attendance", roles: ["admin", "department-head"] },
-      { label: "Import Attendance", href: "/dashboard/attendance/import", icon: FileText, roles: ["admin", "department-head"], feature: "attendance-import" },
-      { label: "Corrections", href: "/dashboard/attendance/corrections", icon: ClipboardCheck, roles: ["admin", "department-head"] },
-      { label: "Shifts", href: "/dashboard/attendance/shifts", icon: Hourglass, roles: ["admin"] },
-      { label: "Attendance Reports", href: "/dashboard/attendance/reports", icon: BarChart3, roles: ["admin", "department-head", "accounts"] },
+    subGroups: [
+      {
+        label: "Attendance",
+        icon: Clock,
+        items: [
+          { label: "Attendance", href: "/dashboard/attendance", roles: ["admin", "department-head"] },
+          { label: "Import Attendance", href: "/dashboard/attendance/import", icon: FileText, roles: ["admin", "department-head"], feature: "attendance-import" },
+          { label: "Corrections", href: "/dashboard/attendance/corrections", icon: ClipboardCheck, roles: ["admin", "department-head"] },
+          { label: "Shifts", href: "/dashboard/attendance/shifts", icon: Hourglass, roles: ["admin"] },
+          { label: "Attendance Reports", href: "/dashboard/attendance/reports", icon: BarChart3, roles: ["admin", "department-head", "accounts"] },
+        ],
+      },
     ],
   },
 
@@ -140,36 +126,36 @@ export const navigationModules: NavModule[] = [
     ],
   },
 
-  // ─── Event Management ────────────────────────────────────────────────
+  // ─── Bookings (Events + Studio, one module — pairs with unified calendar) ─
   {
-    id: "events",
-    label: "Events",
+    id: "bookings",
+    label: "Bookings",
     icon: PartyPopper,
     roles: ["admin", "department-head"],
-    feature: "events",
-    items: [
-      { label: "Dashboard", href: "/dashboard/events", roles: ["admin", "department-head"] },
-      { label: "All Events", href: "/dashboard/events/list", roles: ["admin", "department-head"] },
-      { label: "Event Calendar", href: "/dashboard/events/calendar", icon: Calendar, roles: ["admin", "department-head"] },
-      { label: "Reports", href: "/dashboard/events/reports", icon: BarChart3, roles: ["admin", "department-head"] },
-    ],
-  },
-
-  // ─── Studio Management ───────────────────────────────────────────────
-  {
-    id: "studio",
-    label: "Studio",
-    icon: Clapperboard,
-    roles: ["admin", "department-head"],
-    feature: "studio-booking",
-    items: [
-      { label: "Dashboard", href: "/dashboard/studio", roles: ["admin", "department-head"] },
-      { label: "Bookings", href: "/dashboard/studio/bookings", roles: ["admin", "department-head"] },
-      { label: "Calendar", href: "/dashboard/studio/calendar", icon: Calendar, roles: ["admin", "department-head"] },
-      { label: "Timeline", href: "/dashboard/studio/timeline", roles: ["admin", "department-head"] },
-      { label: "Availability", href: "/dashboard/studio/availability", roles: ["admin", "department-head"] },
-      { label: "Resources", href: "/dashboard/studio/resources", roles: ["admin"], feature: "studio-manage" },
-      { label: "Reports", href: "/dashboard/studio/reports", icon: BarChart3, roles: ["admin", "department-head"] },
+    subGroups: [
+      {
+        label: "Events",
+        icon: PartyPopper,
+        items: [
+          { label: "Dashboard", href: "/dashboard/events", roles: ["admin", "department-head"], feature: "events" },
+          { label: "All Events", href: "/dashboard/events/list", roles: ["admin", "department-head"], feature: "events" },
+          { label: "Event Calendar", href: "/dashboard/events/calendar", icon: Calendar, roles: ["admin", "department-head"], feature: "events" },
+          { label: "Reports", href: "/dashboard/events/reports", icon: BarChart3, roles: ["admin", "department-head"], feature: "events" },
+        ],
+      },
+      {
+        label: "Studio",
+        icon: Clapperboard,
+        items: [
+          { label: "Dashboard", href: "/dashboard/studio", roles: ["admin", "department-head"], feature: "studio-booking" },
+          { label: "Bookings", href: "/dashboard/studio/bookings", roles: ["admin", "department-head"], feature: "studio-booking" },
+          { label: "Calendar", href: "/dashboard/studio/calendar", icon: Calendar, roles: ["admin", "department-head"], feature: "studio-booking" },
+          { label: "Timeline", href: "/dashboard/studio/timeline", roles: ["admin", "department-head"], feature: "studio-booking" },
+          { label: "Availability", href: "/dashboard/studio/availability", roles: ["admin", "department-head"], feature: "studio-booking" },
+          { label: "Resources", href: "/dashboard/studio/resources", roles: ["admin"], feature: "studio-manage" },
+          { label: "Reports", href: "/dashboard/studio/reports", icon: BarChart3, roles: ["admin", "department-head"], feature: "studio-booking" },
+        ],
+      },
     ],
   },
 
@@ -232,6 +218,8 @@ export const navigationModules: NavModule[] = [
     icon: Settings,
     roles: ["admin"],
     items: [
+      { label: "Companies", href: "/dashboard/companies", icon: Building2, roles: ["admin"] },
+      { label: "Departments", href: "/dashboard/departments", icon: Layers, roles: ["admin"] },
       { label: "Notifications", href: "/dashboard/notifications", icon: Bell, roles: ["admin", "department-head", "accounts"] },
       { label: "Banners", href: "/dashboard/banners", icon: ImageIcon, roles: ["admin"] },
       { label: "WhatsApp", href: "/dashboard/whatsapp", icon: MessageSquare, roles: ["admin"] },

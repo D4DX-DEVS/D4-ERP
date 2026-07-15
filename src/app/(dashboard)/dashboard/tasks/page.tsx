@@ -16,7 +16,8 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { PageLoader } from "@/components/ui/loading";
-import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
+import { ListingHeader } from "@/components/ui/listing";
+import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { CommentsSection } from "@/components/ui/comments-section";
 import { formatDate, cn } from "@/lib/utils";
 import { Plus, Loader2, Pencil, Trash2, CheckSquare, Square, X, CalendarClock, ListTodo, Loader, CheckCircle2, LayoutGrid, Rows3, Search } from "lucide-react";
@@ -251,12 +252,36 @@ export default function TasksPage() {
         }
       />
 
-      <ListingStatGrid>
-        <ListingStatCard icon={<ListTodo className="h-5 w-5" />} label="Total Tasks" value={stats.total} toneClassName="bg-slate-100 text-slate-700" />
-        <ListingStatCard icon={<Loader className="h-5 w-5" />} label="In Progress" value={stats.inProgress} toneClassName="bg-sky-50 text-sky-700" />
-        <ListingStatCard icon={<CalendarClock className="h-5 w-5" />} label="Overdue" value={stats.overdue} toneClassName="bg-red-50 text-red-700" />
-        <ListingStatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Completed" value={stats.done} toneClassName="bg-emerald-50 text-emerald-700" />
-      </ListingStatGrid>
+      <StatGrid cols={4}>
+        <StatCard
+          title="Total Tasks"
+          value={stats.total}
+          icon={ListTodo}
+          color="text-slate-600"
+          bg="bg-slate-100"
+        />
+        <StatCard
+          title="In Progress"
+          value={stats.inProgress}
+          icon={Loader}
+          color="text-sky-600"
+          bg="bg-sky-50"
+        />
+        <StatCard
+          title="Overdue"
+          value={stats.overdue}
+          icon={CalendarClock}
+          color="text-red-600"
+          bg="bg-red-50"
+        />
+        <StatCard
+          title="Completed"
+          value={stats.done}
+          icon={CheckCircle2}
+          color="text-emerald-600"
+          bg="bg-emerald-50"
+        />
+      </StatGrid>
 
       {/* View switcher */}
       <div className="inline-flex rounded-full border border-slate-200/90 bg-white/80 p-1 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">

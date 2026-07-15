@@ -15,10 +15,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { getStatusColor, formatDate } from "@/lib/utils";
-import { CalendarDays, Check, X, Search, FilterX, CheckCheck, XCircle } from "lucide-react";
+import { CalendarDays, Check, X, Search, FilterX, CheckCheck, XCircle, Clock, CheckCircle2, XCircleIcon } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
+import { StatCard, StatGrid } from "@/components/ui/stat-card";
 
 export default function LeavesPage() {
   const { user } = useAuthStore();
@@ -383,20 +384,44 @@ export default function LeavesPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {(["pending", "approved", "rejected", "cancelled"] as const).map((status) => (
-          <Card
-            key={status}
-            className={`cursor-pointer transition-all ${filterStatus === status ? "ring-2 ring-blue-500" : ""}`}
-            onClick={() => setFilterStatus(filterStatus === status ? "" : status)}
-          >
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold">{stats[status]}</p>
-              <p className="text-sm text-gray-500 capitalize">{status}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <StatGrid cols={4}>
+        <div onClick={() => setFilterStatus(filterStatus === "pending" ? "" : "pending")} className="cursor-pointer">
+          <StatCard
+            title="Pending"
+            value={stats.pending}
+            icon={Clock}
+            color="text-amber-600"
+            bg="bg-amber-50"
+          />
+        </div>
+        <div onClick={() => setFilterStatus(filterStatus === "approved" ? "" : "approved")} className="cursor-pointer">
+          <StatCard
+            title="Approved"
+            value={stats.approved}
+            icon={CheckCircle2}
+            color="text-emerald-600"
+            bg="bg-emerald-50"
+          />
+        </div>
+        <div onClick={() => setFilterStatus(filterStatus === "rejected" ? "" : "rejected")} className="cursor-pointer">
+          <StatCard
+            title="Rejected"
+            value={stats.rejected}
+            icon={XCircleIcon}
+            color="text-red-600"
+            bg="bg-red-50"
+          />
+        </div>
+        <div onClick={() => setFilterStatus(filterStatus === "cancelled" ? "" : "cancelled")} className="cursor-pointer">
+          <StatCard
+            title="Cancelled"
+            value={stats.cancelled}
+            icon={XCircle}
+            color="text-slate-600"
+            bg="bg-slate-50"
+          />
+        </div>
+      </StatGrid>
 
       {/* Search + Filters */}
       <Card>

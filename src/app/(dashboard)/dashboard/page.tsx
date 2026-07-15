@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { getDocuments, where } from "@/lib/firestore";
 import { useAuthStore } from "@/store/auth-store";
 import {
@@ -77,19 +78,20 @@ export default function DashboardPage() {
   }, []);
 
   const statCards = [
-    { title: "Total Staff", value: stats.totalStaff, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
-    { title: "Companies", value: stats.totalCompanies, icon: Building2, color: "text-purple-600", bg: "bg-purple-50" },
-    { title: "Clients", value: stats.totalClients, icon: Users, color: "text-emerald-600", bg: "bg-emerald-50" },
-    { title: "Pending Leaves", value: stats.pendingLeaves, icon: CalendarDays, color: "text-orange-600", bg: "bg-orange-50" },
-    { title: "Invoices", value: stats.totalInvoices, icon: FileText, color: "text-indigo-600", bg: "bg-indigo-50" },
-    { title: "Active Tasks", value: stats.totalTasks, icon: ClipboardList, color: "text-pink-600", bg: "bg-pink-50" },
-    { title: "Monthly Income", value: formatCurrency(stats.monthlyIncome), icon: TrendingUp, color: "text-green-600", bg: "bg-green-50" },
-    { title: "Monthly Expense", value: formatCurrency(stats.monthlyExpense), icon: TrendingDown, color: "text-red-600", bg: "bg-red-50" },
+    { title: "Total Staff", value: stats.totalStaff, icon: Users, color: "text-blue-600", bg: "bg-blue-50", href: "/dashboard/staff" },
+    { title: "Companies", value: stats.totalCompanies, icon: Building2, color: "text-purple-600", bg: "bg-purple-50", href: "/dashboard/companies" },
+    { title: "Clients", value: stats.totalClients, icon: Users, color: "text-emerald-600", bg: "bg-emerald-50", href: "/dashboard/clients" },
+    { title: "Pending Leaves", value: stats.pendingLeaves, icon: CalendarDays, color: "text-orange-600", bg: "bg-orange-50", href: "/dashboard/leaves" },
+    { title: "Invoices", value: stats.totalInvoices, icon: FileText, color: "text-indigo-600", bg: "bg-indigo-50", href: "/dashboard/invoices" },
+    { title: "Active Tasks", value: stats.totalTasks, icon: ClipboardList, color: "text-pink-600", bg: "bg-pink-50", href: "/dashboard/tasks" },
+    { title: "Monthly Income", value: formatCurrency(stats.monthlyIncome), icon: TrendingUp, color: "text-green-600", bg: "bg-green-50", href: "/dashboard/accounting" },
+    { title: "Monthly Expense", value: formatCurrency(stats.monthlyExpense), icon: TrendingDown, color: "text-red-600", bg: "bg-red-50", href: "/dashboard/accounting" },
   ];
 
   return (
     <div className="space-y-6">
-      <div>
+      {/* ponytail: hidden on mobile — header hero already shows title/welcome */}
+      <div className="hidden lg:block">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-sm text-gray-500 mt-1">
           Welcome back, {user?.firstName}. Here&apos;s your overview.
@@ -97,25 +99,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <StatGrid>
         {statCards.map((stat) => (
-          <Card key={stat.title}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">{stat.title}</p>
-                  <p className="mt-2 text-2xl font-bold text-gray-900">
-                    {loading ? "—" : stat.value}
-                  </p>
-                </div>
-                <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${stat.bg}`}>
-                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <StatCard key={stat.title} {...stat} loading={loading} />
         ))}
-      </div>
+      </StatGrid>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

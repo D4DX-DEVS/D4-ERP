@@ -11,6 +11,7 @@ import {
   BarChart3, PieChart,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { StatCard, StatGrid } from "@/components/ui/stat-card";
 
 export default function ReportsPage() {
   const [stats, setStats] = useState({
@@ -88,81 +89,99 @@ export default function ReportsPage() {
       {/* Financial Overview */}
       <div>
         <h2 className="text-lg font-semibold mb-3">Financial Overview</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <ReportCard
-            icon={<TrendingUp className="h-6 w-6 text-green-500" />}
-            label="Total Income"
+        <StatGrid cols={4}>
+          <StatCard
+            title="Total Income"
             value={formatCurrency(stats.totalIncome)}
+            icon={TrendingUp}
             color="text-green-600"
+            bg="bg-green-50"
           />
-          <ReportCard
-            icon={<TrendingDown className="h-6 w-6 text-red-500" />}
-            label="Total Expense"
+          <StatCard
+            title="Total Expense"
             value={formatCurrency(stats.totalExpense)}
+            icon={TrendingDown}
             color="text-red-600"
+            bg="bg-red-50"
           />
-          <ReportCard
-            icon={<IndianRupee className="h-6 w-6 text-blue-500" />}
-            label="Profit / Loss"
+          <StatCard
+            title="Profit / Loss"
             value={formatCurrency(profitLoss)}
+            icon={IndianRupee}
             color={profitLoss >= 0 ? "text-green-600" : "text-red-600"}
+            bg={profitLoss >= 0 ? "bg-green-50" : "bg-red-50"}
           />
-          <ReportCard
-            icon={<FileText className="h-6 w-6 text-purple-500" />}
-            label="Total Invoiced"
+          <StatCard
+            title="Total Invoiced"
             value={formatCurrency(stats.totalInvoiceAmount)}
+            icon={FileText}
             color="text-purple-600"
+            bg="bg-purple-50"
           />
-        </div>
+        </StatGrid>
       </div>
 
       {/* Staff & HR */}
       <div>
         <h2 className="text-lg font-semibold mb-3">Staff & HR</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <ReportCard
-            icon={<Users className="h-6 w-6 text-blue-500" />}
-            label="Total Staff"
-            value={String(stats.totalStaff)}
+        <StatGrid cols={4}>
+          <StatCard
+            title="Total Staff"
+            value={stats.totalStaff}
+            icon={Users}
+            color="text-blue-600"
+            bg="bg-blue-50"
           />
-          <ReportCard
-            icon={<UserCheck className="h-6 w-6 text-green-500" />}
-            label="Active Staff"
-            value={String(stats.activeStaff)}
+          <StatCard
+            title="Active Staff"
+            value={stats.activeStaff}
+            icon={UserCheck}
+            color="text-green-600"
+            bg="bg-green-50"
           />
-          <ReportCard
-            icon={<Clock className="h-6 w-6 text-orange-500" />}
-            label="Pending Leaves"
-            value={String(stats.pendingLeaves)}
+          <StatCard
+            title="Pending Leaves"
+            value={stats.pendingLeaves}
+            icon={Clock}
+            color="text-orange-600"
+            bg="bg-orange-50"
           />
-          <ReportCard
-            icon={<Calendar className="h-6 w-6 text-teal-500" />}
-            label="Approved Leaves"
-            value={String(stats.approvedLeaves)}
+          <StatCard
+            title="Approved Leaves"
+            value={stats.approvedLeaves}
+            icon={Calendar}
+            color="text-teal-600"
+            bg="bg-teal-50"
           />
-        </div>
+        </StatGrid>
       </div>
 
       {/* Invoice Breakdown */}
       <div>
         <h2 className="text-lg font-semibold mb-3">Invoices</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <ReportCard
-            icon={<BarChart3 className="h-6 w-6 text-green-500" />}
-            label="Paid Invoices"
-            value={String(stats.paidInvoices)}
+        <StatGrid cols={3}>
+          <StatCard
+            title="Paid Invoices"
+            value={stats.paidInvoices}
+            icon={BarChart3}
+            color="text-green-600"
+            bg="bg-green-50"
           />
-          <ReportCard
-            icon={<PieChart className="h-6 w-6 text-red-500" />}
-            label="Unpaid Invoices"
-            value={String(stats.unpaidInvoices)}
+          <StatCard
+            title="Unpaid Invoices"
+            value={stats.unpaidInvoices}
+            icon={PieChart}
+            color="text-red-600"
+            bg="bg-red-50"
           />
-          <ReportCard
-            icon={<FileText className="h-6 w-6 text-gray-500" />}
-            label="Avg. Attendance Days"
-            value={String(stats.avgAttendance)}
+          <StatCard
+            title="Avg. Attendance Days"
+            value={stats.avgAttendance}
+            icon={FileText}
+            color="text-slate-600"
+            bg="bg-slate-50"
           />
-        </div>
+        </StatGrid>
       </div>
 
       {/* Quick Links */}
@@ -198,18 +217,3 @@ export default function ReportsPage() {
   );
 }
 
-function ReportCard({
-  icon, label, value, color,
-}: { icon: React.ReactNode; label: string; value: string; color?: string }) {
-  return (
-    <Card>
-      <CardContent className="p-4 flex items-center gap-3">
-        {icon}
-        <div>
-          <p className="text-xs text-gray-500">{label}</p>
-          <p className={`text-xl font-bold ${color || ""}`}>{value}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}

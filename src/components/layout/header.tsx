@@ -69,9 +69,9 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-20 px-4 pt-3 sm:px-6 lg:px-8 lg:pt-4">
-      <div className="page-frame glass-panel flex min-h-[var(--header-height)] flex-col justify-between gap-3 rounded-[26px] px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:px-6">
-        <div className="pl-14 lg:pl-0">
-          <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+      <div className="page-frame glass-panel flex min-h-0 flex-row items-center justify-between gap-2 rounded-2xl px-3 py-2 sm:px-5 lg:min-h-[var(--header-height)] lg:rounded-[26px] lg:px-6 lg:py-3">
+        <div className="min-w-0 pl-12 lg:pl-0">
+          <div className="mb-2 hidden flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400 lg:flex">
             <span>Admin Workspace</span>
             {breadcrumb.map((item, index) => (
               <span key={`${item}-${index}`} className="inline-flex items-center gap-2">
@@ -83,20 +83,20 @@ export function Header() {
 
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-[1.75rem] font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.9rem]">
+              <h1 className="truncate text-lg font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.9rem]">
                 {currentSection.title}
               </h1>
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700">
+              <span className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-700 sm:inline-block">
                 {todayLabel}
               </span>
             </div>
-            <p className="max-w-2xl text-[13px] leading-5 text-slate-500">
+            <p className="hidden max-w-2xl text-[13px] leading-5 text-slate-500 lg:block">
               {currentSection.description} Welcome back, {user?.firstName}.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-end lg:self-auto">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <Button
             variant="outline"
             className="hidden h-10 items-center gap-2 rounded-2xl border-slate-200/80 bg-white/70 px-3 text-sm text-slate-400 hover:text-slate-600 sm:inline-flex"

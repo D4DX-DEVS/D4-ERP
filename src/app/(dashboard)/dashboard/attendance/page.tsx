@@ -27,7 +27,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { PageLoader } from "@/components/ui/loading";
-import { ListingHeader, ListingPanel, ListingStatCard, ListingStatGrid } from "@/components/ui/listing";
+import { ListingHeader, ListingPanel } from "@/components/ui/listing";
+import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 // ── View + status configuration ──────────────────────────────────────────────
@@ -332,36 +333,36 @@ export default function AttendanceRegisterPage() {
         }
       />
 
-      <ListingStatGrid>
-        <ListingStatCard
-          icon={<Users className="h-5 w-5" />}
-          label="Total Staff"
+      <StatGrid cols={4}>
+        <StatCard
+          title="Total Staff"
           value={stats.staff}
-          toneClassName="bg-sky-50 text-sky-700"
-          meta="On the register"
+          icon={Users}
+          color="text-sky-600"
+          bg="bg-sky-50"
         />
-        <ListingStatCard
-          icon={<UserCheck className="h-5 w-5" />}
-          label="Present Days"
+        <StatCard
+          title="Present Days"
           value={stats.presentDays}
-          toneClassName="bg-emerald-50 text-emerald-700"
-          meta="Logged this month"
+          icon={UserCheck}
+          color="text-emerald-600"
+          bg="bg-emerald-50"
         />
-        <ListingStatCard
-          icon={<CalendarOff className="h-5 w-5" />}
-          label="Leave Days"
+        <StatCard
+          title="Leave Days"
           value={stats.leaveDays}
-          toneClassName="bg-sky-50 text-sky-700"
-          meta="Approved leave logs"
+          icon={CalendarOff}
+          color="text-sky-600"
+          bg="bg-sky-50"
         />
-        <ListingStatCard
-          icon={<TimerReset className="h-5 w-5" />}
-          label="Late Marks"
+        <StatCard
+          title="Late Marks"
           value={stats.lateMarks}
-          toneClassName="bg-amber-50 text-amber-700"
-          meta="Late arrivals logged"
+          icon={TimerReset}
+          color="text-amber-600"
+          bg="bg-amber-50"
         />
-      </ListingStatGrid>
+      </StatGrid>
 
       {/* View switcher + filters */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

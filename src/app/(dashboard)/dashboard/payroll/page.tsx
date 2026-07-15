@@ -16,6 +16,7 @@ import { PageLoader, EmptyState } from "@/components/ui/loading";
 import { formatCurrency } from "@/lib/utils";
 import { DollarSign, Plus, CheckCircle, Clock, FileText } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { StatCard, StatGrid } from "@/components/ui/stat-card";
 
 export default function PayrollPage() {
   const [payrolls, setPayrolls] = useState<(Payroll & { id: string })[]>([]);
@@ -201,35 +202,29 @@ export default function PayrollPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <DollarSign className="h-8 w-8 text-green-500" />
-            <div>
-              <p className="text-xs text-gray-500">Total Payable</p>
-              <p className="text-xl font-bold">{formatCurrency(totalNet)}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <CheckCircle className="h-8 w-8 text-blue-500" />
-            <div>
-              <p className="text-xs text-gray-500">Paid</p>
-              <p className="text-xl font-bold">{paidCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <Clock className="h-8 w-8 text-orange-500" />
-            <div>
-              <p className="text-xs text-gray-500">Pending</p>
-              <p className="text-xl font-bold">{draftCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <StatGrid cols={3}>
+        <StatCard
+          title="Total Payable"
+          value={formatCurrency(totalNet)}
+          icon={DollarSign}
+          color="text-green-600"
+          bg="bg-green-50"
+        />
+        <StatCard
+          title="Paid"
+          value={paidCount}
+          icon={CheckCircle}
+          color="text-blue-600"
+          bg="bg-blue-50"
+        />
+        <StatCard
+          title="Pending"
+          value={draftCount}
+          icon={Clock}
+          color="text-orange-600"
+          bg="bg-orange-50"
+        />
+      </StatGrid>
 
       {loading ? (
         <PageLoader />
