@@ -47,7 +47,7 @@ export function isLegacyRequest(req: Partial<StaffRequest>): boolean {
   return !req.deptHead && !req.admin;
 }
 
-async function getAdminStaffIds(): Promise<string[]> {
+export async function getAdminStaffIds(): Promise<string[]> {
   const admins = await getDocuments<Staff>("staff", [
     where("role", "==", "admin"),
     where("isActive", "==", true),
@@ -55,7 +55,7 @@ async function getAdminStaffIds(): Promise<string[]> {
   return admins.map((a) => a.id!);
 }
 
-async function getDeptHeadStaffId(departmentId: string): Promise<string | null> {
+export async function getDeptHeadStaffId(departmentId: string): Promise<string | null> {
   if (!departmentId) return null;
   const dept = await getDocument<Department>("departments", departmentId);
   return dept?.headId || null;

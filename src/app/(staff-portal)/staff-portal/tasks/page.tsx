@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Task, Staff } from "@/types";
 import { getDocuments, updateDocument, orderBy, where } from "@/lib/firestore";
 import { changeTaskStatus } from "@/lib/tasks";
@@ -24,8 +24,10 @@ import {
   LayoutGrid,
   Rows3,
   ChevronRight,
+  Hourglass,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { isUpdatePendingTask, notifyPendingTaskUpdates } from "@/lib/task-alerts";
 
 type TaskDoc = Task & { id: string };
 
@@ -86,6 +88,15 @@ export default function TeamTasksPage() {
   useEffect(() => {
     void fetchData();
   }, []);
+
+  // After 6 PM, any portal visit alerts dept heads + admins about tasks with
+  // no update today (once per mount; helper is idempotent per day).
+  const notifiedRef = useRef(false);
+  useEffect(() => {
+    if (loading || notifiedRef.current || tasks.length === 0) return;
+    notifiedRef.current = true;
+    notifyPendingTaskUpdates(tasks).catch(() => {});
+  }, [loading, tasks]);
 
   const isAssignee = (task: TaskDoc) => task.assigneeId === user?.staffId;
 
@@ -239,6 +250,12 @@ export default function TeamTasksPage() {
                                   <p className="line-clamp-2 text-xs leading-relaxed text-slate-500">{task.description}</p>
                                 )}
 
+                                {isUpdatePendingTask(task) && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                    <Hourglass className="h-3 w-3" /> No update today
+                                  </span>
+                                )}
+
                                 {progress > 0 && (
                                   <div className="space-y-1">
                                     <div className="flex items-center justify-between text-[10px] font-medium text-slate-400">
@@ -317,6 +334,11 @@ export default function TeamTasksPage() {
                               >
                                 {task.priority}
                               </Badge>
+                              {isUpdatePendingTask(task) && (
+                                <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                  <Hourglass className="h-3 w-3" /> No update today
+                                </span>
+                              )}
                               <span
                                 className={cn(
                                   "flex-shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium",

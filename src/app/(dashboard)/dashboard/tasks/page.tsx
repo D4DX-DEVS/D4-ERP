@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Task, Staff, Department } from "@/types";
 import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
 import { changeTaskStatus } from "@/lib/tasks";
@@ -23,7 +23,8 @@ import { ListingHeader } from "@/components/ui/listing";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { CommentsSection } from "@/components/ui/comments-section";
 import { formatDate, cn } from "@/lib/utils";
-import { Plus, Loader2, Pencil, Trash2, CheckSquare, Square, X, CalendarClock, ListTodo, Loader, CheckCircle2, LayoutGrid, Rows3, Search } from "lucide-react";
+import { Plus, Loader2, Pencil, Trash2, CheckSquare, Square, X, CalendarClock, ListTodo, Loader, CheckCircle2, LayoutGrid, Rows3, Search, Hourglass } from "lucide-react";
+import { isUpdatePendingTask, notifyPendingTaskUpdates } from "@/lib/task-alerts";
 import { useToast } from "@/components/ui/toast";
 
 type TaskDoc = Task & { id: string };
@@ -78,6 +79,8 @@ export default function TasksPage() {
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [pendingUpdateOnly, setPendingUpdateOnly] = useState(false);
+  const notifiedRef = useRef(false);
 
   const [form, setForm] = useState(emptyForm);
   const [subtasks, setSubtasks] = useState<{ title: string; isCompleted: boolean }[]>([]);
@@ -109,6 +112,14 @@ export default function TasksPage() {
     void fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // After 6 PM, alert dept heads + admins about tasks with no update today
+  // (once per mount; the helper itself is idempotent per day).
+  useEffect(() => {
+    if (loading || notifiedRef.current || tasks.length === 0) return;
+    notifiedRef.current = true;
+    notifyPendingTaskUpdates(tasks).catch(() => {});
+  }, [loading, tasks]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -257,6 +268,7 @@ export default function TasksPage() {
     if (assigneeFilter !== "all" && t.assigneeId !== assigneeFilter) return false;
     if (departmentFilter !== "all" && t.departmentId !== departmentFilter) return false;
     if (overdueOnly && !isOverdue(t)) return false;
+    if (pendingUpdateOnly && !isUpdatePendingTask(t)) return false;
     if (q) {
       const haystack = `${t.title} ${t.description ?? ""} ${t.assigneeName ?? ""} ${(t.tags ?? []).join(" ")}`.toLowerCase();
       if (!haystack.includes(q)) return false;
@@ -269,6 +281,7 @@ export default function TasksPage() {
     inProgress: filteredTasks.filter((t) => t.status === "in-progress").length,
     overdue: filteredTasks.filter(isOverdue).length,
     done: filteredTasks.filter((t) => t.status === "done").length,
+    pendingUpdate: tasks.filter((t) => isUpdatePendingTask(t)).length,
   };
 
   return (
@@ -304,6 +317,15 @@ export default function TasksPage() {
           icon={CalendarClock}
           color="text-red-600"
           bg="bg-red-50"
+        />
+        <StatCard
+          title="No Update Today"
+          value={stats.pendingUpdate}
+          icon={Hourglass}
+          color="text-amber-600"
+          bg="bg-amber-50"
+          onClick={() => setPendingUpdateOnly((p) => !p)}
+          active={pendingUpdateOnly}
         />
         <StatCard
           title="Completed"
@@ -465,6 +487,12 @@ export default function TasksPage() {
                             <p className="line-clamp-2 text-xs leading-relaxed text-slate-500">{task.description}</p>
                           )}
 
+                          {isUpdatePendingTask(task) && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              <Hourglass className="h-3 w-3" /> No update today
+                            </span>
+                          )}
+
                           {subTotal > 0 && (
                             <div className="space-y-1">
                               <div className="flex items-center justify-between text-[10px] font-medium text-slate-400">
@@ -545,6 +573,11 @@ export default function TasksPage() {
                   <TableRow key={task.id} className="cursor-pointer" onClick={() => openEdit(task)}>
                     <TableCell>
                       <div className="font-semibold text-slate-800">{task.title}</div>
+                      {isUpdatePendingTask(task) && (
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                          <Hourglass className="h-3 w-3" /> No update today
+                        </span>
+                      )}
                       {(task.tags ?? []).length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {task.tags.slice(0, 3).map((tag) => (
