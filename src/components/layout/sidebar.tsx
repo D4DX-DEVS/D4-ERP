@@ -108,8 +108,12 @@ export function Sidebar() {
     (roles: string[], feature?: string, href?: string) => {
       if (!user?.role) return false;
 
-      // Admin always has full access
-      if (user.role === "admin") return true;
+      // Admin always has full access — except the staff self-service portal
+      // (admins have no attendance/leave self-service; they manage those pages).
+      if (user.role === "admin") {
+        if (href) return !href.startsWith("/staff-portal");
+        return !roles.every((r) => r === "staff");
+      }
 
       // Baseline role/feature check
       const baselineVisible = roles.includes(user.role) || (feature && hasFeature(user, feature as Parameters<typeof hasFeature>[1]));

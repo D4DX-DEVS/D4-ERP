@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   PieChart,
   Pie,
   Cell,
@@ -12,7 +12,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from "recharts";
 
@@ -37,6 +36,66 @@ const ATTENDANCE_STATUS_COLORS: Record<string, string> = {
   absent: CHART_COLORS.purple,
 };
 
+// ── Shared pieces ─────────────────────────────────────────────────────────────
+
+const AXIS_TICK = { fontSize: 11, fill: "#94a3b8" };
+
+interface TooltipEntry {
+  name?: string | number;
+  value?: string | number;
+  color?: string;
+  payload?: Record<string, unknown>;
+}
+
+/** Rounded-card tooltip shared by all charts. */
+function ChartTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: TooltipEntry[];
+  label?: string | number;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-slate-200/80 bg-white/95 px-3 py-2 shadow-lg backdrop-blur">
+      {label !== undefined && label !== "" && (
+        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      )}
+      {payload.map((entry, i) => (
+        <div key={i} className="flex items-center gap-2 py-0.5 text-xs">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: entry.color }} />
+          <span className="capitalize text-slate-500">{entry.name}</span>
+          <span className="ml-auto pl-3 font-semibold tabular-nums text-slate-900">{entry.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Compact dot legend rendered below each chart. */
+function DotLegend({ items }: { items: { label: string; color: string }[] }) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+      {items.map((item) => (
+        <span key={item.label} className="flex items-center gap-1.5 text-[11px] font-medium capitalize text-slate-500">
+          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />
+          {item.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function EmptyChart() {
+  return (
+    <div className="flex h-56 w-full items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 sm:h-64">
+      <p className="text-sm text-slate-400">No data yet</p>
+    </div>
+  );
+}
+
 // ── Attendance Trend Chart ───────────────────────────────────────────────────
 interface AttendanceTrendData {
   day: string;
@@ -49,50 +108,44 @@ interface AttendanceTrendChartProps {
   data: AttendanceTrendData[];
 }
 
+const ATTENDANCE_SERIES = ["present", "late", "absent"] as const;
+
 export function AttendanceTrendChart({ data }: AttendanceTrendChartProps) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="w-full h-56 sm:h-64 flex items-center justify-center bg-slate-50 rounded">
-        <p className="text-sm text-slate-500">No data yet</p>
-      </div>
-    );
-  }
+  if (!data || data.length === 0) return <EmptyChart />;
 
   return (
-    <div className="w-full h-56 sm:h-64">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="day" tick={{ fontSize: 11, fill: "#64748b" }} />
-          <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
-          <Tooltip />
-          <Legend />
-          <Line
-            type="monotone"
-            dataKey="present"
-            stroke={ATTENDANCE_STATUS_COLORS.present}
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 5 }}
-          />
-          <Line
-            type="monotone"
-            dataKey="late"
-            stroke={ATTENDANCE_STATUS_COLORS.late}
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 5 }}
-          />
-          <Line
-            type="monotone"
-            dataKey="absent"
-            stroke={ATTENDANCE_STATUS_COLORS.absent}
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 5 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+    <div className="w-full">
+      <div className="h-52 w-full sm:h-60">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 10, right: 12, left: -18, bottom: 0 }}>
+            <defs>
+              {ATTENDANCE_SERIES.map((key) => (
+                <linearGradient key={key} id={`att-${key}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={ATTENDANCE_STATUS_COLORS[key]} stopOpacity={0.22} />
+                  <stop offset="100%" stopColor={ATTENDANCE_STATUS_COLORS[key]} stopOpacity={0} />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="4 8" stroke="#e2e8f0" vertical={false} />
+            <XAxis dataKey="day" tick={AXIS_TICK} axisLine={false} tickLine={false} dy={6} />
+            <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={44} />
+            <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#cbd5e1", strokeDasharray: "4 4" }} />
+            {ATTENDANCE_SERIES.map((key) => (
+              <Area
+                key={key}
+                type="monotone"
+                dataKey={key}
+                stroke={ATTENDANCE_STATUS_COLORS[key]}
+                strokeWidth={2.5}
+                fill={`url(#att-${key})`}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 2, stroke: "#fff" }}
+              />
+            ))}
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+      <DotLegend items={ATTENDANCE_SERIES.map((key) => ({ label: key, color: ATTENDANCE_STATUS_COLORS[key] }))} />
     </div>
   );
 }
@@ -108,39 +161,47 @@ interface TaskStatusChartProps {
 }
 
 export function TaskStatusChart({ data }: TaskStatusChartProps) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="w-full h-56 sm:h-64 flex items-center justify-center bg-slate-50 rounded">
-        <p className="text-sm text-slate-500">No data yet</p>
-      </div>
-    );
-  }
+  if (!data || data.length === 0) return <EmptyChart />;
+
+  const total = data.reduce((sum, d) => sum + d.value, 0);
 
   return (
-    <div className="w-full h-56 sm:h-64">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            innerRadius={50}
-            outerRadius={80}
-            paddingAngle={2}
-            dataKey="value"
-            label
-          >
-            {data.map((entry, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={TASK_STATUS_COLORS[entry.name.toLowerCase()] || CHART_COLORS.blue}
-              />
-            ))}
-          </Pie>
-          <Tooltip />
-          {data.length >= 2 && <Legend />}
-        </PieChart>
-      </ResponsiveContainer>
+    <div className="w-full">
+      <div className="relative h-52 w-full sm:h-60">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              innerRadius="62%"
+              outerRadius="88%"
+              paddingAngle={3}
+              cornerRadius={6}
+              dataKey="value"
+              stroke="none"
+            >
+              {data.map((entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={TASK_STATUS_COLORS[entry.name.toLowerCase()] || CHART_COLORS.blue}
+                />
+              ))}
+            </Pie>
+            <Tooltip content={<ChartTooltip />} />
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <p className="text-2xl font-bold tabular-nums text-slate-900">{total}</p>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Tasks</p>
+        </div>
+      </div>
+      <DotLegend
+        items={data.map((d) => ({
+          label: `${d.name} · ${d.value}`,
+          color: TASK_STATUS_COLORS[d.name.toLowerCase()] || CHART_COLORS.blue,
+        }))}
+      />
     </div>
   );
 }
@@ -156,36 +217,38 @@ interface IncomeExpenseChartProps {
   data: IncomeExpenseData[];
 }
 
+const INCOME_COLOR = CHART_COLORS.emerald;
+const EXPENSE_COLOR = "#f43f5e";
+
 export function IncomeExpenseChart({ data }: IncomeExpenseChartProps) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="w-full h-56 sm:h-64 flex items-center justify-center bg-slate-50 rounded">
-        <p className="text-sm text-slate-500">No data yet</p>
-      </div>
-    );
-  }
+  if (!data || data.length === 0) return <EmptyChart />;
 
   return (
-    <div className="w-full h-56 sm:h-64">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b" }} />
-          <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
-          <Tooltip />
-          <Legend />
-          <Bar
-            dataKey="income"
-            fill={CHART_COLORS.emerald}
-            radius={[4, 4, 0, 0]}
-          />
-          <Bar
-            dataKey="expense"
-            fill="#dc2626"
-            radius={[4, 4, 0, 0]}
-          />
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="w-full">
+      <div className="h-52 w-full sm:h-60">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 10, right: 12, left: -8, bottom: 0 }} barGap={4}>
+            <CartesianGrid strokeDasharray="4 8" stroke="#e2e8f0" vertical={false} />
+            <XAxis dataKey="month" tick={AXIS_TICK} axisLine={false} tickLine={false} dy={6} />
+            <YAxis
+              tick={AXIS_TICK}
+              axisLine={false}
+              tickLine={false}
+              width={54}
+              tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : `${v}`)}
+            />
+            <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f1f5f9", radius: 8 }} />
+            <Bar dataKey="income" fill={INCOME_COLOR} radius={[6, 6, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="expense" fill={EXPENSE_COLOR} radius={[6, 6, 0, 0]} maxBarSize={28} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <DotLegend
+        items={[
+          { label: "income", color: INCOME_COLOR },
+          { label: "expense", color: EXPENSE_COLOR },
+        ]}
+      />
     </div>
   );
 }
@@ -202,37 +265,38 @@ interface LeaveUsageChartProps {
 }
 
 export function LeaveUsageChart({ data, leaveTypes }: LeaveUsageChartProps) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="w-full h-56 sm:h-64 flex items-center justify-center bg-slate-50 rounded">
-        <p className="text-sm text-slate-500">No data yet</p>
-      </div>
-    );
-  }
+  if (!data || data.length === 0) return <EmptyChart />;
 
   const types = leaveTypes || (data.length > 0 ? Object.keys(data[0]).filter((k) => k !== "month") : []);
   const colorSequence = [CHART_COLORS.blue, CHART_COLORS.emerald, CHART_COLORS.orange, CHART_COLORS.purple];
 
   return (
-    <div className="w-full h-56 sm:h-64">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748b" }} />
-          <YAxis tick={{ fontSize: 11, fill: "#64748b" }} />
-          <Tooltip />
-          {types.length >= 2 && <Legend />}
-          {types.map((type, idx) => (
-            <Bar
-              key={type}
-              dataKey={type}
-              stackId="leave"
-              fill={colorSequence[idx % colorSequence.length]}
-              radius={idx === 0 ? [4, 4, 0, 0] : undefined}
-            />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="w-full">
+      <div className="h-52 w-full sm:h-60">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 10, right: 12, left: -18, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="4 8" stroke="#e2e8f0" vertical={false} />
+            <XAxis dataKey="month" tick={AXIS_TICK} axisLine={false} tickLine={false} dy={6} />
+            <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} allowDecimals={false} width={44} />
+            <Tooltip content={<ChartTooltip />} cursor={{ fill: "#f1f5f9", radius: 8 }} />
+            {types.map((type, idx) => (
+              <Bar
+                key={type}
+                dataKey={type}
+                stackId="leave"
+                fill={colorSequence[idx % colorSequence.length]}
+                maxBarSize={28}
+                radius={idx === types.length - 1 ? [6, 6, 0, 0] : undefined}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      {types.length >= 2 && (
+        <DotLegend
+          items={types.map((type, idx) => ({ label: type, color: colorSequence[idx % colorSequence.length] }))}
+        />
+      )}
     </div>
   );
 }

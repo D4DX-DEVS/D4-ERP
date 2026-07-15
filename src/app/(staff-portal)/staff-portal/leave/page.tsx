@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
-import { Timestamp } from "@/lib/firestore";
+import { getDocument, Timestamp } from "@/lib/firestore";
 import { createStaffRequest, REQUEST_TYPE_LABELS } from "@/lib/requests";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Loader2, CheckCircle, AlertTriangle } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
-import type { StaffRequest } from "@/types";
+import type { Staff, StaffRequest } from "@/types";
 
 const CL_MAX_WITHOUT_APPROVAL = 2;
 
@@ -39,6 +39,19 @@ export default function NewRequestPage() {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  // Earned Leave is a permanent-staff benefit; contract staff and interns don't accrue it.
+  const [isPermanent, setIsPermanent] = useState(false);
+
+  useEffect(() => {
+    if (!user?.staffId) return;
+    getDocument<Staff>("staff", user.staffId)
+      .then((s) => {
+        if (!s) return;
+        const type = s.employmentType || (s.contractType && s.contractType !== "permanent" ? "staff" : "permanent");
+        setIsPermanent(type === "permanent");
+      })
+      .catch(() => {});
+  }, [user?.staffId]);
 
   const [form, setForm] = useState<FormState>({
     type: "leave",
@@ -150,7 +163,7 @@ export default function NewRequestPage() {
                     options={[
                       { value: "CL", label: "Casual Leave" },
                       { value: "SL", label: "Sick Leave" },
-                      { value: "EL", label: "Earned Leave" },
+                      ...(isPermanent ? [{ value: "EL", label: "Earned Leave" }] : []),
                       { value: "CO", label: "Compensatory Off" },
                       { value: "HD", label: "Half Day" },
                       { value: "LOP", label: "Loss of Pay" },

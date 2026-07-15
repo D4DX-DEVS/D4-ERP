@@ -99,6 +99,33 @@ describe("role authorization (/api/db permissions)", () => {
     });
   });
 
+  describe("attendance writes (admin + department-head only)", () => {
+    it("allows admin and department-head", () => {
+      expect(authorize(admin, "update", "attendance")).toBeNull();
+      expect(authorize(deptHead, "create", "attendance")).toBeNull();
+    });
+    it("blocks staff and accounts from editing the register", () => {
+      expect(authorize(staff, "create", "attendance")).toMatch(/permission/i);
+      expect(authorize(staff, "update", "attendance")).toMatch(/permission/i);
+      expect(authorize(accounts, "update", "attendance")).toMatch(/permission/i);
+    });
+  });
+
+  describe("attendance_corrections (staff submit, managers review)", () => {
+    it("allows any role to create (submit) a correction request", () => {
+      expect(authorize(staff, "create", "attendance_corrections")).toBeNull();
+      expect(authorize(deptHead, "create", "attendance_corrections")).toBeNull();
+    });
+    it("blocks staff from updating (self-approving) a correction", () => {
+      expect(authorize(staff, "update", "attendance_corrections")).toMatch(/manager/i);
+      expect(authorize(staff, "delete", "attendance_corrections")).toMatch(/manager/i);
+    });
+    it("allows admin and department-head to review", () => {
+      expect(authorize(admin, "update", "attendance_corrections")).toBeNull();
+      expect(authorize(deptHead, "update", "attendance_corrections")).toBeNull();
+    });
+  });
+
   describe("audit_logs are append-only", () => {
     it("allows create from any role", () => {
       expect(authorize(staff, "create", "audit_logs")).toBeNull();
@@ -185,6 +212,13 @@ describe("scopeFilter (server-side dept/own-record isolation)", () => {
   it("scopes staff to their own records", () => {
     expect(scopeFilter(staff, "leaveRequests", null, null)).toEqual({ staffId: "u1" });
     expect(scopeFilter(staff, "payroll", null, null)).toEqual({ staffId: "u1" });
+    expect(scopeFilter(staff, "attendance_corrections", null, null)).toEqual({ staffId: "u1" });
+  });
+
+  it("scopes dept heads to their members' correction requests", () => {
+    expect(scopeFilter(deptHead, "attendance_corrections", "d1", ["s1", "s2"])).toEqual({
+      staffId: { $in: ["s1", "s2"] },
+    });
   });
 
   it("does not scope staff on tasks (public team board)", () => {

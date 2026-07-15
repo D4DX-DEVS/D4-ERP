@@ -16,6 +16,7 @@ export const WRITE_ROLES: Record<string, string[]> = {
   companies: ["admin"],
   departments: ["admin"],
   staff: ["admin", "department-head"],
+  attendance: ["admin", "department-head"],
   payroll: ["admin", "accounts"],
   banners: ["admin"],
   employee_documents: ["admin", "department-head"],
@@ -42,6 +43,15 @@ export const FEATURE_WRITE: Record<string, { roles: string[]; feature: string }>
 /** Collections that are append-only from the client (no update/delete). */
 export const APPEND_ONLY_COLLECTIONS = new Set(["audit_logs"]);
 
+/**
+ * Collections any authenticated user may CREATE (submit a request), but only
+ * the listed roles may update/delete (review it). Prevents staff from
+ * approving their own submissions with a hand-crafted API call.
+ */
+export const MANAGER_REVIEWED: Record<string, string[]> = {
+  attendance_corrections: ["admin", "department-head"],
+};
+
 /** Hard ceiling on how many documents a single query may return (DoS backstop). */
 export const MAX_QUERY_LIMIT = 50000;
 
@@ -65,6 +75,10 @@ export function authorize(
     return "This resource is append-only and cannot be modified.";
   }
   if (isWriteAction(action)) {
+    const reviewRoles = MANAGER_REVIEWED[collectionName];
+    if (reviewRoles && action !== "create" && !reviewRoles.includes(user.role)) {
+      return "Only a manager can review this resource.";
+    }
     const featureRule = FEATURE_WRITE[collectionName];
     if (featureRule) {
       const allowedByRole = featureRule.roles.includes(user.role);
@@ -109,12 +123,13 @@ export const DEPT_SCOPED_BY_FIELD: Record<string, string> = {
  * Collections scoped for dept heads via membership (doc.staffId must belong
  * to a staff member of their department) because the docs carry no departmentId.
  */
-export const DEPT_SCOPED_BY_STAFF = new Set(["attendance", "payroll"]);
+export const DEPT_SCOPED_BY_STAFF = new Set(["attendance", "payroll", "attendance_corrections"]);
 
 /** Collections where a `staff` role user may only read their own records. */
 export const OWN_SCOPED_FOR_STAFF: Record<string, string> = {
   leaveRequests: "staffId",
   attendance: "staffId",
+  attendance_corrections: "staffId",
   payroll: "staffId",
   employee_documents: "staffId",
 };

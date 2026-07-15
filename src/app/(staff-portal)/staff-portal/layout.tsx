@@ -65,6 +65,10 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
   useEffect(() => {
     if (!isLoading && !user) {
       router.push("/staff-login");
+    } else if (!isLoading && user?.role === "admin") {
+      // Admins have no self-service session — they manage attendance/leave
+      // from the dashboard, not request them.
+      router.push("/dashboard");
     }
   }, [user, isLoading, router]);
 
@@ -82,7 +86,7 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
       .catch(() => {});
   }, [user?.staffId]);
 
-  if (isLoading || !user) {
+  if (isLoading || !user || user.role === "admin") {
     return (
       <div className="mesh-bg flex min-h-screen items-center justify-center px-6">
         <div className="glass-panel flex items-center gap-4 rounded-[28px] px-6 py-5 text-slate-700">
