@@ -1,0 +1,72 @@
+- generic [active] [ref=f5e1]:
+  - generic [ref=f5e2]:
+    - complementary [ref=f5e3]:
+      - generic [ref=f5e4]:
+        - generic [ref=f5e5]:
+          - generic [ref=f5e6]: D4
+          - generic [ref=f5e7]:
+            - paragraph [ref=f5e8]: Staff portal
+            - paragraph [ref=f5e9]: Your workspace
+        - generic [ref=f5e10]:
+          - paragraph [ref=f5e11]: Staff Member
+          - paragraph [ref=f5e12]: staff
+          - paragraph [ref=f5e13]: Quick access to attendance, leave, profile, and tasks.
+      - navigation [ref=f5e14]:
+        - link "Home" [ref=f5e15] [cursor=pointer]:
+          - /url: /staff-portal
+        - link "Apply Leave" [ref=f5e21] [cursor=pointer]:
+          - /url: /staff-portal/leave
+        - link "My Leaves" [ref=f5e26] [cursor=pointer]:
+          - /url: /staff-portal/my-leaves
+        - link "My Tasks" [ref=f5e32] [cursor=pointer]:
+          - /url: /staff-portal/my-tasks
+        - link "Work Log" [ref=f5e38] [cursor=pointer]:
+          - /url: /staff-portal/work-log
+        - link "Attendance" [ref=f5e44] [cursor=pointer]:
+          - /url: /staff-portal/attendance
+        - link "Holidays" [ref=f5e50] [cursor=pointer]:
+          - /url: /staff-portal/holidays
+        - link "Calendar" [ref=f5e57] [cursor=pointer]:
+          - /url: /staff-portal/calendar
+        - link "Alerts 1" [ref=f5e121] [cursor=pointer]:
+          - /url: /staff-portal/notifications
+          - generic [ref=f5e67]: Alerts
+          - generic [ref=f5e122]: "1"
+        - link "Profile" [ref=f5e71] [cursor=pointer]:
+          - /url: /staff-portal/profile
+      - button "Exit portal" [ref=f5e78] [cursor=pointer]
+    - generic [ref=f5e82]:
+      - banner [ref=f5e83]:
+        - generic [ref=f5e84]:
+          - generic [ref=f5e85]:
+            - paragraph [ref=f5e86]: Alerts
+            - generic [ref=f5e87]:
+              - heading "Alerts" [level=1] [ref=f5e88]
+              - paragraph [ref=f5e89]: Welcome back, Staff. Everything you need for your day is organized here.
+          - generic [ref=f5e90]:
+            - generic [ref=f5e91]:
+              - generic [ref=f5e92]: SM
+              - generic [ref=f5e93]:
+                - paragraph [ref=f5e94]: Staff Member
+                - paragraph [ref=f5e95]: staff
+            - button [ref=f5e96] [cursor=pointer]
+      - main [ref=f5e100]:
+        - generic [ref=f5e102]:
+          - heading "Notifications" [level=1] [ref=f5e105]
+          - generic [ref=f5e106]:
+            - button "All" [ref=f5e107] [cursor=pointer]
+            - button "Unread" [ref=f5e108] [cursor=pointer]
+          - generic [ref=f5e135]:
+            - generic [ref=f5e136]:
+              - paragraph [ref=f5e137]: Test notification (E2E verify)
+              - generic [ref=f5e138]: 15 Jul, 05:25 pm
+            - paragraph [ref=f5e139]: Automated delivery check - safe to ignore. Will be cleaned up.
+            - generic [ref=f5e140]: From Admin User
+  - button "Open Next.js Dev Tools" [ref=f5e146] [cursor=pointer]:
+    - generic [ref=f5e149]:
+      - text: Compiling
+      - generic [ref=f5e150]:
+        - generic [ref=f5e151]: .
+        - generic [ref=f5e152]: .
+        - generic [ref=f5e153]: .
+  - alert [ref=f5e120]

@@ -13,17 +13,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FileUpload } from "@/components/ui/file-upload";
-import { Bell, CheckCheck, Trash2, AlertTriangle, Info, CheckCircle, Send, Loader2 } from "lucide-react";
+import { Bell, CheckCheck, Trash2, AlertTriangle, Info, CheckCircle, Megaphone, Send, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
   info: <Info className="h-5 w-5 text-blue-500" />,
+  system: <Info className="h-5 w-5 text-blue-500" />,
   warning: <AlertTriangle className="h-5 w-5 text-orange-500" />,
   success: <CheckCircle className="h-5 w-5 text-green-500" />,
   error: <AlertTriangle className="h-5 w-5 text-red-500" />,
   reminder: <Bell className="h-5 w-5 text-purple-500" />,
+  announcement: <Megaphone className="h-5 w-5 text-purple-500" />,
+  event: <Bell className="h-5 w-5 text-teal-500" />,
+  payroll: <CheckCircle className="h-5 w-5 text-emerald-500" />,
 };
 
 type Audience = "all" | "department" | "specific";
@@ -140,20 +144,27 @@ export default function NotificationsPage() {
     pageSize: 10,
     orderByField: "createdAt",
     orderDirection: "desc",
-    constraints:
-      filter === "unread"
+    constraints: [
+      // Only this admin's own notifications — not every staff member's copies.
+      where("recipientId", "==", user?.uid ?? ""),
+      ...(filter === "unread"
         ? [where("isRead", "==", false)]
         : filter === "read"
           ? [where("isRead", "==", true)]
-          : [],
+          : []),
+    ],
   });
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadUnreadCount() {
+      if (!user) return;
       try {
-        const total = await countDocuments("notifications", [where("isRead", "==", false)]);
+        const total = await countDocuments("notifications", [
+          where("recipientId", "==", user.uid),
+          where("isRead", "==", false),
+        ]);
         if (!isMounted) return;
         setUnreadCount(total);
       } catch (error) {
@@ -169,11 +180,15 @@ export default function NotificationsPage() {
     return () => {
       isMounted = false;
     };
-  }, [toast]);
+  }, [toast, user]);
 
   const refreshNotifications = async () => {
+    if (!user) return;
     try {
-      const total = await countDocuments("notifications", [where("isRead", "==", false)]);
+      const total = await countDocuments("notifications", [
+        where("recipientId", "==", user.uid),
+        where("isRead", "==", false),
+      ]);
       setUnreadCount(total);
       refresh();
     } catch (error) {

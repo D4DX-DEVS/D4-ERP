@@ -1,0 +1,107 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e63]:
+    - complementary [ref=f4e64]:
+      - generic [ref=f4e65]:
+        - generic [ref=f4e66]:
+          - generic [ref=f4e67]: D4
+          - generic [ref=f4e68]:
+            - paragraph [ref=f4e69]: Staff portal
+            - paragraph [ref=f4e70]: Your workspace
+        - generic [ref=f4e71]:
+          - paragraph [ref=f4e72]: Staff Member
+          - paragraph [ref=f4e73]: staff
+          - paragraph [ref=f4e74]: Quick access to attendance, leave, profile, and tasks.
+      - navigation [ref=f4e75]:
+        - link "Home" [ref=f4e76] [cursor=pointer]:
+          - /url: /staff-portal
+        - link "Apply Leave" [ref=f4e85] [cursor=pointer]:
+          - /url: /staff-portal/leave
+        - link "My Leaves" [ref=f4e90] [cursor=pointer]:
+          - /url: /staff-portal/my-leaves
+        - link "My Tasks" [ref=f4e96] [cursor=pointer]:
+          - /url: /staff-portal/my-tasks
+        - link "Work Log" [ref=f4e102] [cursor=pointer]:
+          - /url: /staff-portal/work-log
+        - link "Attendance" [ref=f4e108] [cursor=pointer]:
+          - /url: /staff-portal/attendance
+        - link "Holidays" [ref=f4e114] [cursor=pointer]:
+          - /url: /staff-portal/holidays
+        - link "Calendar" [ref=f4e121] [cursor=pointer]:
+          - /url: /staff-portal/calendar
+        - link "Alerts" [ref=f4e126] [cursor=pointer]:
+          - /url: /staff-portal/notifications
+        - link "Profile" [ref=f4e132] [cursor=pointer]:
+          - /url: /staff-portal/profile
+      - button "Exit portal" [ref=f4e139] [cursor=pointer]
+    - generic [ref=f4e143]:
+      - banner [ref=f4e144]:
+        - generic [ref=f4e145]:
+          - generic [ref=f4e146]:
+            - paragraph [ref=f4e147]: Home
+            - generic [ref=f4e148]:
+              - heading "Home" [level=1] [ref=f4e149]
+              - paragraph [ref=f4e150]: Welcome back, Staff. Everything you need for your day is organized here.
+          - generic [ref=f4e151]:
+            - generic [ref=f4e152]:
+              - generic [ref=f4e153]: SM
+              - generic [ref=f4e154]:
+                - paragraph [ref=f4e155]: Staff Member
+                - paragraph [ref=f4e156]: staff
+            - button [ref=f4e157] [cursor=pointer]
+      - main [ref=f4e161]:
+        - generic [ref=f4e163]:
+          - heading "Welcome, Staff!" [level=1] [ref=f4e164]
+          - generic [ref=f4e165]:
+            - link [ref=f4e166] [cursor=pointer]:
+              - /url: /staff-portal/my-leaves
+              - generic [ref=f4e170]:
+                - paragraph [ref=f4e171]: Pending Leaves
+                - paragraph [ref=f4e172]: "0"
+            - link [ref=f4e176] [cursor=pointer]:
+              - /url: /staff-portal/my-tasks
+              - generic [ref=f4e180]:
+                - paragraph [ref=f4e181]: Active Tasks
+                - paragraph [ref=f4e182]: "0"
+            - generic [ref=f4e190]:
+              - paragraph [ref=f4e191]: Overtime This Month
+              - paragraph [ref=f4e192]: "0"
+          - heading "Attendance • July 2026" [level=3] [ref=f4e198]
+          - generic [ref=f4e200]:
+            - heading "Attendance Summary • 2026" [level=3] [ref=f4e202]
+            - generic [ref=f4e204]:
+              - generic [ref=f4e205]:
+                - paragraph [ref=f4e209]: "0"
+                - paragraph [ref=f4e210]: Present
+              - generic [ref=f4e211]:
+                - paragraph [ref=f4e215]: "0"
+                - paragraph [ref=f4e216]: Leave
+              - generic [ref=f4e217]:
+                - paragraph [ref=f4e223]: "0"
+                - paragraph [ref=f4e224]: Absent
+          - generic [ref=f4e225]:
+            - heading "Leave Balance • 2026" [level=3] [ref=f4e227]
+            - generic [ref=f4e228]:
+              - generic [ref=f4e229]:
+                - generic [ref=f4e230]:
+                  - generic [ref=f4e231]: Casual Leave (CL)
+                  - generic [ref=f4e235]: 0 left of 0
+                - paragraph [ref=f4e238]: Used 0 days this year • Accrues 1.25 days/month from your joining month
+              - generic [ref=f4e239]:
+                - generic [ref=f4e240]:
+                  - generic [ref=f4e241]: Sick Leave (SL)
+                  - generic [ref=f4e245]: 0 left of 0
+                - paragraph [ref=f4e248]: Used 0 days this year • 15/year pool • needs medical report + coordinator approval
+          - generic [ref=f4e249]:
+            - heading "Recent Leave Requests" [level=3] [ref=f4e251]
+            - paragraph [ref=f4e253]: Loading...
+          - generic [ref=f4e254]:
+            - heading "My Tasks" [level=3] [ref=f4e256]
+            - paragraph [ref=f4e258]: Loading...
+  - button "Open Next.js Dev Tools" [ref=f4e54] [cursor=pointer]:
+    - generic [ref=f4e57]:
+      - text: Compiling
+      - generic [ref=f4e58]:
+        - generic [ref=f4e59]: .
+        - generic [ref=f4e60]: .
+        - generic [ref=f4e61]: .
+  - alert [ref=f4e62]

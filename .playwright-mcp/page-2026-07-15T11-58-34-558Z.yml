@@ -1,0 +1,33 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e5]:
+    - generic [ref=f4e6]:
+      - generic [ref=f4e7]:
+        - heading "Staff portal login" [level=3] [ref=f4e13]
+        - paragraph [ref=f4e14]: Use your employee code and mobile digits to open your personal workspace.
+      - generic [ref=f4e16]:
+        - generic [ref=f4e17]:
+          - text: Mobile Number (Last 4 digits)
+          - textbox "Mobile Number (Last 4 digits)" [ref=f4e18]:
+            - /placeholder: "1234"
+        - generic [ref=f4e19]:
+          - text: Employee Code
+          - textbox "Employee Code" [ref=f4e20]:
+            - /placeholder: ABC123
+        - button "Open my portal" [ref=f4e21] [cursor=pointer]
+        - generic [ref=f4e22]:
+          - paragraph [ref=f4e23]: Need admin access instead?
+          - link "Go to admin login" [ref=f4e24] [cursor=pointer]:
+            - /url: /login
+    - generic [ref=f4e27]:
+      - paragraph [ref=f4e28]: D4 Staff Space
+      - generic [ref=f4e29]:
+        - heading "A lighter portal for attendance, tasks, and leave." [level=1] [ref=f4e30]
+        - paragraph [ref=f4e31]: Staff can check in, manage requests, and stay updated without navigating a cluttered back-office UI.
+      - generic [ref=f4e32]:
+        - generic [ref=f4e33]:
+          - heading "Fast daily actions" [level=2] [ref=f4e37]
+          - paragraph [ref=f4e38]: Attendance, leave, and personal tasks stay a tap away.
+        - generic [ref=f4e39]:
+          - heading "Personalized access" [level=2] [ref=f4e43]
+          - paragraph [ref=f4e44]: Each employee sees only their own relevant workspace and records.
+  - button "Open Next.js Dev Tools" [ref=f4e50] [cursor=pointer]

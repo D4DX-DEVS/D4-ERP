@@ -1,0 +1,181 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - complementary [ref=f1e3]:
+      - generic [ref=f1e4]:
+        - generic [ref=f1e5]:
+          - link [ref=f1e6] [cursor=pointer]:
+            - /url: /dashboard
+            - img "D4 Media ERP" [ref=f1e8]
+            - generic [ref=f1e9]:
+              - paragraph [ref=f1e10]: Media ERP
+              - paragraph [ref=f1e11]: Admin Console
+          - generic [ref=f1e12]: Live
+        - generic [ref=f1e19]:
+          - paragraph [ref=f1e20]: Operations overview
+          - paragraph [ref=f1e21]: Teams, finance, and controls.
+      - navigation [ref=f1e22]:
+        - link "Dashboard" [ref=f1e23] [cursor=pointer]:
+          - /url: /dashboard
+        - generic [ref=f1e31]:
+          - button "People" [ref=f1e32]
+          - generic [ref=f1e42]:
+            - link "Staff" [ref=f1e43] [cursor=pointer]:
+              - /url: /dashboard/staff
+            - link "Attendance" [ref=f1e45] [cursor=pointer]:
+              - /url: /dashboard/attendance
+            - link "Import Attendance" [ref=f1e47] [cursor=pointer]:
+              - /url: /dashboard/attendance/import
+            - link "Corrections" [ref=f1e49] [cursor=pointer]:
+              - /url: /dashboard/attendance/corrections
+            - link "Shifts" [ref=f1e51] [cursor=pointer]:
+              - /url: /dashboard/attendance/shifts
+            - link "Attendance Reports" [ref=f1e53] [cursor=pointer]:
+              - /url: /dashboard/attendance/reports
+            - link "Leave Requests" [ref=f1e55] [cursor=pointer]:
+              - /url: /dashboard/leaves
+            - link "Payroll" [ref=f1e57] [cursor=pointer]:
+              - /url: /dashboard/payroll
+            - link "Certificates" [ref=f1e59] [cursor=pointer]:
+              - /url: /dashboard/staff/certificates
+        - generic [ref=f1e61]:
+          - button "Work" [ref=f1e62]
+          - generic [ref=f1e70]:
+            - link "Task Board" [ref=f1e71] [cursor=pointer]:
+              - /url: /dashboard/tasks
+            - link "Daily Updates" [ref=f1e73] [cursor=pointer]:
+              - /url: /dashboard/tasks/daily-updates
+            - link "Work Logs" [ref=f1e75] [cursor=pointer]:
+              - /url: /dashboard/tasks/work-logs
+            - link "Performance" [ref=f1e77] [cursor=pointer]:
+              - /url: /dashboard/tasks/performance
+            - link "Team Calendar" [ref=f1e79] [cursor=pointer]:
+              - /url: /dashboard/calendar
+        - generic [ref=f1e81]:
+          - button "Bookings" [ref=f1e82]
+          - generic [ref=f1e93]:
+            - generic [ref=f1e94]:
+              - button "Events" [ref=f1e95]
+              - generic [ref=f1e105]:
+                - link "Dashboard" [ref=f1e106] [cursor=pointer]:
+                  - /url: /dashboard/events
+                - link "All Events" [ref=f1e108] [cursor=pointer]:
+                  - /url: /dashboard/events/list
+                - link "Event Calendar" [ref=f1e110] [cursor=pointer]:
+                  - /url: /dashboard/calendar
+                - link "Reports" [ref=f1e112] [cursor=pointer]:
+                  - /url: /dashboard/events/reports
+            - generic [ref=f1e114]:
+              - button "Studio" [ref=f1e115]
+              - generic [ref=f1e124]:
+                - link "Dashboard" [ref=f1e125] [cursor=pointer]:
+                  - /url: /dashboard/studio
+                - link "Bookings" [ref=f1e127] [cursor=pointer]:
+                  - /url: /dashboard/studio/bookings
+                - link "Calendar" [ref=f1e129] [cursor=pointer]:
+                  - /url: /dashboard/calendar
+                - link "Timeline" [ref=f1e131] [cursor=pointer]:
+                  - /url: /dashboard/studio/timeline
+                - link "Availability" [ref=f1e133] [cursor=pointer]:
+                  - /url: /dashboard/studio/availability
+                - link "Resources" [ref=f1e135] [cursor=pointer]:
+                  - /url: /dashboard/studio/resources
+                - link "Reports" [ref=f1e137] [cursor=pointer]:
+                  - /url: /dashboard/studio/reports
+        - generic [ref=f1e139]:
+          - button "Assets" [ref=f1e140]
+          - generic [ref=f1e149]:
+            - link "Asset List" [ref=f1e150] [cursor=pointer]:
+              - /url: /dashboard/assets
+            - link "Movements" [ref=f1e152] [cursor=pointer]:
+              - /url: /dashboard/assets/movements
+            - link "Availability" [ref=f1e154] [cursor=pointer]:
+              - /url: /dashboard/assets/availability
+            - link "Events" [ref=f1e156] [cursor=pointer]:
+              - /url: /dashboard/assets/events
+            - link "Categories" [ref=f1e158] [cursor=pointer]:
+              - /url: /dashboard/assets/categories
+            - link "Persons" [ref=f1e160] [cursor=pointer]:
+              - /url: /dashboard/assets/persons
+            - link "Reports" [ref=f1e162] [cursor=pointer]:
+              - /url: /dashboard/assets/reports
+        - generic [ref=f1e164]:
+          - button "Finance" [ref=f1e165]
+          - generic [ref=f1e172]:
+            - link "Accounting" [ref=f1e173] [cursor=pointer]:
+              - /url: /dashboard/accounting
+            - link "Item Master" [ref=f1e175] [cursor=pointer]:
+              - /url: /dashboard/items
+            - generic [ref=f1e177]:
+              - button "Sales" [ref=f1e178]
+              - generic [ref=f1e185]:
+                - link "Clients" [ref=f1e186] [cursor=pointer]:
+                  - /url: /dashboard/clients
+                - link "Quotations" [ref=f1e188] [cursor=pointer]:
+                  - /url: /dashboard/quotations
+                - link "Invoices" [ref=f1e190] [cursor=pointer]:
+                  - /url: /dashboard/invoices
+            - generic [ref=f1e192]:
+              - button "Reports" [ref=f1e193]
+              - generic [ref=f1e199]:
+                - link "Overview" [ref=f1e200] [cursor=pointer]:
+                  - /url: /dashboard/reports
+                - link "Department Reports" [ref=f1e202] [cursor=pointer]:
+                  - /url: /dashboard/reports/department
+                - link "Company Report" [ref=f1e204] [cursor=pointer]:
+                  - /url: /dashboard/reports/company
+                - link "KPI Management" [ref=f1e206] [cursor=pointer]:
+                  - /url: /dashboard/reports/kpis
+                - link "Productivity" [ref=f1e208] [cursor=pointer]:
+                  - /url: /dashboard/reports/productivity
+        - generic [ref=f1e210]:
+          - button "System" [ref=f1e211]
+          - generic [ref=f1e219]:
+            - link "Companies" [ref=f1e220] [cursor=pointer]:
+              - /url: /dashboard/companies
+            - link "Departments" [ref=f1e222] [cursor=pointer]:
+              - /url: /dashboard/departments
+            - link "Notifications" [ref=f1e224] [cursor=pointer]:
+              - /url: /dashboard/notifications
+            - link "Banners" [ref=f1e226] [cursor=pointer]:
+              - /url: /dashboard/banners
+            - link "WhatsApp" [ref=f1e228] [cursor=pointer]:
+              - /url: /dashboard/whatsapp
+            - link "Audit Log" [ref=f1e230] [cursor=pointer]:
+              - /url: /dashboard/audit-log
+            - link "Navigation" [ref=f1e232] [cursor=pointer]:
+              - /url: /dashboard/settings/navigation
+            - link "Settings" [ref=f1e234] [cursor=pointer]:
+              - /url: /dashboard/settings
+      - generic [ref=f1e237]:
+        - paragraph [ref=f1e238]: Admin User
+        - paragraph [ref=f1e239]: admin
+    - generic [ref=f1e240]:
+      - banner [ref=f1e241]:
+        - generic [ref=f1e242]:
+          - generic [ref=f1e243]:
+            - generic [ref=f1e244]:
+              - generic [ref=f1e245]: Admin Workspace
+              - generic [ref=f1e246]: Notifications
+            - generic [ref=f1e250]:
+              - heading "Notifications" [level=1] [ref=f1e252]
+              - paragraph [ref=f1e253]: Stay ahead of pending actions and internal updates. Welcome back, Admin.
+          - generic [ref=f1e254]:
+            - button "Search... Ctrl K" [ref=f1e255] [cursor=pointer]:
+              - generic [ref=f1e259]: Search...
+              - generic [ref=f1e260]: Ctrl K
+            - button [ref=f1e261] [cursor=pointer]
+            - generic [ref=f1e266]:
+              - img "D4 Admin" [ref=f1e268]
+              - generic [ref=f1e269]:
+                - paragraph [ref=f1e270]: Admin User
+                - paragraph [ref=f1e271]: admin
+            - button "Logout" [ref=f1e272] [cursor=pointer]
+      - main [ref=f1e276]:
+        - generic [ref=f1e279]:
+          - heading "Notifications" [level=1] [ref=f1e281]
+          - button "Send Notification" [ref=f1e283] [cursor=pointer]
+          - button "All" [ref=f1e287] [cursor=pointer]
+          - button "Unread" [ref=f1e288] [cursor=pointer]
+          - button "Read" [ref=f1e289] [cursor=pointer]
+  - button "Open Next.js Dev Tools" [ref=f1e297] [cursor=pointer]
+  - alert [ref=f1e301]
