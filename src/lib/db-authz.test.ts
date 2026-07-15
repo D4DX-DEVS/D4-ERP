@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { authorize, sanitizeDoc, isWriteAction, MAX_QUERY_LIMIT } from "@/lib/db-authz";
+import { authorize, sanitizeDoc, isWriteAction, MAX_QUERY_LIMIT, scopeFilter } from "@/lib/db-authz";
 import type { TokenPayload } from "@/lib/auth";
 
 function user(role: string): TokenPayload {
@@ -158,5 +158,36 @@ describe("sanitizeDoc", () => {
 describe("MAX_QUERY_LIMIT", () => {
   it("is a sane positive backstop", () => {
     expect(MAX_QUERY_LIMIT).toBeGreaterThan(0);
+  });
+});
+
+describe("scopeFilter (server-side dept/own-record isolation)", () => {
+  it("never scopes admin or accounts", () => {
+    expect(scopeFilter(admin, "staff", "d1", null)).toBeNull();
+    expect(scopeFilter(accounts, "attendance", "d1", ["s1"])).toBeNull();
+  });
+
+  it("scopes dept heads to their department on departmentId collections", () => {
+    expect(scopeFilter(deptHead, "leaveRequests", "d1", null)).toEqual({ departmentId: "d1" });
+    expect(scopeFilter(deptHead, "staff", "d1", null)).toEqual({ departmentId: "d1" });
+  });
+
+  it("scopes dept heads by staff membership on attendance/payroll", () => {
+    expect(scopeFilter(deptHead, "attendance", "d1", ["s1", "s2"])).toEqual({
+      staffId: { $in: ["s1", "s2"] },
+    });
+  });
+
+  it("does not scope dept heads on unscoped collections", () => {
+    expect(scopeFilter(deptHead, "clients", "d1", null)).toBeNull();
+  });
+
+  it("scopes staff to their own records", () => {
+    expect(scopeFilter(staff, "leaveRequests", null, null)).toEqual({ staffId: "u1" });
+    expect(scopeFilter(staff, "payroll", null, null)).toEqual({ staffId: "u1" });
+  });
+
+  it("does not scope staff on tasks (public team board)", () => {
+    expect(scopeFilter(staff, "tasks", null, null)).toBeNull();
   });
 });

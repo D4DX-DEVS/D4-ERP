@@ -376,44 +376,44 @@ export default function LeavesPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards (act as status filters) */}
       <StatGrid cols={4}>
-        <div onClick={() => setFilterStatus(filterStatus === "pending" ? "" : "pending")} className="cursor-pointer">
-          <StatCard
-            title="Pending"
-            value={stats.pending}
-            icon={Clock}
-            color="text-amber-600"
-            bg="bg-amber-50"
-          />
-        </div>
-        <div onClick={() => setFilterStatus(filterStatus === "approved" ? "" : "approved")} className="cursor-pointer">
-          <StatCard
-            title="Approved"
-            value={stats.approved}
-            icon={CheckCircle2}
-            color="text-emerald-600"
-            bg="bg-emerald-50"
-          />
-        </div>
-        <div onClick={() => setFilterStatus(filterStatus === "rejected" ? "" : "rejected")} className="cursor-pointer">
-          <StatCard
-            title="Rejected"
-            value={stats.rejected}
-            icon={XCircleIcon}
-            color="text-red-600"
-            bg="bg-red-50"
-          />
-        </div>
-        <div onClick={() => setFilterStatus(filterStatus === "cancelled" ? "" : "cancelled")} className="cursor-pointer">
-          <StatCard
-            title="Cancelled"
-            value={stats.cancelled}
-            icon={XCircle}
-            color="text-slate-600"
-            bg="bg-slate-50"
-          />
-        </div>
+        <StatCard
+          title="Pending"
+          value={stats.pending}
+          icon={Clock}
+          color="text-amber-600"
+          bg="bg-amber-50"
+          onClick={() => setFilterStatus(filterStatus === "pending" ? "" : "pending")}
+          active={filterStatus === "pending"}
+        />
+        <StatCard
+          title="Approved"
+          value={stats.approved}
+          icon={CheckCircle2}
+          color="text-emerald-600"
+          bg="bg-emerald-50"
+          onClick={() => setFilterStatus(filterStatus === "approved" ? "" : "approved")}
+          active={filterStatus === "approved"}
+        />
+        <StatCard
+          title="Rejected"
+          value={stats.rejected}
+          icon={XCircleIcon}
+          color="text-red-600"
+          bg="bg-red-50"
+          onClick={() => setFilterStatus(filterStatus === "rejected" ? "" : "rejected")}
+          active={filterStatus === "rejected"}
+        />
+        <StatCard
+          title="Cancelled"
+          value={stats.cancelled}
+          icon={XCircle}
+          color="text-slate-600"
+          bg="bg-slate-50"
+          onClick={() => setFilterStatus(filterStatus === "cancelled" ? "" : "cancelled")}
+          active={filterStatus === "cancelled"}
+        />
       </StatGrid>
 
       {/* Search + Filters */}

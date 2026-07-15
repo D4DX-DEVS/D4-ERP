@@ -213,12 +213,20 @@ async function guardRequestUpdate(
   id: string,
   data: Record<string, unknown>
 ): Promise<string | null> {
-  if (user.role === "admin") return null;
   const Model = getModel("leaveRequests");
   const doc = (await Model.findById(id).lean()) as Record<string, unknown> | null;
   if (!doc) return null; // let the update no-op
   const allowedKeys = (keys: string[]) =>
     Object.keys(data).every((k) => keys.includes(k) || k === "updatedAt");
+
+  // Terminal states are immutable for everyone: no re-deciding or reopening.
+  const touchesWorkflow = ["deptHead", "admin", "status"].some((k) => k in data);
+  const isTerminal = ["approved", "rejected", "cancelled"].includes(doc.status as string);
+  if (touchesWorkflow && isTerminal) {
+    return "Request already finalised.";
+  }
+
+  if (user.role === "admin") return null;
 
   if (user.role === "department-head") {
     const deptId = await callerDepartmentId(user);

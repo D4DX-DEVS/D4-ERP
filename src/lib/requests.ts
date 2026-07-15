@@ -33,7 +33,10 @@ const COLLECTION = "leaveRequests";
 const PENDING_STEP: ApprovalStep = { status: "pending" };
 
 /** Overall status from the two approval steps. Terminal states are immutable. */
-export function resolveRequestStatus(req: Pick<StaffRequest, "deptHead" | "admin">): RequestStatus {
+export function resolveRequestStatus(
+  req: Pick<StaffRequest, "deptHead" | "admin"> & { status?: RequestStatus }
+): RequestStatus {
+  if (req.status === "cancelled") return "cancelled";
   if (req.admin?.status === "rejected" || req.deptHead?.status === "rejected") return "rejected";
   if (req.admin?.status === "approved") return "approved";
   return "pending";
@@ -176,6 +179,14 @@ export async function decideRequest({ request, step, decision, remarks }: Decide
   return next;
 }
 
+/** True when an overtime calendar event already exists for this request (idempotency). */
+async function overtimeEventExists(requestId: string): Promise<boolean> {
+  const existing = await getDocuments("calendar_events", [
+    where("sourceRequestId", "==", requestId),
+  ]);
+  return existing.length > 0;
+}
+
 /** Staff cancels their own still-pending request. */
 export async function cancelRequest(request: StaffRequest): Promise<void> {
   if (request.status !== "pending") throw new Error("Request already finalised");
@@ -185,7 +196,9 @@ export async function cancelRequest(request: StaffRequest): Promise<void> {
 /** Approved overtime shows on the staff member's calendar (item 20). */
 async function createOvertimeCalendarEvent(request: StaffRequest, approver: AuthUser): Promise<void> {
   try {
+    if (await overtimeEventExists(request.id!)) return; // retry-safe: never duplicate
     await createDocument("calendar_events", {
+      sourceRequestId: request.id,
       title: `Overtime — ${request.staffName}`,
       description: request.reason,
       type: "reminder",

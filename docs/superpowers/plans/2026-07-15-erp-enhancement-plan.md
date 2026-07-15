@@ -6,7 +6,7 @@
 
 **Goal:** Turn D4-ERP into a mobile-first ERP with proper multi-step request workflows, role-scoped dynamic dashboards, and complete staff lifecycle (join → assets → requests → payroll → certificates → terminate).
 
-**Architecture:** Next.js App Router + Firestore (client SDK via `src/lib/firestore.ts`). All new features extend existing collections/types in `src/types/index.ts` — no new backend. Approval workflows are status-field state machines on documents; role scoping is query-level `where("departmentId", "==", ...)` filters plus a config-driven sidebar.
+**Architecture (corrected 2026-07-15):** Next.js App Router + MongoDB behind the in-repo `/api/db` proxy route (`src/lib/firestore.ts` is a Firestore-shaped shim over it — NOT Firebase). All new features extend existing collections/types in `src/types/index.ts` — no new backend service; server-side enforcement lives in the existing API route (see Phase 3c), so no claim-sync or external infra is needed. Approval workflows are status-field state machines on documents. The configurable sidebar (Phase 3a) is **presentation-only**; actual authorization = `db-authz.ts` role rules + `scopeFilter` read scoping + per-page role redirects.
 
 **Tech stack:** Existing — Next.js, Tailwind, zustand, lucide, Firestore, DO Spaces uploads. Add: `recharts` (charts), `xlsx` (Excel attendance import). Nothing else.
 

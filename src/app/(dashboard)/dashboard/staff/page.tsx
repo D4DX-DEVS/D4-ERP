@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Staff, Company, Department, Shift, ContractType, EmploymentType, Asset, AssetAssignment } from "@/types";
-import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint, type QueryConstraint, createSubDocument } from "@/lib/firestore";
+import { getDocuments, getDocument, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint, type QueryConstraint, createSubDocument } from "@/lib/firestore";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -303,22 +303,31 @@ export default function StaffPage() {
       // Create asset assignments for newly selected assets
       if (staffId && form.selectedAssets.length > 0) {
         const staffName = `${form.firstName} ${form.lastName}`;
-        const currentUser = "system"; // In production, use currentUser.staffId
+        const skippedAssets: string[] = [];
         for (const assetId of form.selectedAssets) {
-          const assignment: Omit<AssetAssignment, "id" | "createdAt" | "updatedAt"> = {
-            staffId,
-            staffName,
-            assignedDate: Timestamp.now(),
-            assignedBy: currentUser,
-            condition: "good",
-          };
           try {
+            // Re-check availability at save time to narrow the double-assign race.
+            // ponytail: still a check-then-act window; server-side transaction if it ever bites
+            const fresh = await getDocument<Asset>("assets", assetId);
+            if (!fresh || fresh.status !== "available") {
+              skippedAssets.push(fresh?.name || assetId);
+              continue;
+            }
+            const assignment: Omit<AssetAssignment, "id" | "createdAt" | "updatedAt"> = {
+              staffId,
+              staffName,
+              assignedDate: Timestamp.now(),
+              assignedBy: "system",
+              condition: "good",
+            };
             await createSubDocument("assets", assetId, "assignments", assignment);
-            // Update asset status to "assigned" and set currentAssigneeId
             await updateDocument("assets", assetId, { status: "assigned", currentAssigneeId: staffId });
-          } catch (err) {
-            console.error(`Failed to create assignment for asset ${assetId}:`, err);
+          } catch {
+            skippedAssets.push(assetId);
           }
+        }
+        if (skippedAssets.length > 0) {
+          toast("error", `Not assigned (no longer available): ${skippedAssets.join(", ")}`);
         }
       }
 

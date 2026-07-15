@@ -180,11 +180,18 @@ export default function PayrollPage() {
       const monthStart = new Date(y, m - 1, 1, 0, 0, 0, 0);
       const monthEnd = new Date(y, m, 0, 23, 59, 59, 999);
 
+      // Idempotent per (staffId, month): rerunning generation never duplicates records.
+      const existing = await getDocuments<Payroll>("payroll", [where("month", "==", month)]);
+      const alreadyGenerated = new Set(existing.map((p) => p.staffId));
+      let created = 0;
+
       for (const staff of staffList) {
+        if (alreadyGenerated.has(staff.id!)) continue;
         const payrollData = await computePayrollData(staff, month);
         const totalEarnings = Object.values(payrollData.earnings).reduce((a, b) => a + b, 0);
         const totalDeductions = Object.values(payrollData.deductions).reduce((a, b) => a + b, 0);
         const netSalary = totalEarnings - totalDeductions;
+        created += 1;
 
         await createDocument("payroll", {
           staffId: payrollData.staffId,
@@ -204,7 +211,11 @@ export default function PayrollPage() {
         });
       }
       setShowGenerate(false);
-      toast("success", `Payroll generated for ${staffList.length} staff`);
+      const skipped = staffList.length - created;
+      toast(
+        "success",
+        `Payroll generated for ${created} staff${skipped > 0 ? ` (${skipped} already had records)` : ""}`
+      );
       fetchData();
     } catch (error) {
       toast("error", "Failed to generate payroll");

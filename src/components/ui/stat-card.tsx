@@ -12,13 +12,23 @@ interface StatCardProps {
   bg: string;
   /** When set, the whole card is a link. */
   href?: string;
+  /** When set (and no href), the whole card is a keyboard-accessible button. */
+  onClick?: () => void;
+  /** Pressed/selected state for onClick cards (e.g. active filter). */
+  active?: boolean;
   loading?: boolean;
 }
 
 /** Compact, mobile-first stat card: 2-col grids below lg, whole card clickable. */
-export function StatCard({ title, value, icon: Icon, color, bg, href, loading }: StatCardProps) {
+export function StatCard({ title, value, icon: Icon, color, bg, href, onClick, active, loading }: StatCardProps) {
+  const interactive = Boolean(href || onClick);
   const card = (
-    <Card className={href ? "h-full transition-shadow hover:shadow-md active:scale-[0.98]" : "h-full"}>
+    <Card
+      className={
+        (interactive ? "h-full transition-shadow hover:shadow-md active:scale-[0.98]" : "h-full") +
+        (active ? " ring-2 ring-slate-900/70" : "")
+      }
+    >
       <CardContent className="p-4 sm:p-6">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
@@ -35,13 +45,21 @@ export function StatCard({ title, value, icon: Icon, color, bg, href, loading }:
     </Card>
   );
 
-  return href ? (
-    <Link href={href} className="block">
-      {card}
-    </Link>
-  ) : (
-    card
-  );
+  if (href) {
+    return (
+      <Link href={href} className="block">
+        {card}
+      </Link>
+    );
+  }
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} aria-pressed={active} className="block w-full text-left">
+        {card}
+      </button>
+    );
+  }
+  return card;
 }
 
 /** Standard responsive wrapper for StatCard groups. */
