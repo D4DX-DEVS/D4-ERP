@@ -4,13 +4,21 @@ import { getModel } from "@/models";
 import { getAuthUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/permissions";
 import type { ParsedEmployee } from "@/lib/attendance-import/parsers";
+import type { AttendanceStatus } from "@/types";
+
+interface ParsedRecord {
+  date: string;
+  status: AttendanceStatus;
+  checkIn?: string;
+  checkOut?: string;
+}
 
 interface ConfirmBody {
   fileUrl: string;
   fileName: string;
   format: string;
   dateRange: { start: string; end: string };
-  employees: ParsedEmployee[];
+  employees: (Omit<ParsedEmployee, "records"> & { records: ParsedRecord[] })[];
   mappings?: Record<string, string>;
   overwriteExisting?: boolean;
 }
@@ -131,7 +139,7 @@ export async function POST(req: NextRequest) {
           isEarlyDeparture: false,
           source: "biometric",
           importBatchId: batchId,
-          remarks: rec.rawStatus && rec.rawStatus !== "P" && rec.rawStatus !== "A" ? `ESSL status: ${rec.rawStatus}` : undefined,
+          remarks: "rawStatus" in rec && rec.rawStatus && rec.rawStatus !== "P" && rec.rawStatus !== "A" ? `ESSL status: ${rec.rawStatus}` : undefined,
           updatedAt: new Date(),
         };
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getDocuments, orderBy, where, Timestamp } from "@/lib/firestore";
+import { getDocuments, orderBy, where, Timestamp, updateDocument } from "@/lib/firestore";
 import { Attendance, AttendanceStatus, Staff } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 import { exportToCSV } from "@/lib/asset-export-utils";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Users,
   UserCheck,
@@ -18,6 +19,7 @@ import {
   TimerReset,
   Download,
   Eye,
+  Edit2,
   Search,
   LogIn,
   LogOut,
@@ -90,6 +92,11 @@ export default function AttendanceRegisterPage() {
   const [weeklyOff, setWeeklyOff] = useState<string[]>(["Sunday"]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingRecord, setEditingRecord] = useState<Rec | null>(null);
+  const [editStatus, setEditStatus] = useState<AttendanceStatus>("present");
+  const [editCheckIn, setEditCheckIn] = useState("");
+  const [editCheckOut, setEditCheckOut] = useState("");
+  const [saving, setSaving] = useState(false);
 
   // Load staff + attendance settings once
   useEffect(() => {
@@ -119,6 +126,71 @@ export default function AttendanceRegisterPage() {
   const monthStart = useMemo(() => new Date(year, monthNum - 1, 1, 0, 0, 0, 0), [year, monthNum]);
   const monthEnd = useMemo(() => new Date(year, monthNum, 0, 23, 59, 59, 999), [year, monthNum]);
   const daysInMonth = useMemo(() => new Date(year, monthNum, 0).getDate(), [year, monthNum]);
+
+  function openEditDialog(record: Rec) {
+    setEditingRecord(record);
+    setEditStatus(record.status);
+    const inSec = secOf(record.checkIn);
+    const outSec = secOf(record.checkOut);
+    setEditCheckIn(inSec ? new Date(inSec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }).replace(/\s/g, "") : "");
+    setEditCheckOut(outSec ? new Date(outSec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }).replace(/\s/g, "") : "");
+  }
+
+  async function handleSaveEdit() {
+    if (!editingRecord) return;
+    setSaving(true);
+    try {
+      const sec = secOf(editingRecord.date);
+      const dateObj = sec ? new Date(sec * 1000) : new Date();
+
+      const inTime = editCheckIn
+        ? (() => {
+            const [h, m] = editCheckIn.split(":").map(Number);
+            const d = new Date(dateObj);
+            d.setHours(h, m, 0);
+            return Timestamp.fromDate(d);
+          })()
+        : undefined;
+      const outTime = editCheckOut
+        ? (() => {
+            const [h, m] = editCheckOut.split(":").map(Number);
+            const d = new Date(dateObj);
+            d.setHours(h, m, 0);
+            return Timestamp.fromDate(d);
+          })()
+        : undefined;
+
+      await updateDocument("attendance", editingRecord.id, {
+        status: editStatus,
+        checkIn: inTime,
+        checkOut: outTime,
+        source: "manual",
+        updatedAt: new Date(),
+      });
+
+      setRecords((prev) =>
+        prev.map((r) => {
+          if (r.id === editingRecord.id) {
+            return {
+              ...r,
+              status: editStatus,
+              checkIn: inTime || undefined,
+              checkOut: outTime || undefined,
+              source: "manual" as const,
+            };
+          }
+          return r;
+        })
+      );
+
+      toast("success", "Attendance updated");
+      setEditingRecord(null);
+    } catch (error) {
+      toast("error", error instanceof Error ? error.message : "Failed to update attendance");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   // Load attendance for the selected month
   useEffect(() => {
@@ -562,7 +634,10 @@ export default function AttendanceRegisterPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end" onClick={(event) => event.stopPropagation()}>
+                        <div className="flex justify-end gap-1" onClick={(event) => event.stopPropagation()}>
+                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(r)}>
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => router.push(detailHref)}>
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -669,6 +744,40 @@ export default function AttendanceRegisterPage() {
           Weekly Off
         </span>
       </div>
+
+      {editingRecord && (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/40 sm:items-center">
+          <div className="w-full bg-white p-6 shadow-2xl sm:mx-auto sm:max-w-md sm:rounded-2xl">
+            <h3 className="mb-4 text-lg font-semibold text-slate-950">Edit Attendance</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Status</label>
+                <Select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as AttendanceStatus)}
+                  options={Object.entries(STATUS_CONFIG).map(([key, cfg]) => ({ value: key, label: cfg.label }))}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Check In</label>
+                <Input type="time" value={editCheckIn} onChange={(e) => setEditCheckIn(e.target.value)} />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Check Out</label>
+                <Input type="time" value={editCheckOut} onChange={(e) => setEditCheckOut(e.target.value)} />
+              </div>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <Button variant="outline" onClick={() => setEditingRecord(null)} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEdit} disabled={saving} className="flex-1">
+                {saving ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -15,12 +15,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CalendarDays, Download, FileSpreadsheet, FileText, Search, X } from "lucide-react";
 
 type Rec = Attendance & { id: string };
-type ReportType = "employee" | "daily" | "department";
+type ReportType = "employee" | "daily" | "department" | "matrix";
 
 const REPORT_OPTIONS = [
   { value: "employee", label: "Monthly — Per Employee" },
   { value: "daily", label: "Daily Summary" },
   { value: "department", label: "Department Summary" },
+  { value: "matrix", label: "Monthly Matrix" },
 ];
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
@@ -208,7 +209,49 @@ export default function AttendanceReportsPage() {
       .sort((a, b) => a.Department.localeCompare(b.Department));
   }, [scopedStaff, scopedRecords, staffMap, deptMap]);
 
-  const activeRows = reportType === "employee" ? employeeRows : reportType === "daily" ? dailyRows : departmentRows;
+  const gridLookup = useMemo(() => {
+    const map = new Map<string, Rec>();
+    for (const r of scopedRecords) {
+      const sec = (r.date as { seconds?: number } | undefined)?.seconds ?? 0;
+      const key = new Date(sec * 1000).toISOString().split("T")[0];
+      map.set(`${r.staffId}_${key}`, r);
+    }
+    return map;
+  }, [scopedRecords]);
+
+  const matrixRows = useMemo(() => {
+    const daysInMonth = new Date(year, monthNum, 0).getDate();
+    const statusMap: Record<string, string> = {
+      present: "P",
+      absent: "A",
+      "half-day": "½",
+      late: "L",
+      leave: "LV",
+      wfh: "W",
+      "on-duty": "OD",
+      "public-holiday": "H",
+    };
+    return scopedStaff.map((s) => {
+      const row: Record<string, string | number> = {
+        Staff: `${s.firstName} ${s.lastName}`,
+        Code: s.employeeCode || "",
+      };
+      for (let day = 1; day <= daysInMonth; day++) {
+        const key = `${year}-${String(monthNum).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const rec = gridLookup.get(`${s.id}_${key}`);
+        row[String(day)] = rec ? statusMap[rec.status] || "?" : "—";
+      }
+      row["Present"] = scopedRecords.filter((r) => r.staffId === s.id && isPresentLike(r.status)).length;
+      row["Absent"] = scopedRecords.filter((r) => r.staffId === s.id && r.status === "absent").length;
+      row["Late"] = scopedRecords.filter((r) => r.staffId === s.id && r.isLate).length;
+      row["Leave"] = scopedRecords.filter((r) => r.staffId === s.id && r.status === "leave").length;
+      row["Half-Day"] = scopedRecords.filter((r) => r.staffId === s.id && r.status === "half-day").length;
+      row["OT Hrs"] = Math.round(scopedRecords.filter((r) => r.staffId === s.id).reduce((sum, r) => sum + (r.overtimeHours || 0), 0) * 10) / 10;
+      return row;
+    });
+  }, [scopedStaff, gridLookup, scopedRecords, year, monthNum]);
+
+  const activeRows = reportType === "employee" ? employeeRows : reportType === "daily" ? dailyRows : reportType === "department" ? departmentRows : matrixRows;
   const columns = activeRows.length ? Object.keys(activeRows[0]) : [];
   const reportLabel = REPORT_OPTIONS.find((r) => r.value === reportType)?.label ?? "Attendance Report";
   const fileBase = `attendance-${reportType}-${month}`;
@@ -332,16 +375,65 @@ export default function AttendanceReportsPage() {
         </div>
       </div>
 
-      <ListingPanel title={reportLabel} description={`${activeRows.length} rows for ${month}.`} contentClassName="p-0">
+      <ListingPanel title={reportLabel} description={`${activeRows.length} rows for ${month}.`} contentClassName={reportType === "matrix" ? "p-0 overflow-x-auto" : "p-0"}>
         {loading ? (
           <div className="py-10 text-center text-sm text-slate-500">Loading…</div>
+        ) : reportType === "matrix" ? (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  {columns.map((c, idx) => (
+                    <th
+                      key={c}
+                      className={
+                        "px-2 py-1.5 font-semibold text-left " +
+                        (idx < 2 ? "sticky left-0 z-10 bg-slate-50" : "text-center")
+                      }
+                    >
+                      {c}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {activeRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={Math.max(1, columns.length)} className="py-10 text-center text-sm text-slate-500">
+                      No attendance data for this period.
+                    </td>
+                  </tr>
+                ) : (
+                  activeRows.map((row, idx) => (
+                    <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/40">
+                      {columns.map((c, cidx) => (
+                        <td
+                          key={c}
+                          className={
+                            "px-2 py-1 " +
+                            (cidx < 2
+                              ? "sticky left-0 z-10 bg-white font-medium text-slate-950 border-r border-slate-100"
+                              : /^\d+$/.test(c)
+                                ? "text-center text-slate-700"
+                                : "text-center")
+                          }
+                        >
+                          {String((row as Record<string, string | number>)[c] ?? "")}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   {columns.map((c) => (
-                    <TableHead key={c} className={c === "Employee" || c === "Date" || c === "Department" ? "" : "text-center"}>
+                    <TableHead key={c} className={c === "Employee" || c === "Date" || c === "Department" || c === "Staff" || c === "Code" ? "" : "text-center"}>
                       {c}
                     </TableHead>
                   ))}
@@ -360,7 +452,7 @@ export default function AttendanceReportsPage() {
                       {columns.map((c) => (
                         <TableCell
                           key={c}
-                          className={c === "Employee" || c === "Date" || c === "Department" ? "font-medium text-slate-950" : "text-center"}
+                          className={c === "Employee" || c === "Date" || c === "Department" || c === "Staff" || c === "Code" ? "font-medium text-slate-950" : "text-center"}
                         >
                           {String((row as Record<string, string | number>)[c] ?? "")}
                         </TableCell>
