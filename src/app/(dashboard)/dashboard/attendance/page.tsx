@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getDocuments, orderBy, where, Timestamp, updateDocument } from "@/lib/firestore";
+import { createDocument, getDocuments, orderBy, where, Timestamp, updateDocument } from "@/lib/firestore";
 import { Attendance, AttendanceStatus, Staff } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
 import { Badge } from "@/components/ui/badge";
@@ -92,7 +92,8 @@ export default function AttendanceRegisterPage() {
   const [weeklyOff, setWeeklyOff] = useState<string[]>(["Sunday"]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingRecord, setEditingRecord] = useState<Rec | null>(null);
+  // record === null → creating a new entry for that staff/day (grid cell with no log)
+  const [editTarget, setEditTarget] = useState<{ record: Rec | null; staffId: string; staffName: string; date: Date } | null>(null);
   const [editStatus, setEditStatus] = useState<AttendanceStatus>("present");
   const [editCheckIn, setEditCheckIn] = useState("");
   const [editCheckOut, setEditCheckOut] = useState("");
@@ -127,21 +128,27 @@ export default function AttendanceRegisterPage() {
   const monthEnd = useMemo(() => new Date(year, monthNum, 0, 23, 59, 59, 999), [year, monthNum]);
   const daysInMonth = useMemo(() => new Date(year, monthNum, 0).getDate(), [year, monthNum]);
 
-  function openEditDialog(record: Rec) {
-    setEditingRecord(record);
-    setEditStatus(record.status);
-    const inSec = secOf(record.checkIn);
-    const outSec = secOf(record.checkOut);
+  function beginEdit(record: Rec | null, staffId: string, date: Date) {
+    const s = staffList.find((x) => x.id === staffId);
+    setEditTarget({ record, staffId, staffName: fullName(s), date });
+    setEditStatus(record?.status ?? "present");
+    const inSec = secOf(record?.checkIn);
+    const outSec = secOf(record?.checkOut);
     setEditCheckIn(inSec ? new Date(inSec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }).replace(/\s/g, "") : "");
     setEditCheckOut(outSec ? new Date(outSec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }).replace(/\s/g, "") : "");
   }
 
+  function openEditDialog(record: Rec) {
+    const sec = secOf(record.date);
+    beginEdit(record, record.staffId, sec ? new Date(sec * 1000) : new Date());
+  }
+
   async function handleSaveEdit() {
-    if (!editingRecord) return;
+    if (!editTarget) return;
     setSaving(true);
     try {
-      const sec = secOf(editingRecord.date);
-      const dateObj = sec ? new Date(sec * 1000) : new Date();
+      const dateObj = new Date(editTarget.date);
+      dateObj.setHours(0, 0, 0, 0);
 
       const inTime = editCheckIn
         ? (() => {
@@ -160,31 +167,38 @@ export default function AttendanceRegisterPage() {
           })()
         : undefined;
 
-      await updateDocument("attendance", editingRecord.id, {
-        status: editStatus,
-        checkIn: inTime,
-        checkOut: outTime,
-        source: "manual",
-        updatedAt: new Date(),
-      });
-
-      setRecords((prev) =>
-        prev.map((r) => {
-          if (r.id === editingRecord.id) {
-            return {
-              ...r,
-              status: editStatus,
-              checkIn: inTime || undefined,
-              checkOut: outTime || undefined,
-              source: "manual" as const,
-            };
-          }
-          return r;
-        })
-      );
+      if (editTarget.record) {
+        await updateDocument("attendance", editTarget.record.id, {
+          status: editStatus,
+          checkIn: inTime,
+          checkOut: outTime,
+          source: "manual",
+          updatedAt: new Date(),
+        });
+        const targetId = editTarget.record.id;
+        setRecords((prev) =>
+          prev.map((r) =>
+            r.id === targetId
+              ? { ...r, status: editStatus, checkIn: inTime || undefined, checkOut: outTime || undefined, source: "manual" as const }
+              : r
+          )
+        );
+      } else {
+        const newDoc = {
+          staffId: editTarget.staffId,
+          date: Timestamp.fromDate(dateObj),
+          status: editStatus,
+          checkIn: inTime,
+          checkOut: outTime,
+          source: "manual" as const,
+          isDeleted: false,
+        };
+        const id = await createDocument("attendance", newDoc);
+        setRecords((prev) => [...prev, { ...newDoc, id } as Rec]);
+      }
 
       toast("success", "Attendance updated");
-      setEditingRecord(null);
+      setEditTarget(null);
     } catch (error) {
       toast("error", error instanceof Error ? error.message : "Failed to update attendance");
     } finally {
@@ -702,8 +716,14 @@ export default function AttendanceRegisterPage() {
                             {c ? (
                               <button
                                 type="button"
-                                title={`${m.day} — ${c.label}`}
-                                onClick={() => router.push(`/dashboard/attendance/${s.id}?date=${m.key}`)}
+                                title={`${m.day} — ${c.label} (tap to edit)`}
+                                onClick={() =>
+                                  beginEdit(
+                                    gridLookup.get(`${s.id}_${m.key}`) ?? null,
+                                    s.id,
+                                    new Date(year, monthNum - 1, m.day)
+                                  )
+                                }
                                 className={
                                   "mx-auto flex h-7 w-7 items-center justify-center rounded-lg text-[11px] font-semibold transition-transform hover:scale-110 " +
                                   c.cell
@@ -745,10 +765,16 @@ export default function AttendanceRegisterPage() {
         </span>
       </div>
 
-      {editingRecord && (
+      {editTarget && (
         <div className="fixed inset-0 z-50 flex items-end bg-black/40 sm:items-center">
           <div className="w-full bg-white p-6 shadow-2xl sm:mx-auto sm:max-w-md sm:rounded-2xl">
-            <h3 className="mb-4 text-lg font-semibold text-slate-950">Edit Attendance</h3>
+            <h3 className="text-lg font-semibold text-slate-950">
+              {editTarget.record ? "Edit Attendance" : "Add Attendance"}
+            </h3>
+            <p className="mb-4 mt-0.5 text-sm text-slate-500">
+              {editTarget.staffName} —{" "}
+              {editTarget.date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+            </p>
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Status</label>
@@ -768,7 +794,7 @@ export default function AttendanceRegisterPage() {
               </div>
             </div>
             <div className="mt-6 flex gap-3">
-              <Button variant="outline" onClick={() => setEditingRecord(null)} className="flex-1">
+              <Button variant="outline" onClick={() => setEditTarget(null)} className="flex-1">
                 Cancel
               </Button>
               <Button onClick={handleSaveEdit} disabled={saving} className="flex-1">
