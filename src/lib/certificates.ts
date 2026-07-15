@@ -334,10 +334,32 @@ export const DEFAULT_TEMPLATES: CertificateTemplate[] = [
   },
 ];
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Keys rendered into src attributes — restricted to http(s) URLs to block javascript: etc. */
+const URL_KEYS = new Set(["logoUrl", "signatureUrl"]);
+
+function safeValue(key: string, raw: string | undefined): string {
+  const value = raw ?? "";
+  if (URL_KEYS.has(key)) {
+    return /^https?:\/\//i.test(value) ? escapeHtml(value) : "";
+  }
+  return escapeHtml(value);
+}
+
 /**
  * Renders a template by replacing all {{placeholder}} with values.
- * Missing placeholders are replaced with empty string.
- * Supports Handlebars-style conditionals {{#key}}...{{/key}}
+ * Missing placeholders are replaced with empty string. Every substituted
+ * value is HTML-escaped (the result is rendered via innerHTML); URL keys
+ * must be http(s). Supports Handlebars-style conditionals {{#key}}...{{/key}}
+ * which gate on truthiness only and never inline the value.
  */
 export function renderTemplate(bodyHtml: string, values: Record<string, string>): string {
   let result = bodyHtml;
@@ -345,13 +367,13 @@ export function renderTemplate(bodyHtml: string, values: Record<string, string>)
   // Handle conditionals: {{#key}}...{{/key}}
   const conditionalRegex = /\{\{#(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g;
   result = result.replace(conditionalRegex, (match, key, content) => {
-    return values[key] ? content : "";
+    return safeValue(key, values[key]) ? content : "";
   });
 
   // Handle simple replacements: {{key}}
   const replacementRegex = /\{\{(\w+)\}\}/g;
   result = result.replace(replacementRegex, (match, key) => {
-    return values[key] ?? "";
+    return safeValue(key, values[key]);
   });
 
   return result;
