@@ -27,7 +27,7 @@ import {
   Hourglass,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
-import { isUpdatePendingTask, notifyPendingTaskUpdates } from "@/lib/task-alerts";
+import { isUpdatePendingTask, notifyPendingTaskUpdates, updatePendingDays, pendingBadgeClasses, pendingBadgeLabel } from "@/lib/task-alerts";
 
 type TaskDoc = Task & { id: string };
 
@@ -251,8 +251,8 @@ export default function TeamTasksPage() {
                                 )}
 
                                 {isUpdatePendingTask(task) && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                    <Hourglass className="h-3 w-3" /> No update today
+                                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${pendingBadgeClasses(updatePendingDays(task))}`}>
+                                    <Hourglass className="h-3 w-3" /> {pendingBadgeLabel(updatePendingDays(task))}
                                   </span>
                                 )}
 
@@ -335,8 +335,8 @@ export default function TeamTasksPage() {
                                 {task.priority}
                               </Badge>
                               {isUpdatePendingTask(task) && (
-                                <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                  <Hourglass className="h-3 w-3" /> No update today
+                                <span className={`flex-shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${pendingBadgeClasses(updatePendingDays(task))}`}>
+                                  <Hourglass className="h-3 w-3" /> {pendingBadgeLabel(updatePendingDays(task))}
                                 </span>
                               )}
                               <span

@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Hourglass } from "lucide-react";
+import { isUpdatePendingTask } from "@/lib/task-alerts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +79,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [attendanceData, setAttendanceData] = useState<AttendanceTrendData[]>([]);
   const [taskStatusData, setTaskStatusData] = useState<TaskStatusData[]>([]);
+  const [pendingUpdateCount, setPendingUpdateCount] = useState(0);
   const [incomeExpenseData, setIncomeExpenseData] = useState<IncomeExpenseData[]>([]);
 
   useEffect(() => {
@@ -171,6 +175,7 @@ export default function DashboardPage() {
         });
         setTodaysRequests(filtered);
         setTaskStatusData(taskData);
+        setPendingUpdateCount((tasks as Task[]).filter((t) => isUpdatePendingTask(t)).length);
         setAttendanceData(attendanceData);
         setIncomeExpenseData([
           {
@@ -217,6 +222,16 @@ export default function DashboardPage() {
       </StatGrid>
 
       {/* Role-aware Charts Section */}
+      {(user?.role === "admin" || user?.role === "department-head") && pendingUpdateCount > 0 && (
+        <Link
+          href="/dashboard/tasks"
+          className="flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
+        >
+          <Hourglass className="h-4 w-4 shrink-0" />
+          {pendingUpdateCount} open task{pendingUpdateCount === 1 ? "" : "s"} with no update today — tap to review
+        </Link>
+      )}
+
       {(user?.role === "admin" || user?.role === "accounts") && (
         <div className="space-y-6">
           <div className="flex items-center gap-2">

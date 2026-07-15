@@ -24,7 +24,7 @@ import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { CommentsSection } from "@/components/ui/comments-section";
 import { formatDate, cn } from "@/lib/utils";
 import { Plus, Loader2, Pencil, Trash2, CheckSquare, Square, X, CalendarClock, ListTodo, Loader, CheckCircle2, LayoutGrid, Rows3, Search, Hourglass } from "lucide-react";
-import { isUpdatePendingTask, notifyPendingTaskUpdates } from "@/lib/task-alerts";
+import { isUpdatePendingTask, notifyPendingTaskUpdates, updatePendingDays, pendingBadgeClasses, pendingBadgeLabel } from "@/lib/task-alerts";
 import { useToast } from "@/components/ui/toast";
 
 type TaskDoc = Task & { id: string };
@@ -488,8 +488,8 @@ export default function TasksPage() {
                           )}
 
                           {isUpdatePendingTask(task) && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                              <Hourglass className="h-3 w-3" /> No update today
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${pendingBadgeClasses(updatePendingDays(task))}`}>
+                              <Hourglass className="h-3 w-3" /> {pendingBadgeLabel(updatePendingDays(task))}
                             </span>
                           )}
 
@@ -574,8 +574,8 @@ export default function TasksPage() {
                     <TableCell>
                       <div className="font-semibold text-slate-800">{task.title}</div>
                       {isUpdatePendingTask(task) && (
-                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                          <Hourglass className="h-3 w-3" /> No update today
+                        <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${pendingBadgeClasses(updatePendingDays(task))}`}>
+                          <Hourglass className="h-3 w-3" /> {pendingBadgeLabel(updatePendingDays(task))}
                         </span>
                       )}
                       {(task.tags ?? []).length > 0 && (

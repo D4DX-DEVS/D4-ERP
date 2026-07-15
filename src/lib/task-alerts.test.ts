@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isUpdatePendingTask } from "@/lib/task-alerts";
+import { isUpdatePendingTask, updatePendingDays, pendingBadgeClasses } from "@/lib/task-alerts";
 
 const ts = (d: Date) => ({ seconds: Math.floor(d.getTime() / 1000), nanoseconds: 0 });
 
@@ -26,5 +26,25 @@ describe("isUpdatePendingTask (6 PM no-update flag)", () => {
 
   it("never flags done tasks", () => {
     expect(isUpdatePendingTask({ status: "done", updatedAt: ts(yesterday) }, evening)).toBe(false);
+  });
+});
+
+describe("updatePendingDays (staleness severity)", () => {
+  it("returns 0 for non-pending tasks", () => {
+    expect(updatePendingDays({ status: "done", updatedAt: ts(yesterday) }, evening)).toBe(0);
+    expect(updatePendingDays({ status: "todo", updatedAt: ts(thisMorning) }, evening)).toBe(0);
+  });
+
+  it("counts whole days since last touch", () => {
+    expect(updatePendingDays({ status: "todo", updatedAt: ts(yesterday) }, evening)).toBe(1);
+    expect(updatePendingDays({ status: "todo", updatedAt: ts(new Date(2026, 6, 13, 10, 0)) }, evening)).toBe(2);
+    expect(updatePendingDays({ status: "todo", updatedAt: ts(new Date(2026, 6, 10, 10, 0)) }, evening)).toBe(5);
+  });
+
+  it("escalates badge color with staleness", () => {
+    expect(pendingBadgeClasses(1)).toContain("amber");
+    expect(pendingBadgeClasses(2)).toContain("orange");
+    expect(pendingBadgeClasses(3)).toContain("red");
+    expect(pendingBadgeClasses(7)).toContain("red");
   });
 });
