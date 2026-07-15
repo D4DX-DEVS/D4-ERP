@@ -146,11 +146,60 @@ export interface EmployeeDocument extends BaseDocument {
   uploadedBy: string;
 }
 
-// ==================== Leave Management ====================
+// ==================== Leave Management / Staff Requests ====================
 export type LeaveRequestType = "leave" | "wfh" | "overtime" | "on-duty";
+/** Unified request types — superset of LeaveRequestType (2-step approval engine). */
+export type StaffRequestType =
+  | "leave"
+  | "wfh"
+  | "long-leave"
+  | "salary-increment"
+  | "overtime"
+  | "on-duty"
+  | "other";
 export type LeaveType = "CL" | "SL" | "EL" | "CO" | "HD" | "LOP";
 export type HalfDaySession = "first-half" | "second-half";
 export type RequestStatus = "pending" | "approved" | "rejected" | "cancelled";
+
+export type ApprovalStepStatus = "pending" | "approved" | "rejected";
+
+export interface ApprovalStep {
+  status: ApprovalStepStatus;
+  by?: string; // staffId of approver
+  byName?: string;
+  at?: Timestamp;
+  remarks?: string;
+}
+
+/**
+ * Unified staff request (stored in the `leaveRequests` collection).
+ * Two-step approval: deptHead (step 1) then admin (step 2). Admin can
+ * approve directly at any time (adminOverride). Legacy docs without
+ * deptHead/admin fields are read as single-step via their `status`.
+ */
+export interface StaffRequest extends BaseDocument {
+  staffId: string;
+  staffName?: string;
+  departmentId: string;
+  type: StaffRequestType;
+  leaveType?: LeaveType;
+  isHalfDay?: boolean;
+  session?: HalfDaySession;
+  startDate: Timestamp;
+  endDate: Timestamp;
+  startTime?: string;
+  endTime?: string;
+  /** Requested new salary for salary-increment requests. */
+  requestedAmount?: number;
+  reason: string;
+  attachments?: { name: string; url: string; type: string; size?: number }[];
+  deptHead: ApprovalStep;
+  admin: ApprovalStep;
+  /** Derived overall status — see resolveRequestStatus() in lib/requests.ts. */
+  status: RequestStatus;
+  /** True when admin approved without dept-head approval. */
+  adminOverride?: boolean;
+}
 
 export interface LeaveRequest extends BaseDocument {
   staffId: string;
@@ -839,7 +888,7 @@ export interface StatusHistoryEntry {
 }
 
 // ==================== Comments (Cross-Cutting) ====================
-export type CommentEntityType = "event" | "studio_booking" | "task" | "work_log";
+export type CommentEntityType = "event" | "studio_booking" | "task" | "work_log" | "staff_request";
 
 export interface Comment extends BaseDocument {
   entityType: CommentEntityType;

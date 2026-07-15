@@ -176,16 +176,17 @@ Sweep every dashboard page that lists staff-related data; for `role === "departm
 
 **Create** `src/lib/scope.ts` — `deptScope(user): QueryConstraint[]` helper returning `[]` for admin, `[where("departmentId","==",user.departmentId)]` for dept head. Use it in all the above pages so the rule is one line per page.
 
-### 3c. Server-side enforcement — Firestore security rules (GPT #16, adopted)
+### 3c. Server-side enforcement — /api/db route guard (GPT #16, adopted; corrected 2026-07-15)
 
-Client-side `where()` filters are UI convenience only — a dept head with devtools can query other depts. Enforce in `firestore.rules`:
+> Correction: `src/lib/firestore.ts` is a shim over a Next.js API route (`/api/db`) backed by MongoDB — NOT the Firebase client SDK. So enforcement lives in the API route, not Firestore rules. (The route already does server-side audit logging via `auditUser`.)
 
-- `staff`, `leaveRequests`, `attendance`, `tasks`, `workLogs`, `departmentReports`: read allowed when `request.auth.token.role == "admin"` OR (`role == "department-head"` AND `resource.data.departmentId == request.auth.token.departmentId`) OR own-record (`resource.data.staffId == request.auth.uid` mapping via staff doc).
-- Requires setting custom claims (`role`, `departmentId`, `staffId`) at login — add a small Firebase callable/Admin-SDK script for claim sync when staff role/department changes.
-- Writes: approval-step fields only writable by the matching role.
-- Deploy + test with Firestore rules emulator.
+Client-side `where()` filters are UI convenience only — a dept head with devtools can query other depts. Enforce in `src/app/api/db/route.ts`:
 
-**Acceptance:** dept head account sees only own-dept staff/requests/attendance/tasks everywhere; a hand-crafted cross-dept query is DENIED by rules (verified in emulator); admin unchanged; menu matrix changes reflect in sidebar after reload.
+- Resolve the caller's session server-side (role, departmentId, staffId) — never trust `auditUser` from the request body for authorization.
+- For `find`/`paginate`/`count` on scoped collections (`staff`, `leaveRequests`, `attendance`, `tasks`, `workLogs`, `departmentReports`): if role is `department-head`, force-inject `departmentId == caller.departmentId` constraint server-side; if role is `staff`, force `staffId == caller.staffId`.
+- For `update` on `leaveRequests`: dept heads may only write the `deptHead` step on own-dept docs; only admins may write the `admin` step; terminal-status docs immutable.
+
+**Acceptance:** dept head account sees only own-dept staff/requests/attendance/tasks everywhere; a hand-crafted cross-dept API call returns only own-dept rows (verified with curl); admin unchanged; menu matrix changes reflect in sidebar after reload.
 
 ---
 

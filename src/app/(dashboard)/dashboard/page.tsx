@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
-import { getDocuments, where } from "@/lib/firestore";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { getDocuments, where, Timestamp } from "@/lib/firestore";
+import { REQUEST_TYPE_LABELS } from "@/lib/requests";
 import { useAuthStore } from "@/store/auth-store";
 import {
   Users,
@@ -14,9 +18,11 @@ import {
   ClipboardList,
   TrendingUp,
   TrendingDown,
+  Eye,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import { useToast } from "@/components/ui/toast";
+import type { StaffRequest } from "@/types";
 
 interface DashboardStats {
   totalStaff: number;
@@ -32,6 +38,7 @@ interface DashboardStats {
 export default function DashboardPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
+  const router = useRouter();
   const [stats, setStats] = useState<DashboardStats>({
     totalStaff: 0,
     totalCompanies: 0,
@@ -42,12 +49,18 @@ export default function DashboardPage() {
     monthlyIncome: 0,
     monthlyExpense: 0,
   });
+  const [todaysRequests, setTodaysRequests] = useState<(StaffRequest & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchStats() {
       try {
-        const [staffList, companies, clients, pendingLeaves, invoices, tasks] =
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrowTs = new Date(today);
+        tomorrowTs.setDate(tomorrowTs.getDate() + 1);
+
+        const [staffList, companies, clients, pendingLeaves, invoices, tasks, todayRequests] =
           await Promise.all([
             getDocuments("staff", [where("isActive", "==", true)]),
             getDocuments("companies", [where("isActive", "==", true)]),
@@ -55,7 +68,19 @@ export default function DashboardPage() {
             getDocuments("leaveRequests", [where("status", "==", "pending")]),
             getDocuments("invoices"),
             getDocuments("tasks", [where("status", "!=", "done")]),
+            // Today's requests: createdAt today AND status pending
+            getDocuments<StaffRequest>("leaveRequests", [
+              where("status", "==", "pending"),
+              where("createdAt", ">=", Timestamp.fromDate(today)),
+              where("createdAt", "<", Timestamp.fromDate(tomorrowTs)),
+            ]),
           ]);
+
+        // Filter today's requests by department if user is dept-head
+        let filtered = todayRequests;
+        if (user?.role === "department-head") {
+          filtered = todayRequests.filter((r) => r.departmentId === user.departmentId);
+        }
 
         setStats({
           totalStaff: staffList.length,
@@ -67,15 +92,15 @@ export default function DashboardPage() {
           monthlyIncome: 0,
           monthlyExpense: 0,
         });
+        setTodaysRequests(filtered);
       } catch (error) {
-        console.error("Error fetching dashboard stats:", error);
         toast("error", "Failed to load dashboard data");
       } finally {
         setLoading(false);
       }
     }
     fetchStats();
-  }, []);
+  }, [user, toast]);
 
   const statCards = [
     { title: "Total Staff", value: stats.totalStaff, icon: Users, color: "text-blue-600", bg: "bg-blue-50", href: "/dashboard/staff" },
@@ -105,21 +130,39 @@ export default function DashboardPage() {
         ))}
       </StatGrid>
 
-      {/* Quick Actions */}
+      {/* Today's Requests & Quick Overview */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Recent Leave Requests</CardTitle>
+            <CardTitle className="text-lg">Today's Requests</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
               <p className="text-sm text-gray-500">Loading...</p>
-            ) : stats.pendingLeaves > 0 ? (
-              <p className="text-sm text-gray-600">
-                You have <span className="font-semibold text-orange-600">{stats.pendingLeaves}</span> pending leave requests to review.
-              </p>
+            ) : todaysRequests.length === 0 ? (
+              <p className="text-sm text-gray-500">No requests today.</p>
             ) : (
-              <p className="text-sm text-gray-500">No pending leave requests.</p>
+              <div className="space-y-2">
+                {todaysRequests.map((req) => (
+                  <div key={req.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 hover:bg-slate-50">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900">{req.staffName}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge className="text-xs">{REQUEST_TYPE_LABELS[req.type]}</Badge>
+                        <span className="text-xs text-slate-500">{formatDate(new Date(req.createdAt?.seconds! * 1000))}</span>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => router.push("/dashboard/leaves")}
+                      className="flex-shrink-0"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
