@@ -2,22 +2,28 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
-import { getDocument } from "@/lib/firestore";
-import { Staff, Department, Company } from "@/types";
+import { getDocument, getSubDocuments, getDocuments, where, orderBy } from "@/lib/firestore";
+import { Staff, Department, Company, SalaryHistory, Payroll, AssetAssignment } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { EmployeeDocuments } from "@/components/staff/employee-documents";
 import { Camera, Loader2, User, Phone, Mail, Briefcase, Building, Calendar, IndianRupee } from "lucide-react";
 
+type TabKey = "overview" | "salary" | "documents" | "assets";
+
 export default function StaffProfilePage() {
   const { user } = useAuthStore();
   const [staff, setStaff] = useState<Staff | null>(null);
   const [department, setDepartment] = useState<Department | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
+  const [salaryHistory, setSalaryHistory] = useState<(SalaryHistory & { id: string })[]>([]);
+  const [payrolls, setPayrolls] = useState<(Payroll & { id: string })[]>([]);
+  const [assignments, setAssignments] = useState<(AssetAssignment & { id: string; assetName?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -34,13 +40,17 @@ export default function StaffProfilePage() {
         if (isMounted) {
           setStaff(data);
           if (data) {
-            const [dept, comp] = await Promise.all([
+            const [dept, comp, salHist, payrollList] = await Promise.all([
               data.departmentId ? getDocument<Department>("departments", data.departmentId) : null,
               data.companyId ? getDocument<Company>("companies", data.companyId) : null,
+              getSubDocuments<SalaryHistory>("staff", staffId, "salaryHistory", [orderBy("createdAt", "desc")]),
+              getDocuments<Payroll>("payroll", [where("staffId", "==", staffId)]),
             ]);
             if (isMounted) {
               setDepartment(dept ?? null);
               setCompany(comp ?? null);
+              setSalaryHistory(salHist);
+              setPayrolls(payrollList);
             }
           }
         }
@@ -167,42 +177,188 @@ export default function StaffProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Personal Info */}
-      <Card>
-        <CardHeader><CardTitle>Personal Information</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <InfoRow icon={<User className="h-4 w-4" />} label="Employee Code" value={staff.employeeCode} />
-          <InfoRow icon={<Phone className="h-4 w-4" />} label="Phone" value={staff.mobile} />
-          <InfoRow icon={<Mail className="h-4 w-4" />} label="Email" value={staff.email || "—"} />
-          <InfoRow icon={<Calendar className="h-4 w-4" />} label="Date of Birth" value={staff.dateOfBirth ? formatDate(new Date(staff.dateOfBirth.seconds * 1000)) : "—"} />
-          <InfoRow icon={<MapPinIcon />} label="Address" value={staff.address ? [staff.address.street, staff.address.city, staff.address.state, staff.address.pincode].filter(Boolean).join(", ") || "—" : "—"} />
-        </CardContent>
-      </Card>
+      {/* Tab Navigation */}
+      <div className="border-b flex gap-1 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab("overview")}
+          className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === "overview" ? "border-emerald-600 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Overview
+        </button>
+        <button
+          onClick={() => setActiveTab("salary")}
+          className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === "salary" ? "border-emerald-600 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Salary
+        </button>
+        <button
+          onClick={() => setActiveTab("documents")}
+          className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === "documents" ? "border-emerald-600 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Documents
+        </button>
+        <button
+          onClick={() => setActiveTab("assets")}
+          className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            activeTab === "assets" ? "border-emerald-600 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          My Assets
+        </button>
+      </div>
 
-      {/* Employment Info */}
-      <Card>
-        <CardHeader><CardTitle>Employment Details</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <InfoRow icon={<Briefcase className="h-4 w-4" />} label="Department" value={department?.name || staff.departmentId || "—"} />
-          <InfoRow icon={<Building className="h-4 w-4" />} label="Company" value={company?.name || staff.companyId || "—"} />
-          <InfoRow icon={<Calendar className="h-4 w-4" />} label="Joining Date" value={staff.dateOfJoining ? formatDate(new Date(staff.dateOfJoining.seconds * 1000)) : "—"} />
-          <InfoRow icon={<IndianRupee className="h-4 w-4" />} label="Current Salary" value={staff.currentSalary ? formatCurrency(staff.currentSalary) : "—"} />
-        </CardContent>
-      </Card>
+      {/* Overview Tab */}
+      {activeTab === "overview" && (
+        <div className="space-y-4">
+          {/* Personal Info */}
+          <Card>
+            <CardHeader><CardTitle>Personal Information</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <InfoRow icon={<User className="h-4 w-4" />} label="Employee Code" value={staff.employeeCode} />
+              <InfoRow icon={<Phone className="h-4 w-4" />} label="Phone" value={staff.mobile} />
+              <InfoRow icon={<Mail className="h-4 w-4" />} label="Email" value={staff.email || "—"} />
+              <InfoRow icon={<Calendar className="h-4 w-4" />} label="Date of Birth" value={staff.dateOfBirth ? formatDate(new Date(staff.dateOfBirth.seconds * 1000)) : "—"} />
+              <InfoRow icon={<MapPinIcon />} label="Address" value={staff.address ? [staff.address.street, staff.address.city, staff.address.state, staff.address.pincode].filter(Boolean).join(", ") || "—" : "—"} />
+            </CardContent>
+          </Card>
 
-      {/* Bank Info */}
-      {staff.bankDetails && (
+          {/* Employment Info */}
+          <Card>
+            <CardHeader><CardTitle>Employment Details</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <InfoRow icon={<Briefcase className="h-4 w-4" />} label="Department" value={department?.name || staff.departmentId || "—"} />
+              <InfoRow icon={<Building className="h-4 w-4" />} label="Company" value={company?.name || staff.companyId || "—"} />
+              <InfoRow icon={<Calendar className="h-4 w-4" />} label="Joining Date" value={staff.dateOfJoining ? formatDate(new Date(staff.dateOfJoining.seconds * 1000)) : "—"} />
+              <InfoRow icon={<IndianRupee className="h-4 w-4" />} label="Current Salary" value={staff.currentSalary ? formatCurrency(staff.currentSalary) : "—"} />
+            </CardContent>
+          </Card>
+
+          {/* Bank Info */}
+          {staff.bankDetails && (
+            <Card>
+              <CardHeader><CardTitle>Bank Details</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <InfoRow label="Bank" value={staff.bankDetails.bankName || "—"} />
+                <InfoRow label="Account" value={staff.bankDetails.accountNo || "—"} />
+                <InfoRow label="IFSC" value={staff.bankDetails.ifscCode || "—"} />
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Salary Tab */}
+      {activeTab === "salary" && (
+        <div className="space-y-4">
+          {/* Current Salary */}
+          <Card>
+            <CardHeader><CardTitle>Current Salary</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-3xl font-bold text-emerald-600">{formatCurrency(staff.currentSalary || 0)}</p>
+              <p className="text-xs text-gray-500 mt-2">Per Month</p>
+            </CardContent>
+          </Card>
+
+          {/* Salary History */}
+          {salaryHistory.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle>Salary History</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {salaryHistory.map((entry) => (
+                    <div key={entry.id} className="flex justify-between items-start p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="text-sm font-medium capitalize">{entry.type}</p>
+                        <p className="text-xs text-gray-500">{entry.reason}</p>
+                        <p className="text-xs text-gray-400 mt-1">{entry.effectiveDate ? formatDate(new Date(entry.effectiveDate.seconds * 1000)) : "—"}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">{formatCurrency(entry.newSalary)}</p>
+                        <p className="text-xs text-gray-500">
+                          {entry.previousSalary ? `from ${formatCurrency(entry.previousSalary)}` : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Payslips */}
+          {payrolls.length > 0 && (
+            <Card>
+              <CardHeader><CardTitle>Payslips</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {payrolls.map((payroll) => (
+                    <div key={payroll.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div>
+                        <p className="text-sm font-medium">{payroll.month}/{payroll.year}</p>
+                        <p className="text-xs text-gray-500">Net Salary</p>
+                      </div>
+                      <p className="text-sm font-medium text-emerald-600">{formatCurrency(payroll.netSalary || 0)}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {salaryHistory.length === 0 && payrolls.length === 0 && (
+            <Card>
+              <CardContent className="py-8 text-center">
+                <p className="text-gray-500 text-sm">No salary records yet.</p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Documents Tab */}
+      {activeTab === "documents" && (
+        user?.staffId && <EmployeeDocuments staffId={user.staffId} canManage={false} />
+      )}
+
+      {/* Assets Tab */}
+      {activeTab === "assets" && (
         <Card>
-          <CardHeader><CardTitle>Bank Details</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <InfoRow label="Bank" value={staff.bankDetails.bankName || "—"} />
-            <InfoRow label="Account" value={staff.bankDetails.accountNo || "—"} />
-            <InfoRow label="IFSC" value={staff.bankDetails.ifscCode || "—"} />
+          <CardHeader><CardTitle>Assigned Assets</CardTitle></CardHeader>
+          <CardContent>
+            {assignments.length === 0 ? (
+              <p className="text-gray-500 text-sm py-4">No assets assigned yet.</p>
+            ) : (
+              <div className="space-y-3">
+                {assignments.map((assignment) => (
+                  <div key={assignment.id} className="p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm font-medium">{assignment.assetName || "Asset"}</p>
+                    <div className="flex justify-between mt-2">
+                      <div className="text-xs text-gray-500">
+                        <p>Assigned: {assignment.assignedDate ? formatDate(new Date(assignment.assignedDate.seconds * 1000)) : "—"}</p>
+                        {assignment.returnDate && (
+                          <p>Returned: {formatDate(new Date(assignment.returnDate.seconds * 1000))}</p>
+                        )}
+                      </div>
+                      <Badge variant={!assignment.returnDate ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"}>
+                        {!assignment.returnDate ? "Active" : "Returned"}
+                      </Badge>
+                    </div>
+                    {assignment.condition && (
+                      <p className="text-xs text-gray-500 mt-2 capitalize">Condition: {assignment.condition}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
-
-      {user?.staffId && <EmployeeDocuments staffId={user.staffId} canManage={false} />}
     </div>
   );
 }

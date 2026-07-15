@@ -39,7 +39,13 @@ export interface Department extends BaseDocument {
 
 // ==================== Staff ====================
 export type StaffRole = "admin" | "department-head" | "accounts" | "staff";
-export type StaffStatus = "active" | "suspended" | "terminated" | "on-leave";
+export type StaffStatus =
+  | "active"
+  | "suspended"
+  | "notice-period"
+  | "relieved"
+  | "terminated"
+  | "on-leave";
 export type Gender = "Male" | "Female" | "Other";
 
 export type ContractType =
@@ -107,7 +113,7 @@ export interface SalaryHistory extends BaseDocument {
 }
 
 export interface StatusHistory extends BaseDocument {
-  type: "suspension" | "termination" | "reinstatement" | "leave";
+  type: "suspension" | "termination" | "reinstatement" | "leave" | "notice-period" | "relieved";
   reason: string;
   startDate: Timestamp;
   endDate?: Timestamp;

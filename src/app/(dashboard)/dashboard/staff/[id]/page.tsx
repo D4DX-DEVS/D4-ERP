@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Staff, Department, Company, SalaryHistory, StatusHistory, ContractHistory, ContractType } from "@/types";
-import { getDocument, getSubDocuments, createSubDocument, updateDocument, orderBy, Timestamp } from "@/lib/firestore";
+import { Staff, Department, Company, SalaryHistory, StatusHistory, ContractHistory, ContractType, Asset, AssetAssignment } from "@/types";
+import { getDocument, getSubDocuments, createSubDocument, updateDocument, orderBy, Timestamp, where, getDocuments } from "@/lib/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -37,10 +37,11 @@ import {
   History,
   User,
   CalendarClock,
+  Package,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 
-type TabKey = "overview" | "salary" | "access" | "documents";
+type TabKey = "overview" | "salary" | "access" | "documents" | "assets";
 
 export default function StaffProfilePage() {
   const params = useParams();
@@ -77,6 +78,7 @@ export default function StaffProfilePage() {
     startDate: new Date().toISOString().split("T")[0],
     endDate: "",
   });
+  const [returnAssetsOnTerminate, setReturnAssetsOnTerminate] = useState(false);
 
   const [contractHistory, setContractHistory] = useState<(ContractHistory & { id: string })[]>([]);
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
@@ -159,22 +161,52 @@ export default function StaffProfilePage() {
         reason: statusForm.reason,
         startDate: Timestamp.fromDate(new Date(statusForm.startDate)),
         endDate: statusForm.endDate ? Timestamp.fromDate(new Date(statusForm.endDate)) : null,
-        approvedBy: "",
+        approvedBy: currentUser?.staffId || "",
       });
 
-      const newStatus =
-        statusForm.type === "termination"
-          ? "terminated"
-          : statusForm.type === "suspension"
-          ? "suspended"
-          : "active";
+      // Map StatusHistory type to Staff status field
+      let newStatus: Staff["status"] = "active";
+      if (statusForm.type === "termination") {
+        newStatus = "terminated";
+      } else if (statusForm.type === "suspension") {
+        newStatus = "suspended";
+      } else if (statusForm.type === "notice-period") {
+        newStatus = "notice-period";
+      } else if (statusForm.type === "relieved") {
+        newStatus = "relieved";
+      }
 
-      await updateDocument("staff", staffId, {
+      const updatePayload: Record<string, unknown> = {
         status: newStatus,
-        isActive: newStatus !== "terminated",
-      });
+        isActive: !["terminated", "relieved"].includes(newStatus),
+      };
+
+      await updateDocument("staff", staffId, updatePayload);
+
+      // If terminating and user wants to return assets, close all open assignments
+      if (statusForm.type === "termination" && returnAssetsOnTerminate) {
+        try {
+          const allAssets = await getDocuments<Asset>("assets", [where("currentAssigneeId", "==", staffId)]);
+          for (const asset of allAssets) {
+            const assignments = await getSubDocuments<AssetAssignment>("assets", asset.id, "assignments", [where("staffId", "==", staffId)]);
+            for (const assignment of assignments) {
+              if (!assignment.returnDate) {
+                await updateDocument(`assets/${asset.id}/assignments`, assignment.id, {
+                  returnDate: Timestamp.now(),
+                });
+              }
+            }
+            // Mark asset as available
+            await updateDocument("assets", asset.id, { status: "available", currentAssigneeId: null });
+          }
+          toast("success", "Assets returned and marked as available");
+        } catch (err) {
+          console.error("Error returning assets:", err);
+        }
+      }
 
       setStatusDialogOpen(false);
+      setReturnAssetsOnTerminate(false);
       toast("success", "Staff status updated");
       fetchData();
     } catch (error) {
@@ -258,6 +290,7 @@ export default function StaffProfilePage() {
     { key: "salary", label: "Salary & Status", icon: <History className="h-4 w-4" /> },
     { key: "access", label: "Access & Features", icon: <Shield className="h-4 w-4" /> },
     { key: "documents", label: "Documents", icon: <FileText className="h-4 w-4" /> },
+    { key: "assets", label: "Assets", icon: <Package className="h-4 w-4" /> },
   ];
 
   return (
@@ -647,6 +680,23 @@ export default function StaffProfilePage() {
         <EmployeeDocuments staffId={staffId} canManage={canEditFeatures} uploadedBy={currentUser?.uid} />
       )}
 
+      {/* ───── Tab: Assets ───── */}
+      {activeTab === "assets" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Assigned Assets</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-500 mb-4">Current and historical asset assignments for this staff member.</p>
+            <div className="space-y-3">
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-sm">Assets assigned to this staff member will appear here.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* ───── Salary Change Dialog ───── */}
       <Dialog open={incrementOpen} onClose={() => setIncrementOpen(false)}>
         <DialogHeader>
@@ -717,6 +767,8 @@ export default function StaffProfilePage() {
               onChange={(e) => setStatusForm({ ...statusForm, type: e.target.value as StatusHistory["type"] })}
               options={[
                 { value: "suspension", label: "Suspend" },
+                { value: "notice-period", label: "Place on Notice Period" },
+                { value: "relieved", label: "Mark as Relieved" },
                 { value: "termination", label: "Terminate" },
                 { value: "reinstatement", label: "Reinstate" },
               ]}
@@ -730,7 +782,7 @@ export default function StaffProfilePage() {
               required
             />
           </div>
-          {statusForm.type === "suspension" && (
+          {(statusForm.type === "suspension" || statusForm.type === "notice-period") && (
             <div className="space-y-2">
               <Label>End Date</Label>
               <DatePicker
@@ -745,13 +797,36 @@ export default function StaffProfilePage() {
               value={statusForm.reason}
               onChange={(e) => setStatusForm({ ...statusForm, reason: e.target.value })}
               required
+              placeholder="Provide a brief reason for this status change"
             />
           </div>
+
+          {statusForm.type === "termination" && (
+            <div className="space-y-3 border-t pt-4">
+              <p className="text-sm font-medium">Asset Management</p>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={returnAssetsOnTerminate}
+                  onChange={(e) => setReturnAssetsOnTerminate(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-gray-300 text-red-600"
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Return all assigned assets</p>
+                  <p className="text-xs text-gray-500">Automatically close all asset assignments and mark them as available</p>
+                </div>
+              </label>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => setStatusDialogOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={saving} variant={statusForm.type === "termination" ? "destructive" : "default"}>
+            <Button type="button" variant="outline" onClick={() => {
+              setStatusDialogOpen(false);
+              setReturnAssetsOnTerminate(false);
+            }}>Cancel</Button>
+            <Button type="submit" disabled={saving} variant={["termination", "relieved"].includes(statusForm.type) ? "destructive" : "default"}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Confirm {statusForm.type}
+              Confirm
             </Button>
           </div>
         </form>

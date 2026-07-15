@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Staff, Company, Department, Shift, ContractType, EmploymentType } from "@/types";
-import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint, type QueryConstraint } from "@/lib/firestore";
+import { Staff, Company, Department, Shift, ContractType, EmploymentType, Asset, AssetAssignment } from "@/types";
+import { getDocuments, createDocument, updateDocument, deleteDocument, where, Timestamp, search as searchConstraint, type QueryConstraint, createSubDocument } from "@/lib/firestore";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,7 @@ export default function StaffPage() {
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
   const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
   const [shifts, setShifts] = useState<(Shift & { id: string })[]>([]);
+  const [assets, setAssets] = useState<(Asset & { id: string })[]>([]);
   const [lookupsLoading, setLookupsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{ id: string } | null>(null);
@@ -130,8 +131,8 @@ export default function StaffPage() {
     designation: "",
     baseSalary: 0,
     currentSalary: 0,
-    role: "staff" as "admin" | "department-head" | "accounts" | "staff",
-    status: "active" as "active" | "suspended" | "terminated" | "on-leave",
+    role: "staff" as Staff["role"],
+    status: "active" as Staff["status"],
     shiftId: "",
     isActive: true,
     jobDescription: "",
@@ -139,6 +140,8 @@ export default function StaffPage() {
     contractType: "permanent" as ContractType,
     contractEndDate: "",
     grantedFeatures: [] as string[],
+    selectedAssets: [] as string[],
+    consumables: [] as string[],
   });
 
   const setContractType = (type: ContractType) => {
@@ -182,13 +185,15 @@ export default function StaffPage() {
 
     async function loadLookups() {
       try {
-        const [comps, depts] = await Promise.all([
+        const [comps, depts, availableAssets] = await Promise.all([
           getDocuments<Company>("companies", [where("isActive", "==", true)]),
           getDocuments<Department>("departments", [where("isActive", "==", true)]),
+          getDocuments<Asset>("assets", [where("status", "==", "available"), where("isActive", "==", true)]),
         ]);
         if (!isMounted) return;
         setCompanies(comps);
         setDepartments(depts);
+        setAssets(availableAssets);
         getDocuments<Shift>("shifts", [where("isActive", "==", true)])
           .then((list) => { if (isMounted) setShifts(list); })
           .catch((error) => console.error("Error:", error));
@@ -227,8 +232,8 @@ export default function StaffPage() {
         designation: staff.designation,
         baseSalary: staff.baseSalary,
         currentSalary: staff.currentSalary,
-        role: staff.role || "staff",
-        status: staff.status || "active",
+        role: (staff.role || "staff") as Staff["role"],
+        status: (staff.status || "active") as Staff["status"],
         shiftId: staff.shiftId || "",
         isActive: staff.isActive,
         jobDescription: staff.jobDescription || "",
@@ -236,6 +241,8 @@ export default function StaffPage() {
         contractType: staff.contractType || "permanent",
         contractEndDate: staff.contractEndDate ? new Date(staff.contractEndDate.seconds * 1000).toISOString().split("T")[0] : "",
         grantedFeatures: staff.grantedFeatures || [],
+        selectedAssets: [],
+        consumables: [],
       });
     } else {
       setEditingId(null);
@@ -248,22 +255,24 @@ export default function StaffPage() {
         mobile: "",
         address: { street: "", city: "", state: "", pincode: "" },
         dateOfBirth: "",
-        gender: "Male",
+        gender: "Male" as const,
         dateOfJoining: new Date().toISOString().split("T")[0],
         departmentId: "",
         companyId: "",
         designation: "",
         baseSalary: 0,
         currentSalary: 0,
-        role: "staff",
-        status: "active",
+        role: "staff" as Staff["role"],
+        status: "active" as Staff["status"],
         shiftId: "",
         isActive: true,
         jobDescription: "",
-        employmentType: "permanent",
-        contractType: "permanent",
+        employmentType: "permanent" as EmploymentType,
+        contractType: "permanent" as ContractType,
         contractEndDate: "",
         grantedFeatures: [],
+        selectedAssets: [],
+        consumables: [],
       });
     }
     setFormStep(1);
@@ -281,13 +290,38 @@ export default function StaffPage() {
         currentSalary: form.currentSalary || form.baseSalary,
         contractEndDate: form.contractEndDate ? Timestamp.fromDate(new Date(form.contractEndDate)) : null,
       };
+
+      let staffId = editingId;
       if (editingId) {
         await updateDocument("staff", editingId, data);
         toast("success", "Staff member updated successfully");
       } else {
-        await createDocument("staff", data);
+        staffId = await createDocument("staff", data);
         toast("success", "Staff member added successfully");
       }
+
+      // Create asset assignments for newly selected assets
+      if (staffId && form.selectedAssets.length > 0) {
+        const staffName = `${form.firstName} ${form.lastName}`;
+        const currentUser = "system"; // In production, use currentUser.staffId
+        for (const assetId of form.selectedAssets) {
+          const assignment: Omit<AssetAssignment, "id" | "createdAt" | "updatedAt"> = {
+            staffId,
+            staffName,
+            assignedDate: Timestamp.now(),
+            assignedBy: currentUser,
+            condition: "good",
+          };
+          try {
+            await createSubDocument("assets", assetId, "assignments", assignment);
+            // Update asset status to "assigned" and set currentAssigneeId
+            await updateDocument("assets", assetId, { status: "assigned", currentAssigneeId: staffId });
+          } catch (err) {
+            console.error(`Failed to create assignment for asset ${assetId}:`, err);
+          }
+        }
+      }
+
       setDialogOpen(false);
       refresh();
     } catch (error) {
@@ -482,27 +516,34 @@ export default function StaffPage() {
         </DialogHeader>
 
         {/* Step Tabs */}
-        <div className="flex border-b mb-4">
+        <div className="flex border-b mb-4 overflow-x-auto">
           <button
             type="button"
             onClick={() => setFormStep(1)}
-            className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-colors ${formStep === 1 ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${formStep === 1 ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
           >
             1. Personal Info
           </button>
           <button
             type="button"
             onClick={() => setFormStep(2)}
-            className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-colors ${formStep === 2 ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${formStep === 2 ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
           >
             2. Work & Address
           </button>
           <button
             type="button"
             onClick={() => setFormStep(3)}
-            className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-colors ${formStep === 3 ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+            className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${formStep === 3 ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
           >
             3. Permissions
+          </button>
+          <button
+            type="button"
+            onClick={() => setFormStep(4)}
+            className={`flex-1 py-2.5 text-sm font-medium text-center border-b-2 transition-colors whitespace-nowrap ${formStep === 4 ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+          >
+            4. Assets
           </button>
         </div>
 
@@ -759,6 +800,94 @@ export default function StaffPage() {
 
               <div className="flex justify-between pt-4 border-t">
                 <Button type="button" variant="outline" onClick={() => setFormStep(2)}>
+                  Back
+                </Button>
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={saving}>
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    {editingId ? "Update" : "Add"} Staff
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Company Assets */}
+          {formStep === 4 && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-semibold mb-3">Select Company Assets</h4>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto border rounded-lg p-3 bg-gray-50">
+                  {assets.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-4">No available assets at this time.</p>
+                  ) : (
+                    assets.map((asset) => (
+                      <label key={asset.id} className="flex items-center gap-3 p-2 hover:bg-white rounded cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={form.selectedAssets.includes(asset.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setForm({ ...form, selectedAssets: [...form.selectedAssets, asset.id] });
+                            } else {
+                              setForm({ ...form, selectedAssets: form.selectedAssets.filter((id) => id !== asset.id) });
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{asset.name}</p>
+                          <p className="text-xs text-gray-500">{asset.category} • {asset.serialNumber || "No SN"}</p>
+                        </div>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold mb-3">Consumables (e.g., wire, SSD)</h4>
+                <div className="space-y-2">
+                  {form.consumables.map((consumable, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input
+                        value={consumable}
+                        onChange={(e) => {
+                          const updated = [...form.consumables];
+                          updated[idx] = e.target.value;
+                          setForm({ ...form, consumables: updated });
+                        }}
+                        placeholder="e.g. USB cable, 256GB SSD"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setForm({ ...form, consumables: form.consumables.filter((_, i) => i !== idx) });
+                        }}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setForm({ ...form, consumables: [...form.consumables, ""] });
+                    }}
+                  >
+                    + Add Consumable
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex justify-between pt-4 border-t">
+                <Button type="button" variant="outline" onClick={() => setFormStep(3)}>
                   Back
                 </Button>
                 <div className="flex gap-3">
