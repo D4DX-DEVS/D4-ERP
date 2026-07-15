@@ -38,7 +38,9 @@ import {
   User,
   CalendarClock,
   Package,
+  DollarSign,
 } from "lucide-react";
+import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 
 type TabKey = "overview" | "salary" | "access" | "documents" | "assets";
@@ -495,13 +497,23 @@ export default function StaffProfilePage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">Salary History</CardTitle>
-              <Button variant="outline" size="sm" onClick={() => {
-                setIncrementForm({ ...incrementForm, newSalary: staff.currentSalary });
-                setIncrementOpen(true);
-              }}>
-                <TrendingUp className="h-4 w-4 mr-1.5" />
-                Add Change
-              </Button>
+              <div className="flex gap-2">
+                {(currentUser?.role === "admin" || currentUser?.role === "accounts") && (
+                  <Link href={`/dashboard/payroll/staff/${staffId}`}>
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      <DollarSign className="h-4 w-4" />
+                      Dossier
+                    </Button>
+                  </Link>
+                )}
+                <Button variant="outline" size="sm" onClick={() => {
+                  setIncrementForm({ ...incrementForm, newSalary: staff.currentSalary });
+                  setIncrementOpen(true);
+                }}>
+                  <TrendingUp className="h-4 w-4 mr-1.5" />
+                  Add Change
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {salaryHistory.length === 0 ? (
