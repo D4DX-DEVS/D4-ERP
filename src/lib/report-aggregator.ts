@@ -1,5 +1,5 @@
 import { getDocuments, where, orderBy } from "@/lib/firestore";
-import type { WorkLog, Task, ReportAutoMetrics, ReportPeriod } from "@/types";
+import type { WorkLog, Task, ReportAutoMetrics, ReportPeriod, StaffBreakdownEntry, Attendance, Staff } from "@/types";
 
 /**
  * Computes auto-metrics for a department in a given period.
@@ -57,6 +57,58 @@ export async function computeDepartmentMetrics(
       coverageRate,
     },
   };
+}
+
+/**
+ * Computes staff-level breakdown for a department in a given period.
+ * Returns per-staff attendance counts, completed tasks, and work log hours.
+ */
+export async function computeStaffBreakdown(
+  departmentId: string,
+  startDate: string,
+  endDate: string
+): Promise<StaffBreakdownEntry[]> {
+  const [staff, attendance, tasks, workLogs] = await Promise.all([
+    getDocuments<Staff>("staff", [where("departmentId", "==", departmentId), where("isActive", "==", true)]),
+    getDocuments<Attendance>("attendance", [where("departmentId", "==", departmentId)]),
+    getDocuments<Task>("tasks", [where("departmentId", "==", departmentId)]),
+    getDocuments<WorkLog>("work_logs", [where("departmentId", "==", departmentId)]),
+  ]);
+
+  const breakdown: StaffBreakdownEntry[] = staff.map((s) => {
+    // Filter attendance for this staff member in the period
+    const staffAttendance = attendance.filter((a) => {
+      if (a.staffId !== s.id) return false;
+      const attDate = a.date instanceof Object && "toDate" in a.date ? a.date.toDate().toISOString().split("T")[0] : a.date;
+      return attDate >= startDate && attDate <= endDate;
+    });
+    const present = staffAttendance.filter((a) => a.status === "present").length;
+    const late = staffAttendance.filter((a) => a.status === "late").length;
+    const absent = staffAttendance.filter((a) => a.status === "absent").length;
+    const leaves = staffAttendance.filter((a) => ["leave", "wfh", "on-duty"].includes(a.status)).length;
+
+    // Filter tasks completed by this staff member in the period
+    const staffTasks = tasks.filter((t) => t.assigneeId === s.id && t.status === "done" && t.completedAt);
+    const tasksCompleted = staffTasks.filter((t) => {
+      if (!t.completedAt) return false;
+      const completedDate = t.completedAt.toDate?.() ? t.completedAt.toDate().toISOString().split("T")[0] : "";
+      return completedDate >= startDate && completedDate <= endDate;
+    }).length;
+
+    // Sum work log hours for this staff member in the period
+    const staffLogs = workLogs.filter((l) => l.staffId === s.id && l.date >= startDate && l.date <= endDate);
+    const workLogHours = staffLogs.reduce((sum, l) => sum + (l.totalHours || 0), 0);
+
+    return {
+      staffId: s.id || "",
+      staffName: `${s.firstName} ${s.lastName}`,
+      attendance: { present, late, absent, leaves },
+      tasksCompleted,
+      workLogHours: Math.round(workLogHours * 10) / 10,
+    };
+  });
+
+  return breakdown;
 }
 
 /**

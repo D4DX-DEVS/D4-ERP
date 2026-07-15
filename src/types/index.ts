@@ -1013,7 +1013,7 @@ export interface StudioEquipment extends BaseDocument {
 
 // ==================== Department Reports ====================
 export type ReportPeriod = "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
-export type ReportStatus = "draft" | "published";
+export type ReportStatus = "draft" | "submitted" | "published";
 
 export interface CustomKPI {
   label: string;
@@ -1031,6 +1031,15 @@ export interface ReportAutoMetrics {
   revenue?: { invoiced: number; received: number; pending: number };
 }
 
+export interface StaffBreakdownEntry {
+  staffId: string;
+  staffName: string;
+  attendance: { present: number; late: number; absent: number; leaves: number };
+  tasksCompleted: number;
+  workLogHours: number;
+  remarks?: string;
+}
+
 export interface DepartmentReport extends BaseDocument {
   departmentId: string;
   departmentName: string;
@@ -1045,6 +1054,9 @@ export interface DepartmentReport extends BaseDocument {
   generatedAt: Timestamp;
   status: ReportStatus;
   remarks?: string;
+  staffBreakdown?: StaffBreakdownEntry[];
+  submittedAt?: Timestamp;
+  submittedBy?: string;
 }
 
 export interface CompanyReport extends BaseDocument {
