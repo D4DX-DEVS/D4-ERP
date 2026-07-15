@@ -37,6 +37,11 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 
 const isPresentLike = (s?: string) => s === "present" || s === "late" || s === "wfh" || s === "on-duty";
 
+// Local-date key (YYYY-MM-DD). Never toISOString here: that shifts IST
+// records stored at local midnight onto the previous UTC day.
+const localDateKey = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
 export default function AttendanceReportsPage() {
   const { user, authorized, isLoading } = useRoleGuard(["admin", "department-head", "accounts"]);
 
@@ -166,7 +171,7 @@ export default function AttendanceReportsPage() {
     const byDay = new Map<string, Rec[]>();
     for (const r of scopedRecords) {
       const sec = (r.date as { seconds?: number } | undefined)?.seconds ?? 0;
-      const key = new Date(sec * 1000).toISOString().split("T")[0];
+      const key = localDateKey(new Date(sec * 1000));
       if (!byDay.has(key)) byDay.set(key, []);
       byDay.get(key)!.push(r);
     }
@@ -213,7 +218,7 @@ export default function AttendanceReportsPage() {
     const map = new Map<string, Rec>();
     for (const r of scopedRecords) {
       const sec = (r.date as { seconds?: number } | undefined)?.seconds ?? 0;
-      const key = new Date(sec * 1000).toISOString().split("T")[0];
+      const key = localDateKey(new Date(sec * 1000));
       map.set(`${r.staffId}_${key}`, r);
     }
     return map;

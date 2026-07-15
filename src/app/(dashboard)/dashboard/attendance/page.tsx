@@ -73,7 +73,12 @@ const timeStr = (ts: unknown): string => {
   return s ? new Date(s * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
 };
 
-const dateKeyFromSec = (s: number): string => new Date(s * 1000).toISOString().split("T")[0];
+// Local-date key (YYYY-MM-DD). Never toISOString here: that shifts IST
+// records stored at local midnight onto the previous UTC day.
+const localDateKey = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const dateKeyFromSec = (s: number): string => localDateKey(new Date(s * 1000));
 
 const fullName = (s?: Staff) => (s ? `${s.firstName} ${s.lastName}` : "Unknown");
 
@@ -323,7 +328,7 @@ export default function AttendanceRegisterPage() {
     return map;
   }, [records]);
 
-  const todayKey = new Date().toISOString().split("T")[0];
+  const todayKey = localDateKey(new Date());
 
   const dayMeta = useMemo(() => {
     const holidayMap = new Map(holidays.map((h) => [h.date, h.name]));
@@ -785,11 +790,11 @@ export default function AttendanceRegisterPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Check In</label>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Check In (optional)</label>
                 <Input type="time" value={editCheckIn} onChange={(e) => setEditCheckIn(e.target.value)} />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Check Out</label>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Check Out (optional)</label>
                 <Input type="time" value={editCheckOut} onChange={(e) => setEditCheckOut(e.target.value)} />
               </div>
             </div>
