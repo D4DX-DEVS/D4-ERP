@@ -153,6 +153,7 @@ export const navigationModules: NavModule[] = [
       { label: "Staff", href: "/dashboard/staff", roles: ["admin", "department-head"] },
       { label: "Leave Requests", href: "/dashboard/leaves", roles: ["admin", "department-head"] },
       { label: "Payroll", href: "/dashboard/payroll", roles: ["admin", "accounts"] },
+      { label: "Certificates", href: "/dashboard/staff/certificates", roles: ["admin"] },
     ],
     subGroups: [
       {

@@ -1091,6 +1091,28 @@ export interface NavigationConfig extends BaseDocument {
   dashboardWidgets?: Partial<Record<StaffRole, string[]>>;
 }
 
+// ==================== Certificates / Letter Templates ====================
+export interface CertificateTemplate extends BaseDocument {
+  key: string;
+  name: string;
+  bodyHtml: string;
+  logoUrl?: string;
+  signatureUrl?: string;
+  signatoryName?: string;
+}
+
+export interface IssuedLetter extends BaseDocument {
+  templateKey: string;
+  templateName: string;
+  staffId: string;
+  staffName: string;
+  designation?: string;
+  values: Record<string, string>;
+  fileUrl?: string;
+  issuedBy: string;
+  issuedByName?: string;
+}
+
 // ==================== Auth ====================
 export interface AuthUser {
   uid: string;
