@@ -126,6 +126,7 @@ export const navigationModules: NavModule[] = [
       { label: "My Leaves", href: "/staff-portal/my-leaves", roles: ["staff"] },
       { label: "Attendance", href: "/staff-portal/attendance", roles: ["staff"] },
       { label: "My Tasks", href: "/staff-portal/my-tasks", roles: ["staff"] },
+      { label: "Team Board", href: "/staff-portal/tasks", roles: ["staff"] },
       { label: "Work Log", href: "/staff-portal/work-log", roles: ["staff"] },
       { label: "Calendar", href: "/staff-portal/calendar", icon: Calendar, roles: ["staff"] },
       { label: "Holidays", href: "/staff-portal/holidays", roles: ["staff"] },

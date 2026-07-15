@@ -79,6 +79,7 @@ export default function TasksPage() {
   const [form, setForm] = useState(emptyForm);
   const [subtasks, setSubtasks] = useState<{ title: string; isCompleted: boolean }[]>([]);
   const [newSubtask, setNewSubtask] = useState("");
+  const [completionPercentage, setCompletionPercentage] = useState(0);
 
   const fetchData = async () => {
     try {
@@ -124,6 +125,7 @@ export default function TasksPage() {
       tags: (task.tags ?? []).join(", "),
     });
     setSubtasks(task.subtasks ?? []);
+    setCompletionPercentage(task.completionPercentage ?? 0);
     setNewSubtask("");
     setDialogOpen(true);
   };
@@ -143,6 +145,7 @@ export default function TasksPage() {
         dueDate: form.dueDate ? Timestamp.fromDate(new Date(form.dueDate)) : Timestamp.now(),
         subtasks,
         tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+        completionPercentage,
       };
       if (editingId) {
         await updateDocument("tasks", editingId, {
@@ -162,9 +165,9 @@ export default function TasksPage() {
       setEditingId(null);
       setForm(emptyForm);
       setSubtasks([]);
+      setCompletionPercentage(0);
       void fetchData();
     } catch (error) {
-      console.error("Error:", error);
       toast("error", editingId ? "Failed to update task" : "Failed to create task");
     } finally {
       setSaving(false);
@@ -660,6 +663,36 @@ export default function TasksPage() {
               />
               <Button type="button" variant="outline" onClick={addSubtask}>Add</Button>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Progress (%)</Label>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={completionPercentage}
+                onChange={(e) => setCompletionPercentage(parseInt(e.target.value, 10))}
+                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
+              />
+              <span className="inline-flex h-8 w-12 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-700">
+                {completionPercentage}%
+              </span>
+            </div>
+            {subtasks.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const completed = subtasks.filter((s) => s.isCompleted).length;
+                  setCompletionPercentage(subtasks.length ? Math.round((completed / subtasks.length) * 100) : 0);
+                }}
+                className="text-xs text-teal-600 hover:text-teal-700 font-medium"
+              >
+                Sync from subtasks
+              </button>
+            )}
           </div>
 
           <div className="space-y-2">
