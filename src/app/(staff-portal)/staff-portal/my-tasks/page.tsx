@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
-import { getDocuments, updateDocument, where } from "@/lib/firestore";
+import { getDocuments, where } from "@/lib/firestore";
+import { changeTaskStatus } from "@/lib/tasks";
+import { useToast } from "@/components/ui/toast";
 import { Task } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,7 @@ const priorityColors: Record<string, string> = {
 
 export default function MyTasksPage() {
   const { user } = useAuthStore();
+  const { toast } = useToast();
   const [tasks, setTasks] = useState<(Task & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -75,9 +78,14 @@ export default function MyTasksPage() {
     };
   }, [user]);
 
-  const handleStatusChange = async (taskId: string, status: Task["status"]) => {
-    await updateDocument("tasks", taskId, { status });
-    fetchTasks();
+  const handleStatusChange = async (task: Task & { id: string }, status: Task["status"]) => {
+    if (!user) return;
+    try {
+      await changeTaskStatus(task, status, user);
+      fetchTasks();
+    } catch (error) {
+      toast("error", error instanceof Error ? error.message : "Failed to update status");
+    }
   };
 
   if (loading) return <PageLoader />;
@@ -150,12 +158,13 @@ export default function MyTasksPage() {
                         <Button variant="ghost" size="icon" onClick={() => router.push(detailHref)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        {task.status !== "in-progress" ? (
-                          <Button size="sm" variant="outline" onClick={() => handleStatusChange(task.id, "in-progress")}>Start</Button>
+                        {task.status === "todo" ? (
+                          <Button size="sm" variant="outline" onClick={() => handleStatusChange(task, "in-progress")}>Start</Button>
+                        ) : task.status === "in-progress" ? (
+                          <Button size="sm" className="bg-amber-600 hover:bg-amber-700" onClick={() => handleStatusChange(task, "review")}>Submit for Review</Button>
                         ) : (
-                          <Button size="sm" variant="outline" onClick={() => handleStatusChange(task.id, "review")}>Submit</Button>
+                          <Button size="sm" variant="outline" onClick={() => handleStatusChange(task, "in-progress")}>Pull Back</Button>
                         )}
-                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => handleStatusChange(task.id, "done")}>Done</Button>
                       </div>
                     </TableCell>
                   </TableRow>

@@ -12,6 +12,8 @@ import {
   DEPT_SCOPED_BY_STAFF,
 } from "@/lib/db-authz";
 import type { TokenPayload } from "@/lib/auth";
+import { canTransitionTask, transitionNeedsRemark } from "@/lib/task-workflow";
+import type { StaffRole, TaskStatus } from "@/types";
 
 // ── Timestamp helpers ─────────────────────────────────────────────────────────
 
@@ -248,6 +250,49 @@ async function guardRequestUpdate(
   return null;
 }
 
+/**
+ * Guard writes to tasks (review-gated workflow): status moves must pass
+ * canTransitionTask for the caller's role; staff may only touch their own
+ * tasks. Admin unrestricted. Returns error message or null.
+ */
+async function guardTaskUpdate(
+  user: TokenPayload,
+  id: string,
+  data: Record<string, unknown>
+): Promise<string | null> {
+  if (user.role === "admin") return null;
+  const Model = getModel("tasks");
+  const doc = (await Model.findById(id).lean()) as Record<string, unknown> | null;
+  if (!doc) return null; // let the update no-op
+
+  const isAssignee = doc.assigneeId === user.uid;
+  if (user.role === "staff" && !isAssignee) {
+    return "You may only update tasks assigned to you.";
+  }
+  if (user.role === "department-head" && !isAssignee) {
+    const deptId = await callerDepartmentId(user);
+    if (doc.departmentId && deptId && doc.departmentId !== deptId) {
+      return "You may only act on your own department's tasks.";
+    }
+  }
+
+  if ("status" in data && data.status !== doc.status) {
+    const from = doc.status as TaskStatus;
+    const to = data.status as TaskStatus;
+    if (!canTransitionTask(user.role as StaffRole, isAssignee, from, to)) {
+      return `Status change ${from} → ${to} is not allowed for your role.`;
+    }
+    if (transitionNeedsRemark(from, to) && !isAssignee) {
+      const history = data.statusHistory as { remarks?: string }[] | undefined;
+      const last = history?.[history.length - 1];
+      if (!last?.remarks?.trim()) {
+        return "A reason is required when returning a task from review.";
+      }
+    }
+  }
+  return null;
+}
+
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -318,6 +363,12 @@ export async function POST(req: NextRequest) {
         const data = tsToDate(rawData) as Record<string, unknown>;
         if (collectionName === "leaveRequests") {
           const deniedUpdate = await guardRequestUpdate(user, id, data);
+          if (deniedUpdate) {
+            return NextResponse.json({ error: deniedUpdate }, { status: 403 });
+          }
+        }
+        if (collectionName === "tasks") {
+          const deniedUpdate = await guardTaskUpdate(user, id, data);
           if (deniedUpdate) {
             return NextResponse.json({ error: deniedUpdate }, { status: 403 });
           }

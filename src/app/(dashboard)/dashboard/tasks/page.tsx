@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { Task, Staff, Department } from "@/types";
 import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
+import { changeTaskStatus } from "@/lib/tasks";
+import { canTransitionTask, transitionNeedsRemark } from "@/lib/task-workflow";
+import { createNotification } from "@/lib/notifications";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,6 +83,8 @@ export default function TasksPage() {
   const [subtasks, setSubtasks] = useState<{ title: string; isCompleted: boolean }[]>([]);
   const [newSubtask, setNewSubtask] = useState("");
   const [completionPercentage, setCompletionPercentage] = useState(0);
+  const [returnTarget, setReturnTarget] = useState<TaskDoc | null>(null);
+  const [returnRemark, setReturnRemark] = useState("");
 
   const fetchData = async () => {
     try {
@@ -148,17 +153,29 @@ export default function TasksPage() {
         completionPercentage,
       };
       if (editingId) {
-        await updateDocument("tasks", editingId, {
-          ...payload,
-          ...(form.status === "done" ? { completedAt: Timestamp.now() } : {}),
-        });
+        // Status moves go through the workflow helper (history + guards) — not the edit form.
+        const editPayload: Record<string, unknown> = { ...payload };
+        delete editPayload.status;
+        await updateDocument("tasks", editingId, editPayload);
         toast("success", "Task updated successfully");
       } else {
-        await createDocument("tasks", {
+        const id = await createDocument("tasks", {
           ...payload,
           assignedBy: user?.staffId || "",
           createdBy: user?.staffId || "",
         });
+        if (form.assigneeId && form.assigneeId !== user?.staffId) {
+          void createNotification({
+            recipientId: form.assigneeId,
+            type: "task",
+            title: "New task assigned",
+            message: `You have been assigned "${payload.title}".`,
+            link: `/staff-portal/my-tasks/${id}`,
+            entityId: id,
+            entityType: "task",
+            senderName: user ? `${user.firstName} ${user.lastName}` : undefined,
+          });
+        }
         toast("success", "Task created successfully");
       }
       setDialogOpen(false);
@@ -174,21 +191,32 @@ export default function TasksPage() {
     }
   };
 
-  const handleStatusChange = async (taskId: string, newStatus: Task["status"]) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task || task.status === newStatus) return;
+  const applyStatusChange = async (task: TaskDoc, newStatus: Task["status"], remarks?: string) => {
+    if (!user) return;
     // Optimistic update for snappy drag-and-drop
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)));
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t)));
     try {
-      await updateDocument("tasks", taskId, {
-        status: newStatus,
-        ...(newStatus === "done" ? { completedAt: Timestamp.now() } : {}),
-      });
+      const update = await changeTaskStatus(task, newStatus, user, remarks);
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...update } : t)));
     } catch (error) {
-      console.error("Error:", error);
-      toast("error", "Failed to update task status");
+      toast("error", error instanceof Error ? error.message : "Failed to update task status");
       void fetchData();
     }
+  };
+
+  const handleStatusChange = (taskId: string, newStatus: Task["status"]) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.status === newStatus || !user) return;
+    if (!canTransitionTask(user.role, task.assigneeId === user.staffId, task.status, newStatus)) {
+      toast("error", "That status change is not allowed for your role.");
+      return;
+    }
+    if (transitionNeedsRemark(task.status, newStatus) && task.assigneeId !== user.staffId) {
+      setReturnTarget(task);
+      setReturnRemark("");
+      return;
+    }
+    void applyStatusChange(task, newStatus);
   };
 
   const handleDelete = async () => {
@@ -543,7 +571,13 @@ export default function TasksPage() {
                         value={task.status}
                         onChange={(e) => void handleStatusChange(task.id, e.target.value as Task["status"])}
                         className="w-full min-w-[140px]"
-                        options={statusColumns.map((c) => ({ value: c.key, label: c.label }))}
+                        options={statusColumns
+                          .filter(
+                            (c) =>
+                              c.key === task.status ||
+                              (user && canTransitionTask(user.role, task.assigneeId === user.staffId, task.status, c.key as Task["status"]))
+                          )
+                          .map((c) => ({ value: c.key, label: c.label }))}
                       />
                     </TableCell>
                     <TableCell>
@@ -628,8 +662,14 @@ export default function TasksPage() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Status</Label>
-              <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Task["status"] })}
-                options={statusColumns.map((c) => ({ value: c.key, label: c.label }))} />
+              {editingId ? (
+                <p className="flex h-10 items-center rounded-xl border border-slate-200/70 bg-slate-50/60 px-3 text-sm text-slate-500">
+                  {statusColumns.find((c) => c.key === form.status)?.label} — change from the board
+                </p>
+              ) : (
+                <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Task["status"] })}
+                  options={statusColumns.map((c) => ({ value: c.key, label: c.label }))} />
+              )}
             </div>
             <div className="space-y-2">
               <Label>Due Date *</Label>
@@ -736,6 +776,36 @@ export default function TasksPage() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      <Dialog open={!!returnTarget} onClose={() => setReturnTarget(null)}>
+        <DialogHeader>
+          <DialogTitle>Return Task from Review</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Tell {returnTarget?.assigneeName || "the assignee"} what needs fixing on “{returnTarget?.title}”. This is posted as a comment.
+          </p>
+          <Textarea
+            value={returnRemark}
+            onChange={(e) => setReturnRemark(e.target.value)}
+            placeholder="e.g. Fix mobile alignment, validation missing on the form"
+            rows={3}
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setReturnTarget(null)}>Cancel</Button>
+            <Button
+              disabled={!returnRemark.trim()}
+              onClick={() => {
+                if (!returnTarget) return;
+                void applyStatusChange(returnTarget, "in-progress", returnRemark.trim());
+                setReturnTarget(null);
+              }}
+            >
+              Return Task
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

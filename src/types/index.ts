@@ -466,6 +466,15 @@ export interface CalendarEvent extends BaseDocument {
 export type TaskStatus = "todo" | "in-progress" | "review" | "done";
 export type TaskPriority = "low" | "medium" | "high" | "urgent";
 
+export interface TaskStatusChange {
+  status: TaskStatus;
+  by: string;
+  byName?: string;
+  at: Timestamp;
+  /** Required when a reviewer returns the task (review → in-progress). */
+  remarks?: string;
+}
+
 export interface Task extends BaseDocument {
   title: string;
   description?: string;
@@ -480,6 +489,12 @@ export interface Task extends BaseDocument {
   clientId?: string;
   dueDate: Timestamp;
   completedAt?: Timestamp;
+  /** Who approved review → done. */
+  completedBy?: string;
+  reviewedBy?: string;
+  reviewedAt?: Timestamp;
+  /** Append-only trail of status transitions (ClickUp-style timeline). */
+  statusHistory?: TaskStatusChange[];
   subtasks: { title: string; isCompleted: boolean }[];
   tags: string[];
   /** Percentage completion (0-100). */

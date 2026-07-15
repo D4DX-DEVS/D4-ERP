@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Task, Staff } from "@/types";
-import { getDocuments, updateDocument, orderBy, where, Timestamp } from "@/lib/firestore";
+import { getDocuments, updateDocument, orderBy, where } from "@/lib/firestore";
+import { changeTaskStatus } from "@/lib/tasks";
+import { canTransitionTask, transitionNeedsRemark } from "@/lib/task-workflow";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -99,24 +101,19 @@ export default function TeamTasksPage() {
   };
 
   const handleStatusChange = async (task: TaskDoc, newStatus: Task["status"]) => {
-    if (!isAssignee(task)) return;
+    if (!user) return;
+    if (transitionNeedsRemark(task.status, newStatus) && !isAssignee(task)) {
+      toast("error", "Open the task in My Tasks to return it with a reason.");
+      return;
+    }
     setSaving(true);
     try {
-      await updateDocument("tasks", task.id, {
-        status: newStatus,
-        ...(newStatus === "done" ? { completedAt: Timestamp.now() } : {}),
-      });
-      setSelectedTask((prev) =>
-        prev ? { ...prev, status: newStatus, ...(newStatus === "done" ? { completedAt: Timestamp.now() } : {}) } : null
-      );
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === task.id ? { ...t, status: newStatus, ...(newStatus === "done" ? { completedAt: Timestamp.now() } : {}) } : t
-        )
-      );
+      const update = await changeTaskStatus(task, newStatus, user);
+      setSelectedTask((prev) => (prev && prev.id === task.id ? { ...prev, ...update } : prev));
+      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...update } : t)));
       toast("success", "Status updated");
     } catch (error) {
-      toast("error", "Failed to update status");
+      toast("error", error instanceof Error ? error.message : "Failed to update status");
     } finally {
       setSaving(false);
     }
@@ -385,21 +382,27 @@ export default function TeamTasksPage() {
                 <div className="rounded-lg border border-slate-200/70 bg-slate-50/50 p-3">
                   <p className="text-xs font-medium text-slate-500 uppercase tracking-[0.1em]">Status</p>
                   <div className="mt-2 space-y-2">
-                    {isAssignee(selectedTask) ? (
+                    {user && statusColumns.some((col) => canTransitionTask(user.role, isAssignee(selectedTask), selectedTask.status, col.key as Task["status"])) ? (
                       <div className="space-y-1">
-                        {statusColumns.map((col) => (
-                          <Button
-                            key={col.key}
-                            type="button"
-                            variant={selectedTask.status === col.key ? "default" : "outline"}
-                            className="w-full justify-start text-xs"
-                            disabled={saving}
-                            onClick={() => handleStatusChange(selectedTask, col.key as Task["status"])}
-                          >
-                            <span className={cn("h-2 w-2 rounded-full mr-2", col.dot)} />
-                            {col.label}
-                          </Button>
-                        ))}
+                        {statusColumns
+                          .filter(
+                            (col) =>
+                              col.key === selectedTask.status ||
+                              canTransitionTask(user.role, isAssignee(selectedTask), selectedTask.status, col.key as Task["status"])
+                          )
+                          .map((col) => (
+                            <Button
+                              key={col.key}
+                              type="button"
+                              variant={selectedTask.status === col.key ? "default" : "outline"}
+                              className="w-full justify-start text-xs"
+                              disabled={saving || selectedTask.status === col.key}
+                              onClick={() => handleStatusChange(selectedTask, col.key as Task["status"])}
+                            >
+                              <span className={cn("h-2 w-2 rounded-full mr-2", col.dot)} />
+                              {col.label}
+                            </Button>
+                          ))}
                       </div>
                     ) : (
                       <p className="text-sm text-slate-700 font-medium">
