@@ -196,7 +196,7 @@ export function Sidebar() {
                 />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Media ERP</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">D4Media ERP</p>
                 <p className="text-sm font-semibold tracking-[-0.03em] text-slate-950">Admin Console</p>
               </div>
             </Link>
