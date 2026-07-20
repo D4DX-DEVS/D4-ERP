@@ -191,7 +191,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   invoicePrefix: "INV",
   quotationPrefix: "QTN",
   numberFormats: {
-    quotation: "QTN-{COMP}/{YYYY}/{SEQ:3}",
+    quotation: "D4-Q-{SEQ:3}",
     estimate: "EST-{COMP}-{YYYY}/{SEQ:3}",
     invoice: "D4-{SEQ:3}",
     receipt: "RCPT-{COMP}/{YYYY}/{SEQ:3}",
@@ -237,6 +237,10 @@ export function normalizeSettings(raw?: Partial<AppSettings> | null): AppSetting
   // existing settings docs pick it up without a manual edit. Custom formats are kept.
   if (numberFormats.invoice === "INV-{COMP}/{YYYY}/{SEQ:3}") {
     numberFormats.invoice = DEFAULT_SETTINGS.numberFormats.invoice;
+  }
+  // ponytail: same auto-upgrade for the legacy quotation format -> clean D4-Q series.
+  if (numberFormats.quotation === "QTN-{COMP}/{YYYY}/{SEQ:3}") {
+    numberFormats.quotation = DEFAULT_SETTINGS.numberFormats.quotation;
   }
 
   return {

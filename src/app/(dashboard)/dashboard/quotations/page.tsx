@@ -76,7 +76,7 @@ export default function QuotationsPage() {
     isInterState: false,
     discount: { type: "fixed" as "fixed" | "percentage", value: 0 },
     notes: "",
-    terms: "This quotation is valid for 30 days from the date of issue.",
+    terms: "This quotation is valid for 7 days from the date of issue.",
   });
 
   useEffect(() => {
@@ -112,7 +112,9 @@ export default function QuotationsPage() {
 
   const updateItem = (idx: number, field: string, value: string | number) => {
     const newItems = [...form.items];
-    (newItems[idx] as Record<string, unknown>)[field] = value;
+    // ponytail: qty/rate can never be negative; clamp at the state boundary so no input path can sneak one in.
+    const next = field === "quantity" || field === "rate" ? Math.max(0, Number(value) || 0) : value;
+    (newItems[idx] as Record<string, unknown>)[field] = next;
     if (field === "quantity" || field === "rate") {
       newItems[idx].amount = newItems[idx].quantity * newItems[idx].rate;
     }
@@ -226,8 +228,8 @@ export default function QuotationsPage() {
         setEditingId(null);
         toast("success", "Quotation updated successfully");
       } else {
-        const prefix = "QTN";
-        const number = `${prefix}-${Timestamp.now().seconds.toString(36).toUpperCase()}`;
+        const company = companies.find((c) => c.id === form.companyId) ?? null;
+        const number = await generateDocNumber({ series: "quotation", company });
         await createDocument("invoices", {
           type: "quotation",
           invoiceNumber: number,
@@ -247,7 +249,7 @@ export default function QuotationsPage() {
         items: [{ description: "", quantity: 1, rate: 0, amount: 0, sacCode: "", subDescription: "" }],
         taxType: "gst", gstRate: 18, isInterState: false,
         discount: { type: "fixed", value: 0 }, notes: "",
-        terms: "This quotation is valid for 30 days from the date of issue.",
+        terms: "This quotation is valid for 7 days from the date of issue.",
       });
       refresh();
     } catch (error) {
@@ -283,6 +285,8 @@ export default function QuotationsPage() {
         paidAmount: 0,
         balanceAmount: quotation.totalAmount,
         convertedFrom: quotation.id,
+        // ponytail: quotation T&C ("valid for N days") is nonsense on an invoice; swap for invoice terms.
+        terms: "Payment is due within 7 days of the invoice date.",
         date: Timestamp.now(),
         createdAt: Timestamp.now(),
       });
@@ -372,8 +376,8 @@ export default function QuotationsPage() {
                     <div key={idx} className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-3 space-y-2">
                       <div className="grid grid-cols-12 items-end gap-2">
                         <Input className="col-span-5" placeholder="Description" value={item.description} onChange={(e) => updateItem(idx, "description", e.target.value)} />
-                        <Input className="col-span-2" type="number" placeholder="Qty" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} />
-                        <Input className="col-span-2" type="number" placeholder="Rate" value={item.rate} onChange={(e) => updateItem(idx, "rate", Number(e.target.value))} />
+                        <Input className="col-span-2" type="number" min={0} onKeyDown={(e) => { if (e.key === "-") e.preventDefault(); }} placeholder="Qty" value={item.quantity} onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))} />
+                        <Input className="col-span-2" type="number" min={0} onKeyDown={(e) => { if (e.key === "-") e.preventDefault(); }} placeholder="Rate" value={item.rate} onChange={(e) => updateItem(idx, "rate", Number(e.target.value))} />
                         <div className="col-span-2 pt-2 text-right text-sm font-medium">{formatCurrency(item.amount)}</div>
                         <Button variant="ghost" size="sm" className="col-span-1" onClick={() => removeItem(idx)}>
                           <Trash2 className="h-4 w-4 text-red-400" />

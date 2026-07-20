@@ -36,6 +36,8 @@ const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLI
             setFocused(false);
             onBlur?.(e);
           }}
+          // ponytail: scroll wheel silently mutating the value is never wanted; blur on wheel kills it.
+          onWheel={(e) => e.currentTarget.blur()}
           onChange={(e) => {
             setText(e.target.value);
             onChange?.(e);
