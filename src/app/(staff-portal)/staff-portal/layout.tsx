@@ -24,6 +24,40 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
+import { hasFeature, FEATURES, type FeatureKey, type PortalSection } from "@/lib/permissions";
+import { useAuthRefresh } from "@/hooks/use-auth-refresh";
+import { Receipt, Wallet, Package, Box, Clapperboard, Users, BarChart3 } from "lucide-react";
+
+// Granted modules render inside the portal shell (routes re-export the
+// dashboard pages). Nav derives from the feature registry: a link shows only
+// when the feature is granted; empty sections disappear.
+const MODULE_ICONS: Partial<Record<FeatureKey, typeof Wallet>> = {
+  "studio-booking": Clapperboard,
+  events: CalendarDays,
+  "asset-management": Box,
+  clients: Users,
+  tasks: ClipboardList,
+  "work-logs": Pencil,
+  accounting: Wallet,
+  quotations: FileText,
+  invoices: Receipt,
+  items: Package,
+  payroll: Wallet,
+  reports: BarChart3,
+};
+
+const SECTION_ORDER: PortalSection[] = ["Operations", "Work", "Finance", "Insights"];
+
+const portalModules = FEATURES.filter((f) => f.portal).map((f) => ({
+  feature: f.key,
+  section: f.portal!.section,
+  href: f.portal!.href,
+  label: f.portal!.label ?? f.label,
+  icon: MODULE_ICONS[f.key] ?? Wallet,
+}));
+
+// Longest prefix first so /staff-portal/tasks/work-logs resolves to work-logs, not tasks.
+const guardOrder = [...portalModules].sort((a, b) => b.href.length - a.href.length);
 
 const navItems = [
   { href: "/staff-portal", label: "Home", icon: Home },
@@ -56,11 +90,24 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
 
+  // Pick up grant changes without re-login (revoked features disappear + guard kicks in).
+  useAuthRefresh();
+
   useEffect(() => {
     setMoreOpen(false);
   }, [pathname]);
 
-  const currentItem = navItems.find((item) => pathname === item.href) ?? navItems[0];
+  const grantedModules = portalModules.filter((m) => hasFeature(user, m.feature));
+  const grantedSections = SECTION_ORDER.map((section) => ({
+    section,
+    modules: grantedModules.filter((m) => m.section === section),
+  })).filter((s) => s.modules.length > 0);
+  // Longest matching prefix wins so /tasks/work-logs doesn't also light up /tasks.
+  const activeModuleHref = guardOrder.find((m) => pathname?.startsWith(m.href))?.href;
+  const currentItem =
+    navItems.find((item) => pathname === item.href) ??
+    guardOrder.filter((m) => hasFeature(user, m.feature)).find((m) => pathname?.startsWith(m.href)) ??
+    navItems[0];
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -71,6 +118,13 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
       router.push("/dashboard");
     }
   }, [user, isLoading, router]);
+
+  // Feature guard: portal module routes need the matching grant.
+  useEffect(() => {
+    if (isLoading || !user) return;
+    const mod = guardOrder.find((m) => pathname?.startsWith(m.href));
+    if (mod && !hasFeature(user, mod.feature)) router.replace("/staff-portal");
+  }, [user, isLoading, pathname, router]);
 
   useEffect(() => {
     if (!user) return;
@@ -149,6 +203,36 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
               </Link>
             );
           })}
+
+          {grantedSections.map(({ section, modules }) => (
+            <div key={section}>
+              <p className="px-3.5 pb-1 pt-4 text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{section}</p>
+              {modules.map((item) => {
+                const isActive = item.href === activeModuleHref;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "group flex items-center gap-3 rounded-[20px] px-3.5 py-2.5 text-sm font-medium transition-all",
+                      isActive
+                        ? "bg-slate-950 text-white shadow-[0_16px_36px_rgba(15,23,42,0.18)]"
+                        : "text-slate-600 hover:bg-white/70 hover:text-slate-950"
+                    )}
+                  >
+                    <span className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-2xl transition-colors",
+                      isActive ? "bg-white/10 text-white" : "bg-white/80 text-slate-500 group-hover:text-slate-950"
+                    )}>
+                      <item.icon className="h-4.5 w-4.5" />
+                    </span>
+                    <span className="flex-1">{item.label}</span>
+                    <ArrowUpRight className={cn("h-4 w-4", isActive ? "text-white/70" : "text-slate-300 group-hover:text-slate-500")} />
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="border-t border-slate-200/70 p-4">
@@ -210,6 +294,32 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200" />
+            {grantedSections.map(({ section, modules }) => (
+              <div key={section}>
+                <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{section}</p>
+                <div className="mb-3 grid grid-cols-3 gap-2">
+                  {modules.map((item) => {
+                    const isActive = item.href === activeModuleHref;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3 text-xs font-medium",
+                          isActive ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-600"
+                        )}
+                      >
+                        <item.icon className="h-5 w-5" />
+                        <span className="whitespace-nowrap">{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+            {grantedSections.length > 0 && (
+              <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">More</p>
+            )}
             <div className="grid grid-cols-3 gap-2">
               {moreItems.map((item) => {
                 const isActive = pathname === item.href;

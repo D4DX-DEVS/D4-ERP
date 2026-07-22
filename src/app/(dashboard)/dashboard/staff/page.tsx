@@ -776,17 +776,21 @@ export default function StaffPage() {
                   {FEATURES.map((f) => {
                     const auto = roleHasFeature(form.role, f.key);
                     const granted = form.grantedFeatures.includes(f.key);
+                    // Features without a portal module are department-management
+                    // tools: no defined extra-grant behavior outside their
+                    // default roles, so don't let admins tick a dead checkbox.
+                    const unsupported = !auto && !f.portal;
                     return (
                       <label
                         key={f.key}
-                        className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                          auto ? "bg-teal-50/50 border-teal-200" : granted ? "border-teal-500 bg-teal-50/30" : "hover:bg-gray-50"
+                        className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
+                          auto ? "bg-teal-50/50 border-teal-200" : granted ? "border-teal-500 bg-teal-50/30" : unsupported ? "opacity-60" : "cursor-pointer hover:bg-gray-50"
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={auto || granted}
-                          disabled={auto}
+                          disabled={auto || unsupported}
                           onChange={() => toggleGrantedFeature(f.key)}
                           className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
                         />
@@ -796,6 +800,11 @@ export default function StaffPage() {
                             {auto && (
                               <span className="ml-2 text-[10px] uppercase tracking-wider text-teal-600 bg-teal-100 px-1.5 py-0.5 rounded">
                                 Role default
+                              </span>
+                            )}
+                            {unsupported && (
+                              <span className="ml-2 text-[10px] uppercase tracking-wider text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                                Dept-management role only
                               </span>
                             )}
                           </p>

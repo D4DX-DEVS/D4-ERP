@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -54,6 +55,7 @@ const statusColors: Record<string, string> = {
 export default function AssetEventsPage() {
   const { user } = useAuthStore();
   const router = useRouter();
+  const base = useWorkspaceBase();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -195,7 +197,7 @@ export default function AssetEventsPage() {
         logAssetActivity({ userName: user?.firstName || "System", action: "CREATE", module: "Events", resourceId: id, details: `Created event "${form.name}"` });
         setDialogOpen(false);
         // Auto-redirect to event detail page (Step 2 of workflow)
-        router.push(`/dashboard/assets/events/${id}`);
+        router.push(`${base}/assets/events/${id}`);
       }
     } catch (error) {
       console.error("Error:", error);
@@ -430,7 +432,7 @@ export default function AssetEventsPage() {
                     <div>
                       <p className="font-medium">{event.name}</p>
                       <button
-                        onClick={() => router.push(`/dashboard/assets/events/${event.id}`)}
+                        onClick={() => router.push(`${base}/assets/events/${event.id}`)}
                         className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 mt-0.5 font-medium"
                       >
                         Manage Assets <ArrowRight className="w-3 h-3" />
@@ -483,7 +485,7 @@ export default function AssetEventsPage() {
                       <button onClick={() => downloadEventReport(event, "pdf")} title="Download PDF" className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                         <FileText className="w-4 h-4" />
                       </button>
-                      <Button variant="ghost" size="icon" onClick={() => router.push(`/dashboard/assets/events/${event.id}`)}>
+                      <Button variant="ghost" size="icon" onClick={() => router.push(`${base}/assets/events/${event.id}`)}>
                         <Eye className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => {

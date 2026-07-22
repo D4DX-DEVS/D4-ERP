@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -107,6 +108,7 @@ const emptyForm: EventForm = {
 
 export default function EventsListPage() {
   const router = useRouter();
+  const base = useWorkspaceBase();
   const { user } = useAuthStore();
   const { toast } = useToast();
 
@@ -242,6 +244,7 @@ export default function EventsListPage() {
           companyId: user.companyId,
           createdBy: user.uid,
           createdByName: `${user.firstName} ${user.lastName}`,
+          source: base === "/staff-portal" ? "staff" : "admin",
           createdAt: Timestamp.now(),
         });
         await logAudit("create", "events", "event", docId as string, `Created event: ${form.title}`, user);
@@ -345,7 +348,7 @@ export default function EventsListPage() {
           </TableHeader>
           <TableBody>
             {filteredEvents.map((event) => (
-              <TableRow key={event.id} className="cursor-pointer" onClick={() => router.push(`/dashboard/events/${event.id}`)}>
+              <TableRow key={event.id} className="cursor-pointer" onClick={() => router.push(`${base}/events/${event.id}`)}>
                 <TableCell>
                   <p className="font-semibold text-slate-900">{event.title}</p>
                   <p className="text-xs text-slate-400">{event.eventId}</p>
@@ -368,7 +371,7 @@ export default function EventsListPage() {
                 </TableCell>
                 <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-end gap-1">
-                    <Button variant="ghost" size="icon" title="View details" onClick={() => router.push(`/dashboard/events/${event.id}`)}>
+                    <Button variant="ghost" size="icon" title="View details" onClick={() => router.push(`${base}/events/${event.id}`)}>
                       <Eye className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" title="Edit" onClick={() => handleOpenEdit(event)}>

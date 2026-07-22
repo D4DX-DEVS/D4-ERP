@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 import { useEffect, useState } from "react";
 import { getDocuments } from "@/lib/firestore";
@@ -14,6 +15,7 @@ import { useToast } from "@/components/ui/toast";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
 
 export default function ReportsPage() {
+  const base = useWorkspaceBase();
   const [stats, setStats] = useState({
     totalStaff: 0,
     activeStaff: 0,
@@ -190,16 +192,16 @@ export default function ReportsPage() {
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {[
-              { label: "Quotation List", desc: "All quotations & estimates", href: "/dashboard/reports/sales" },
-              { label: "Invoice Report", desc: "Invoices, payments, dues", href: "/dashboard/reports/sales" },
-              { label: "Pending Payments", desc: "Outstanding balances", href: "/dashboard/reports/sales" },
-              { label: "Payment Collection", desc: "Receipts by date & mode", href: "/dashboard/reports/sales" },
-              { label: "Receipt Register", desc: "All issued receipts", href: "/dashboard/reports/sales" },
+              { label: "Quotation List", desc: "All quotations & estimates", href: `${base}/reports/sales` },
+              { label: "Invoice Report", desc: "Invoices, payments, dues", href: `${base}/reports/sales` },
+              { label: "Pending Payments", desc: "Outstanding balances", href: `${base}/reports/sales` },
+              { label: "Payment Collection", desc: "Receipts by date & mode", href: `${base}/reports/sales` },
+              { label: "Receipt Register", desc: "All issued receipts", href: `${base}/reports/sales` },
               { label: "Staff Report", desc: "Employee details, salary info", href: "/dashboard/staff" },
-              { label: "Financial Report", desc: "Income, expenses, P&L", href: "/dashboard/accounting" },
+              { label: "Financial Report", desc: "Income, expenses, P&L", href: `${base}/accounting` },
               { label: "Leave Report", desc: "Leave trends, balance", href: "/dashboard/leaves" },
               { label: "Attendance Report", desc: "Daily attendance logs", href: "/dashboard/attendance" },
-              { label: "Payroll Report", desc: "Monthly salary breakdown", href: "/dashboard/payroll" },
+              { label: "Payroll Report", desc: "Monthly salary breakdown", href: `${base}/payroll` },
             ].map((r) => (
               <a
                 key={r.label}

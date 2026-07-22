@@ -24,10 +24,12 @@ import { formatCurrency, formatDate, getStatusColor, numberToWords } from "@/lib
 import { ArrowLeft, Receipt, Download, Loader2, MessageCircle, Pencil, Plus, Printer, Send, Share2, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 type QuotationDoc = Invoice & { id: string };
 
 export default function QuotationDetailPage() {
+  const base = useWorkspaceBase();
   const params = useParams();
   const router = useRouter();
   const { user } = useAuthStore();
@@ -72,7 +74,7 @@ export default function QuotationDetailPage() {
       }
       // Guard: invoices belong to the invoice route.
       if (doc.type === "invoice") {
-        router.replace(`/dashboard/invoices/${quotationId}`);
+        router.replace(`${base}/invoices/${quotationId}`);
         return;
       }
       const [comp, cl, sett, comps, cls] = await Promise.all([
@@ -248,7 +250,7 @@ export default function QuotationDetailPage() {
       });
       await updateDocument("invoices", quotationId, { status: "converted", convertedToInvoiceId: invoiceId });
       toast("success", "Quotation converted to invoice");
-      router.push(`/dashboard/invoices/${invoiceId}`);
+      router.push(`${base}/invoices/${invoiceId}`);
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to convert quotation");
@@ -354,7 +356,7 @@ export default function QuotationDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/dashboard/quotations">
+        <Link href={`${base}/quotations`}>
           <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
         </Link>
         <div className="flex-1">

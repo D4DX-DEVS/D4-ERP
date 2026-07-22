@@ -11,8 +11,10 @@ import { PageLoader } from "@/components/ui/loading";
 import { ListingHeader, ListingPanel, ListingStatCard, ListingStatGrid } from "@/components/ui/listing";
 import { ArrowLeft, FileText, Phone, UserRound, Wallet } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 export default function ClientDetailPage() {
+  const base = useWorkspaceBase();
   const params = useParams();
   const clientId = params.id as string;
 
@@ -26,7 +28,9 @@ export default function ClientDetailPage() {
       try {
         const [clientData, invoiceData] = await Promise.all([
           getDocument<Client>("clients", clientId),
-          getDocuments<Invoice>("invoices", [where("clientId", "==", clientId)]),
+          // Finance reads are feature-gated server-side; users without a grant
+          // still get the client profile, just no billing history.
+          getDocuments<Invoice>("invoices", [where("clientId", "==", clientId)]).catch(() => []),
         ]);
 
         setClient(clientData);
@@ -50,7 +54,7 @@ export default function ClientDetailPage() {
         title={client.companyName}
         description="Client profile, contact information, and commercial snapshot."
         action={
-          <Link href="/dashboard/clients">
+          <Link href={`${base}/clients`}>
             <Button variant="outline">
               <ArrowLeft className="h-4 w-4" />
               Back to clients

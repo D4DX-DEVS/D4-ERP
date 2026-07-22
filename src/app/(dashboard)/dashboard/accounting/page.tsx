@@ -21,9 +21,13 @@ import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 export default function AccountingPage() {
   const { user } = useAuthStore();
+  const base = useWorkspaceBase();
+  // Feature-granted staff can view/add; destructive + config actions stay with admin/accounts.
+  const canManage = ["admin", "accounts"].includes(user?.role || "");
   const { toast } = useToast();
   const [transactions, setTransactions] = useState<(Transaction & { id: string })[]>([]);
   const [categories, setCategories] = useState<(Category & { id: string })[]>([]);
@@ -87,6 +91,8 @@ export default function AccountingPage() {
         amount: Number(form.amount),
         date: Timestamp.fromDate(new Date(form.date)),
         createdBy: user?.staffId || "",
+        createdByName: user ? `${user.firstName} ${user.lastName}` : "",
+        source: base === "/staff-portal" ? "staff" : "admin",
       });
       setDialogOpen(false);
       toast("success", "Transaction added successfully");
@@ -156,9 +162,11 @@ export default function AccountingPage() {
           <p className="text-sm text-gray-500 mt-1">Manage income & expenses</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setCategoryDialogOpen(true)}>
-            <Settings className="h-4 w-4 mr-2" /> Categories
-          </Button>
+          {canManage && (
+            <Button variant="outline" onClick={() => setCategoryDialogOpen(true)}>
+              <Settings className="h-4 w-4 mr-2" /> Categories
+            </Button>
+          )}
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" /> Add Transaction
           </Button>
@@ -228,8 +236,9 @@ export default function AccountingPage() {
                 <TableHead>Company</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Mode</TableHead>
+                <TableHead>Added by</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                {canManage && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -245,14 +254,24 @@ export default function AccountingPage() {
                   <TableCell>{getCompanyName(t.companyId)}</TableCell>
                   <TableCell className="max-w-[200px] truncate">{t.description}</TableCell>
                   <TableCell className="capitalize">{t.paymentMode}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">{t.createdByName || "—"}</span>
+                      {t.source === "staff" && (
+                        <Badge variant="bg-amber-100 text-amber-700">Staff</Badge>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className={`text-right font-semibold ${t.type === "income" ? "text-green-600" : "text-red-600"}`}>
                     {t.type === "income" ? "+" : "-"}{formatCurrency(t.amount)}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleDelete(t.id)}>
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </TableCell>
+                  {canManage && (
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(t.id)}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

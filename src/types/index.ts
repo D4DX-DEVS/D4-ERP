@@ -263,6 +263,8 @@ export interface Transaction extends BaseDocument {
   clientId?: string;
   invoiceId?: string;
   createdBy: string;
+  createdByName?: string;
+  source?: "staff" | "admin";
 }
 
 export interface Category extends BaseDocument {
@@ -324,6 +326,8 @@ export interface Invoice extends BaseDocument {
   convertedFrom?: string;
   convertedToInvoiceId?: string;
   createdBy: string;
+  createdByName?: string;
+  source?: "staff" | "admin";
 }
 
 export interface InvoicePayment extends BaseDocument {

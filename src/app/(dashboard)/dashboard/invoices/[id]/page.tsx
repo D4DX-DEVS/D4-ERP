@@ -23,8 +23,10 @@ import { useToast } from "@/components/ui/toast";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { generateDocNumber } from "@/lib/numbering";
 import { generateDocumentPdfBlob, downloadPdfBlob as savePdfBlob, printPdfBlob as printPdfDoc } from "@/lib/document-pdf";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 export default function InvoiceDetailPage() {
+  const base = useWorkspaceBase();
   const params = useParams();
   const { user } = useAuthStore();
   const { toast } = useToast();
@@ -634,7 +636,7 @@ export default function InvoiceDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/dashboard/invoices">
+        <Link href={`${base}/invoices`}>
           <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
         </Link>
         <div className="flex-1">

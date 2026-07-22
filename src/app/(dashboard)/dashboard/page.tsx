@@ -24,6 +24,7 @@ import {
   Eye,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { hasFeature } from "@/lib/permissions";
 import { useToast } from "@/components/ui/toast";
 import {
   AttendanceTrendChart,
@@ -100,14 +101,17 @@ export default function DashboardPage() {
             getDocuments("companies", [where("isActive", "==", true)]),
             getDocuments("clients", [where("isActive", "==", true)]),
             getDocuments("leaveRequests", [where("status", "==", "pending")]),
-            getDocuments("invoices"),
+            // Server rejects finance reads without the feature — don't let a 403 sink the whole Promise.all.
+            hasFeature(user, "invoices") || hasFeature(user, "quotations") || hasFeature(user, "reports")
+              ? getDocuments("invoices")
+              : Promise.resolve([]),
             getDocuments("tasks", [where("status", "!=", "done")]),
             getDocuments<StaffRequest>("leaveRequests", [
               where("status", "==", "pending"),
               where("createdAt", ">=", Timestamp.fromDate(today)),
               where("createdAt", "<", Timestamp.fromDate(tomorrowTs)),
             ]),
-            user?.role === "admin" || user?.role === "accounts"
+            hasFeature(user, "accounting") || hasFeature(user, "reports")
               ? getDocuments<Transaction>("transactions", [
                   where("date", ">=", Timestamp.fromDate(monthStart)),
                   where("date", "<", Timestamp.fromDate(monthEnd)),

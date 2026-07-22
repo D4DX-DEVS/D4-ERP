@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { CommandSearch } from "@/components/layout/command-search";
 import { hasFeature } from "@/lib/permissions";
+import { useAuthRefresh } from "@/hooks/use-auth-refresh";
 import type { StaffRole } from "@/types";
 import type { FeatureKey } from "@/lib/permissions";
 
@@ -56,6 +57,12 @@ const ROUTE_FEATURES: Record<string, FeatureKey> = {
   "/dashboard/assets": "asset-management",
   "/dashboard/calendar": "calendar",
   "/dashboard/clients": "clients",
+  "/dashboard/accounting": "accounting",
+  "/dashboard/invoices": "invoices",
+  "/dashboard/quotations": "quotations",
+  "/dashboard/items": "items",
+  "/dashboard/payroll": "payroll",
+  "/dashboard/reports": "reports",
 };
 
 function getRouteRoles(pathname: string): StaffRole[] | null {
@@ -85,6 +92,7 @@ function getRouteFeature(pathname: string): FeatureKey | null {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuthStore();
+  useAuthRefresh();
   const router = useRouter();
   const pathname = usePathname();
 

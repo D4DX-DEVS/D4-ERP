@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -31,6 +32,7 @@ function getFirstDayOfMonth(year: number, month: number) {
 
 export default function EventCalendarPage() {
   const router = useRouter();
+  const base = useWorkspaceBase();
   const [events, setEvents] = useState<ManagedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -140,7 +142,7 @@ export default function EventCalendarPage() {
                     {dayEvents.slice(0, 3).map((e) => (
                       <button
                         key={e.id}
-                        onClick={() => router.push(`/dashboard/events/${e.id}`)}
+                        onClick={() => router.push(`${base}/events/${e.id}`)}
                         className="w-full text-left rounded-md px-1 py-0.5 text-[10px] truncate hover:bg-white flex items-center gap-1 text-slate-700"
                         title={e.title}
                       >

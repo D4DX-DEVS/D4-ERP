@@ -22,8 +22,10 @@ import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 export default function InvoicesPage() {
+  const base = useWorkspaceBase();
   const { user } = useAuthStore();
   const { toast } = useToast();
   const [clients, setClients] = useState<(Client & { id: string })[]>([]);
@@ -177,6 +179,8 @@ export default function InvoicesPage() {
         notes: form.notes,
         terms: form.terms,
         createdBy: user?.staffId || "",
+        createdByName: user ? `${user.firstName} ${user.lastName}` : "",
+        source: base === "/staff-portal" ? "staff" : "admin",
       });
       setDialogOpen(false);
       toast("success", "Invoice created successfully");
@@ -320,7 +324,7 @@ export default function InvoicesPage() {
                   <TableCell className="text-right">{formatCurrency(inv.paidAmount)}</TableCell>
                   <TableCell><Badge variant={getStatusColor(inv.status)}>{inv.status}</Badge></TableCell>
                   <TableCell className="text-right">
-                    <Link href={`/dashboard/invoices/${inv.id}`}>
+                    <Link href={`${base}/invoices/${inv.id}`}>
                       <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
                     </Link>
                   </TableCell>
