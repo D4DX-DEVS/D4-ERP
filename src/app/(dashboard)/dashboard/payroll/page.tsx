@@ -18,6 +18,7 @@ import { DollarSign, Plus, CheckCircle, Clock, FileText, ExternalLink } from "lu
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 interface PayrollForm {
   staffId: string;
@@ -47,6 +48,7 @@ interface PayrollForm {
 }
 
 export default function PayrollPage() {
+  const base = useWorkspaceBase();
   const [payrolls, setPayrolls] = useState<(Payroll & { id: string })[]>([]);
   const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -367,7 +369,7 @@ export default function PayrollPage() {
                 {filtered.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="font-medium">
-                      <Link href={`/dashboard/payroll/staff/${p.staffId}`} className="text-teal-600 hover:text-teal-700 flex items-center gap-1">
+                      <Link href={`${base}/payroll/staff/${p.staffId}`} className="text-teal-600 hover:text-teal-700 flex items-center gap-1">
                         {staffMap[p.staffId]
                           ? `${staffMap[p.staffId].firstName} ${staffMap[p.staffId].lastName}`
                           : p.staffId}

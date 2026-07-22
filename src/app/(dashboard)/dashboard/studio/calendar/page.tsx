@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -24,6 +25,7 @@ const STATUS_DOT_COLORS: Record<string, string> = {
 
 export default function StudioCalendarPage() {
   const router = useRouter();
+  const base = useWorkspaceBase();
   const [bookings, setBookings] = useState<StudioBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -127,7 +129,7 @@ export default function StudioCalendarPage() {
                       <div
                         key={b.id}
                         className="w-full text-left rounded-lg px-1.5 py-0.5 text-[10px] truncate hover:bg-teal-50 flex items-center gap-1 cursor-pointer"
-                        onClick={() => router.push("/dashboard/studio/bookings")}
+                        onClick={() => router.push(`${base}/studio/bookings`)}
                         title={`${b.startTime}–${b.endTime} ${b.purpose}`}
                       >
                         <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT_COLORS[b.status] || "bg-gray-400"}`} />

@@ -3,6 +3,16 @@
 // Kept separate from the route handler so it can be unit-tested in isolation.
 
 import type { TokenPayload } from "@/lib/auth";
+import { hasFeature, type FeatureKey } from "@/lib/permissions";
+
+/**
+ * Authorization subject. `grantedFeatures` must be the CURRENT grants resolved
+ * from the staff document by the caller — never the (possibly stale) JWT claim.
+ */
+export interface AuthzUser {
+  role: string;
+  grantedFeatures?: string[] | null;
+}
 
 /** Collections whose contents must never be returned to the client. */
 export const FORBIDDEN_COLLECTIONS = new Set(["number_sequences"]);
@@ -17,28 +27,97 @@ export const WRITE_ROLES: Record<string, string[]> = {
   departments: ["admin"],
   staff: ["admin", "department-head"],
   attendance: ["admin", "department-head"],
-  payroll: ["admin", "accounts"],
   banners: ["admin"],
   employee_documents: ["admin", "department-head"],
   letterTemplates: ["admin"],
   issuedLetters: ["admin"],
   studios: ["admin"],
   studio_equipment: ["admin"],
-  events: ["admin", "department-head"],
   department_reports: ["admin", "department-head"],
   custom_kpis: ["admin", "department-head"],
   attendance_imports: ["admin", "department-head"],
+  // Category management is an admin/accounts capability, not part of the
+  // accounting feature grant (granted staff can add transactions only).
+  categories: ["admin", "accounts"],
 };
 
 /**
- * Collections whose write access is gated by a granted feature (carried in the
- * JWT) in addition to default roles. A user may write if their role is in the
- * default list OR they have been granted the feature.
+ * Collections whose write access requires a feature: role defaults from the
+ * feature registry OR an explicit grant, evaluated with the canonical
+ * hasFeature() semantics on CURRENT grants.
  */
-export const FEATURE_WRITE: Record<string, { roles: string[]; feature: string }> = {
-  studio_bookings: { roles: ["admin", "department-head"], feature: "studio-booking" },
-  work_logs: { roles: ["admin", "department-head"], feature: "work-logs" },
+export const FEATURE_WRITE: Record<string, FeatureKey> = {
+  studio_bookings: "studio-booking",
+  work_logs: "work-logs",
+  payroll: "payroll",
+  transactions: "accounting",
+  items: "items",
+  invoice_payments: "invoices",
+  events: "events",
+  clients: "clients",
+  assets: "asset-management",
+  "asset-categories": "asset-management",
+  "asset-persons": "asset-management",
+  "asset-events": "asset-management",
+  // tasks intentionally absent: staff must update their own assigned tasks;
+  // the task-workflow guard (role/assignee/status) is the write authority.
 };
+
+/**
+ * Collections whose READS require at least one of the listed features.
+ * Collections not listed keep their existing behavior (open read + scoping).
+ */
+export const FEATURE_READ: Record<string, FeatureKey[]> = {
+  transactions: ["accounting", "reports"],
+  categories: ["accounting", "reports"],
+  invoices: ["invoices", "quotations", "reports"],
+  invoice_payments: ["invoices", "quotations", "reports"],
+  items: ["items", "invoices", "quotations"],
+};
+
+/**
+ * The `invoices` collection holds both invoices and quotations, distinguished
+ * by `type`. The required write feature follows the document type so an
+ * invoices grant does not implicitly grant quotations (and vice versa).
+ */
+export function invoiceFeature(docType: unknown): FeatureKey {
+  return docType === "quotation" ? "quotations" : "invoices";
+}
+
+/** Error if the user may not read the collection at all, else null. */
+export function authorizeRead(user: AuthzUser, collectionName: string): string | null {
+  const required = FEATURE_READ[collectionName];
+  if (!required) return null;
+  return required.some((f) => hasFeature(user, f))
+    ? null
+    : "You do not have permission to view this resource.";
+}
+
+/**
+ * Extra filter AND-ed into invoices reads for users who hold only one of the
+ * two document-type features. Null = no restriction needed.
+ */
+export function featureReadFilter(user: AuthzUser, collectionName: string): Record<string, unknown> | null {
+  if (collectionName !== "invoices" || hasFeature(user, "reports")) return null;
+  const inv = hasFeature(user, "invoices");
+  const quo = hasFeature(user, "quotations");
+  if (inv && quo) return null;
+  if (inv) return { type: { $ne: "quotation" } };
+  if (quo) return { type: "quotation" };
+  return null; // unreachable: authorizeRead already denied
+}
+
+/** Per-document read check (findOne on type-split collections). */
+export function authorizeReadDoc(
+  user: AuthzUser,
+  collectionName: string,
+  doc: Record<string, unknown>
+): string | null {
+  if (collectionName !== "invoices" || hasFeature(user, "reports")) return null;
+  return hasFeature(user, invoiceFeature(doc.type))
+    ? null
+    : "You do not have permission to view this resource.";
+}
 
 /** Collections that are append-only from the client (no update/delete). */
 export const APPEND_ONLY_COLLECTIONS = new Set(["audit_logs"]);
@@ -59,11 +138,17 @@ export function isWriteAction(action: string): boolean {
   return action === "create" || action === "update" || action === "delete";
 }
 
-/** Returns an error message if the user may not perform the action, else null. */
+/**
+ * Returns an error message if the user may not perform the action, else null.
+ * `docType` is only consulted for writes to the type-split `invoices`
+ * collection (pass the document's `type`: existing doc for update/delete,
+ * payload for create).
+ */
 export function authorize(
-  user: TokenPayload,
+  user: AuthzUser,
   action: string,
-  collectionName: string
+  collectionName: string,
+  docType?: unknown
 ): string | null {
   if (FORBIDDEN_COLLECTIONS.has(collectionName) && action !== "nextSequence") {
     return "This collection is not accessible.";
@@ -79,19 +164,20 @@ export function authorize(
     if (reviewRoles && action !== "create" && !reviewRoles.includes(user.role)) {
       return "Only a manager can review this resource.";
     }
-    const featureRule = FEATURE_WRITE[collectionName];
-    if (featureRule) {
-      const allowedByRole = featureRule.roles.includes(user.role);
-      const allowedByFeature =
-        Array.isArray(user.features) && user.features.includes(featureRule.feature);
-      if (!allowedByRole && !allowedByFeature) {
-        return "You do not have permission to modify this resource.";
-      }
+    if (collectionName === "invoices" && !hasFeature(user, invoiceFeature(docType))) {
+      return "You do not have permission to modify this resource.";
+    }
+    const featureKey = FEATURE_WRITE[collectionName];
+    if (featureKey && !hasFeature(user, featureKey)) {
+      return "You do not have permission to modify this resource.";
     }
     const allowed = WRITE_ROLES[collectionName];
     if (allowed && !allowed.includes(user.role)) {
       return "You do not have permission to modify this resource.";
     }
+  }
+  if (isReadAction(action) || action === "findOne") {
+    return authorizeRead(user, collectionName);
   }
   return null;
 }

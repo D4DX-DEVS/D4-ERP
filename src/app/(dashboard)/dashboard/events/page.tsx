@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -19,6 +20,7 @@ import type { ManagedEvent } from "@/types";
 
 export default function EventsDashboardPage() {
   const router = useRouter();
+  const base = useWorkspaceBase();
   const [events, setEvents] = useState<ManagedEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -58,7 +60,7 @@ export default function EventsDashboardPage() {
         title="Event Management"
         description="Overview of all events, revenue, and team allocation."
         action={
-          <Button onClick={() => router.push("/dashboard/events/list")}>
+          <Button onClick={() => router.push(`${base}/events/list`)}>
             <PartyPopper className="h-4 w-4" /> Create Event
           </Button>
         }
@@ -100,7 +102,7 @@ export default function EventsDashboardPage() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold tracking-[-0.02em] text-slate-950">Upcoming Events</h3>
           <button
-            onClick={() => router.push("/dashboard/events/list")}
+            onClick={() => router.push(`${base}/events/list`)}
             className="text-sm font-medium text-teal-700 flex items-center gap-1 hover:text-teal-800 hover:underline"
           >
             View all <ArrowRight className="h-3 w-3" />
@@ -117,7 +119,7 @@ export default function EventsDashboardPage() {
               <div
                 key={event.id}
                 className="flex items-center justify-between rounded-2xl border border-white/70 bg-white/60 p-3 hover:bg-white hover:shadow-[0_12px_30px_rgba(15,23,42,0.08)] cursor-pointer transition-all"
-                onClick={() => router.push(`/dashboard/events/${event.id}`)}
+                onClick={() => router.push(`${base}/events/${event.id}`)}
               >
                 <div className="flex-1">
                   <h4 className="text-sm font-semibold text-slate-900">{event.title}</h4>
@@ -156,7 +158,7 @@ export default function EventsDashboardPage() {
               <div
                 key={event.id}
                 className="flex items-center justify-between py-2.5 border-b border-slate-100 last:border-0 cursor-pointer hover:bg-white/70 px-2 rounded-xl transition-colors"
-                onClick={() => router.push(`/dashboard/events/${event.id}`)}
+                onClick={() => router.push(`${base}/events/${event.id}`)}
               >
                 <div>
                   <span className="text-sm font-semibold text-slate-900">{event.title}</span>

@@ -17,7 +17,6 @@ import { useAuthStore } from "@/store/auth-store";
 import type { CalendarEvent, LeaveRequest, Task, EventType, EventPriority, EventScope, RecurrenceFrequency, ManagedEvent, StudioBooking } from "@/types";
 import type { Holiday } from "@/lib/settings";
 import {
-  EVENT_CATEGORIES,
   MANUAL_EVENT_TYPES,
   categoryMeta,
   eventToItems,
@@ -135,6 +134,8 @@ export default function CalendarPage() {
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
+  const [showChooser, setShowChooser] = useState(false);
+  const [chooserDay, setChooserDay] = useState<number | undefined>(undefined);
   const [createType, setCreateType] = useState<"calendar" | "event" | "studio" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -147,7 +148,6 @@ export default function CalendarPage() {
   const [showCalendar, setShowCalendar] = useState(true);
   const [showEvents, setShowEvents] = useState(true);
   const [showStudio, setShowStudio] = useState(true);
-  const [categoryFilter, setCategoryFilter] = useState<Set<string>>(new Set());
   const [scopeFilter, setScopeFilter] = useState<Set<EventScope>>(new Set());
   const [showLeaves, setShowLeaves] = useState(true);
   const [showTasks, setShowTasks] = useState(true);
@@ -221,7 +221,11 @@ export default function CalendarPage() {
             type: "event",
             start,
             end,
-            isAllDay: true,
+            isAllDay: !e.startTime,
+            startTime: e.startTime,
+            endTime: e.endTime,
+            location: e.venue || e.location,
+            description: [e.eventId, e.clientName && `Client: ${e.clientName}`, e.status && `Status: ${e.status}`, e.description].filter(Boolean).join("\n"),
             color: "#9333ea",
             editable: false,
             href: `/dashboard/events/${e.id}`,
@@ -241,7 +245,7 @@ export default function CalendarPage() {
           list.push({
             key: `studio-booking-${b.id}`,
             id: b.id,
-            title: `${b.startTime} ${b.studioName}`,
+            title: b.studioName ? `${b.studioName} — ${b.purpose}` : b.purpose,
             source: "booking",
             type: "studio",
             start,
@@ -249,6 +253,8 @@ export default function CalendarPage() {
             isAllDay: false,
             startTime: b.startTime,
             endTime: b.endTime,
+            location: b.studioName,
+            description: [b.bookingId, b.eventName && `Event: ${b.eventName}`, b.clientName && `Client: ${b.clientName}`, b.purpose, b.notes].filter(Boolean).join("\n"),
             color: "#f97316",
             editable: false,
             href: `/dashboard/studio/bookings`,
@@ -265,8 +271,6 @@ export default function CalendarPage() {
     if (showHolidays) for (const h of holidays) list.push({ ...holidayToItem(h), itemSource: "calendar-event" });
 
     return list.filter((it) => {
-      const key = it.source === "task" ? "task" : it.type;
-      if (categoryFilter.size > 0 && !categoryFilter.has(key)) return false;
       if (scopeFilter.size > 0 && it.scope && !scopeFilter.has(it.scope)) return false;
       return true;
     });
@@ -290,6 +294,7 @@ export default function CalendarPage() {
   // ── Form helpers ────────────────────────────────────────────────────────────
   const openCreate = (day?: number, type?: "calendar" | "event" | "studio") => {
     if (type) {
+      setShowChooser(false);
       setCreateType(type);
       if (type === "calendar") {
         const base = day ? `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}` : "";
@@ -304,8 +309,9 @@ export default function CalendarPage() {
       }
     } else {
       // Show type chooser dialog
-      setCreateType(null);
+      setChooserDay(day);
       setSelected(null);
+      setShowChooser(true);
     }
   };
 
@@ -557,7 +563,7 @@ export default function CalendarPage() {
               </div>
             )}
           </div>
-          <Button onClick={() => { setCreateType(null); setShowForm(true); }}><Plus className="h-4 w-4 mr-2" /> Add</Button>
+          <Button onClick={() => openCreate()}><Plus className="h-4 w-4 mr-2" /> Add</Button>
         </div>
       </div>
 
@@ -565,42 +571,14 @@ export default function CalendarPage() {
       <Card>
         <CardContent className="py-3 space-y-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              onClick={() => setCategoryFilter(new Set())}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium border ${categoryFilter.size === 0 ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-600"}`}
-            >
-              All
-            </button>
-            {EVENT_CATEGORIES.map((c) => (
-              <button
-                key={c.value}
-                onClick={() => toggleSet(categoryFilter, c.value, setCategoryFilter)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium border ${categoryFilter.has(c.value) ? c.badge + " border-transparent" : "bg-white text-gray-500"}`}
-              >
-                {c.label}
-              </button>
-            ))}
-            <button
-              onClick={() => toggleSet(categoryFilter, "task", setCategoryFilter)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium border ${categoryFilter.has("task") ? "bg-red-100 text-red-700 border-transparent" : "bg-white text-gray-500"}`}
-            >
-              Tasks
-            </button>
-            <button
-              onClick={() => toggleSet(categoryFilter, "event", setCategoryFilter)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium border ${categoryFilter.has("event") ? "bg-purple-100 text-purple-700 border-transparent" : "bg-white text-gray-500"}`}
-            >
-              Events
-            </button>
-            <button
-              onClick={() => toggleSet(categoryFilter, "studio", setCategoryFilter)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium border ${categoryFilter.has("studio") ? "bg-orange-100 text-orange-700 border-transparent" : "bg-white text-gray-500"}`}
-            >
-              Studio
-            </button>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs text-gray-400 mr-1">Scope:</span>
+            <span className="text-xs text-gray-400 mr-1">Show:</span>
+            <button onClick={() => setShowCalendar((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showCalendar ? "bg-blue-100 text-blue-700 border-transparent" : "bg-white text-gray-400"}`}>Calendar</button>
+            <button onClick={() => setShowEvents((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showEvents ? "bg-purple-100 text-purple-700 border-transparent" : "bg-white text-gray-400"}`}>Events</button>
+            <button onClick={() => setShowStudio((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showStudio ? "bg-orange-100 text-orange-700 border-transparent" : "bg-white text-gray-400"}`}>Studio</button>
+            <button onClick={() => setShowLeaves((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showLeaves ? "bg-amber-100 text-amber-700 border-transparent" : "bg-white text-gray-400"}`}>Leaves</button>
+            <button onClick={() => setShowTasks((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showTasks ? "bg-red-100 text-red-700 border-transparent" : "bg-white text-gray-400"}`}>Tasks</button>
+            <button onClick={() => setShowHolidays((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showHolidays ? "bg-green-100 text-green-700 border-transparent" : "bg-white text-gray-400"}`}>Holidays</button>
+            <span className="text-xs text-gray-400 ml-3 mr-1">Scope:</span>
             {(["personal", "department", "company"] as EventScope[]).map((s) => (
               <button
                 key={s}
@@ -610,11 +588,6 @@ export default function CalendarPage() {
                 {s === "personal" ? "My Events" : s === "department" ? "Department" : "Company"}
               </button>
             ))}
-            <span className="text-xs text-gray-400 ml-3 mr-1">Sources:</span>
-            <button onClick={() => setShowCalendar((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showCalendar ? "bg-blue-100 text-blue-700 border-transparent" : "bg-white text-gray-400"}`}>Calendar</button>
-            <button onClick={() => setShowLeaves((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showLeaves ? "bg-amber-100 text-amber-700 border-transparent" : "bg-white text-gray-400"}`}>Leaves</button>
-            <button onClick={() => setShowTasks((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showTasks ? "bg-red-100 text-red-700 border-transparent" : "bg-white text-gray-400"}`}>Tasks</button>
-            <button onClick={() => setShowHolidays((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showHolidays ? "bg-green-100 text-green-700 border-transparent" : "bg-white text-gray-400"}`}>Holidays</button>
           </div>
         </CardContent>
       </Card>
@@ -749,13 +722,13 @@ export default function CalendarPage() {
       </Card>
 
       {/* Type chooser dialog */}
-      <Dialog open={!showForm && createType === null} onOpenChange={(o) => !o && setCreateType(null)}>
+      <Dialog open={showChooser} onOpenChange={(o) => setShowChooser(o)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Create New</DialogTitle></DialogHeader>
           <div className="space-y-2">
-            <Button onClick={() => openCreate(undefined, "calendar")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Calendar Event</span><span className="text-xs text-gray-400">Team meeting, holiday, all-day</span></div></Button>
-            <Button variant="outline" onClick={() => openCreate(undefined, "event")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Event (Managed)</span><span className="text-xs text-gray-400">Conference, webinar, project</span></div></Button>
-            <Button variant="outline" onClick={() => openCreate(undefined, "studio")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Studio Booking</span><span className="text-xs text-gray-400">Video, photo, production</span></div></Button>
+            <Button onClick={() => openCreate(chooserDay, "calendar")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Calendar Event</span><span className="text-xs text-gray-400">Team meeting, holiday, all-day</span></div></Button>
+            <Button variant="outline" onClick={() => openCreate(chooserDay, "event")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Event (Managed)</span><span className="text-xs text-gray-400">Conference, webinar, project</span></div></Button>
+            <Button variant="outline" onClick={() => openCreate(chooserDay, "studio")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Studio Booking</span><span className="text-xs text-gray-400">Video, photo, production</span></div></Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -868,11 +841,11 @@ export default function CalendarPage() {
                   {formatDate(selected.start)}{!sameDay(selected.start, selected.end) ? ` → ${formatDate(selected.end)}` : ""}
                   {!selected.isAllDay && selected.startTime ? ` · ${selected.startTime}${selected.endTime ? ` - ${selected.endTime}` : ""}` : " · All day"}
                 </p>
-                {selected.itemSource === "calendar-event" && selected.location && <p className="flex items-center gap-2 text-gray-600"><MapPin className="h-4 w-4" />{selected.location}</p>}
+                {selected.location && <p className="flex items-center gap-2 text-gray-600"><MapPin className="h-4 w-4" />{selected.location}</p>}
                 {selected.itemSource === "calendar-event" && selected.raw?.recurrence && selected.raw.recurrence.frequency !== "none" && (
                   <p className="flex items-center gap-2 text-gray-600"><Repeat className="h-4 w-4" />Repeats {selected.raw.recurrence.frequency}</p>
                 )}
-                {selected.itemSource === "calendar-event" && selected.description && <p className="text-gray-600 whitespace-pre-wrap">{selected.description}</p>}
+                {selected.description && <p className="text-gray-600 whitespace-pre-wrap">{selected.description}</p>}
 
                 <div className="flex items-center gap-2 pt-2 border-t flex-wrap">
                   {selected.itemSource === "calendar-event" && selected.raw ? (

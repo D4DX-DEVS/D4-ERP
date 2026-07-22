@@ -25,8 +25,12 @@ import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
+import { useAuthStore } from "@/store/auth-store";
 
 export default function QuotationsPage() {
+  const base = useWorkspaceBase();
+  const { user } = useAuthStore();
   const [clients, setClients] = useState<(Client & { id: string })[]>([]);
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
   const [lookupsLoading, setLookupsLoading] = useState(true);
@@ -239,6 +243,9 @@ export default function QuotationsPage() {
           status: "draft",
           date: Timestamp.now(),
           createdAt: Timestamp.now(),
+          createdBy: user?.staffId || "",
+          createdByName: user ? `${user.firstName} ${user.lastName}` : "",
+          source: base === "/staff-portal" ? "staff" : "admin",
         });
         setShowAdd(false);
         toast("success", "Quotation created successfully");
@@ -292,7 +299,7 @@ export default function QuotationsPage() {
       });
       await updateDocument("invoices", quotation.id, { status: "converted", convertedToInvoiceId: invoiceId });
       toast("success", "Quotation converted to invoice");
-      router.push(`/dashboard/invoices/${invoiceId}`);
+      router.push(`${base}/invoices/${invoiceId}`);
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to convert quotation");
@@ -520,7 +527,7 @@ export default function QuotationsPage() {
                     <TableCell className="text-right font-semibold">{formatCurrency(q.totalAmount)}</TableCell>
                     <TableCell><Badge variant={getStatusColor(q.status)}>{q.status}</Badge></TableCell>
                     <TableCell className="text-right">
-                      <Link href={`/dashboard/invoices/${q.id}`}>
+                      <Link href={`${base}/invoices/${q.id}`}>
                         <Button variant="ghost" size="icon"><Eye className="h-4 w-4" /></Button>
                       </Link>
                       <Button variant="ghost" size="icon" title="Edit" onClick={() => handleEdit(q)}>

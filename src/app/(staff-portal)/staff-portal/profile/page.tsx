@@ -12,6 +12,15 @@ import { Camera, Loader2, User, Phone, Mail, Briefcase, Building, Calendar, Indi
 
 type TabKey = "overview" | "salary" | "documents" | "assets";
 
+/** Payroll month is "YYYY-MM" on new docs, numeric month + year on legacy ones. */
+function payslipLabel(p: Payroll): string {
+  if (typeof p.month === "string" && p.month.includes("-")) {
+    const [y, m] = p.month.split("-").map(Number);
+    return new Date(y, m - 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
+  }
+  return `${p.month}/${p.year}`;
+}
+
 export default function StaffProfilePage() {
   const { user } = useAuthStore();
   const [staff, setStaff] = useState<Staff | null>(null);
@@ -300,7 +309,7 @@ export default function StaffProfilePage() {
                   {payrolls.map((payroll) => (
                     <div key={payroll.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                       <div>
-                        <p className="text-sm font-medium">{payroll.month}/{payroll.year}</p>
+                        <p className="text-sm font-medium">{payslipLabel(payroll)}</p>
                         <p className="text-xs text-gray-500">Net Salary</p>
                       </div>
                       <p className="text-sm font-medium text-emerald-600">{formatCurrency(payroll.netSalary || 0)}</p>

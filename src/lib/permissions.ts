@@ -25,12 +25,21 @@ export type FeatureKey =
   | "reports"
   | "events";
 
+export type PortalSection = "Operations" | "Work" | "Finance" | "Insights";
+
 export interface FeatureMeta {
   key: FeatureKey;
   label: string;
   description: string;
   /** Roles that receive this feature automatically (no explicit grant needed). */
   defaultRoles: StaffRole[];
+  /**
+   * Staff-portal embedding: where a grant surfaces in the portal nav.
+   * Absent = department-management feature with no defined extra-grant
+   * semantics for plain staff (dashboard-only; the grant dialog disables it
+   * for roles outside defaultRoles).
+   */
+  portal?: { section: PortalSection; href: string; label?: string };
 }
 
 /** Registry of grantable features. Listed in the order shown in the UI. */
@@ -40,6 +49,7 @@ export const FEATURES: FeatureMeta[] = [
     label: "Studio Booking",
     description: "Book studios and rooms with date/time slots.",
     defaultRoles: ["admin", "department-head"],
+    portal: { section: "Operations", href: "/staff-portal/studio" },
   },
   {
     key: "studio-manage",
@@ -52,24 +62,30 @@ export const FEATURES: FeatureMeta[] = [
     label: "Event Management",
     description: "Create and manage events with lifecycle tracking.",
     defaultRoles: ["admin", "department-head"],
+    portal: { section: "Operations", href: "/staff-portal/events", label: "Events" },
   },
   {
     key: "asset-management",
     label: "Asset Management",
     description: "Manage assets, movements and availability.",
     defaultRoles: ["admin", "department-head"],
+    portal: { section: "Operations", href: "/staff-portal/assets", label: "Assets" },
   },
   {
     key: "tasks",
     label: "Tasks",
     description: "Create and manage tasks.",
     defaultRoles: ["admin", "department-head"],
+    // Distinct from the self-service "My Tasks" page every staff member has.
+    portal: { section: "Work", href: "/staff-portal/tasks", label: "Task Management" },
   },
   {
     key: "work-logs",
     label: "Work Logs",
     description: "View and manage staff daily work logs.",
     defaultRoles: ["admin", "department-head"],
+    // Distinct from the self-service "Work Log" page every staff member has.
+    portal: { section: "Work", href: "/staff-portal/tasks/work-logs", label: "Work Log Management" },
   },
   {
     key: "calendar",
@@ -82,6 +98,7 @@ export const FEATURES: FeatureMeta[] = [
     label: "Clients",
     description: "Manage client records.",
     defaultRoles: ["admin", "department-head", "accounts"],
+    portal: { section: "Operations", href: "/staff-portal/clients" },
   },
   {
     key: "attendance-manage",
@@ -106,36 +123,44 @@ export const FEATURES: FeatureMeta[] = [
     label: "Accounting",
     description: "Manage income and expense transactions.",
     defaultRoles: ["admin", "accounts"],
+    portal: { section: "Finance", href: "/staff-portal/accounting" },
   },
   {
     key: "invoices",
     label: "Invoices",
     description: "Create and manage invoices.",
     defaultRoles: ["admin", "accounts"],
+    portal: { section: "Finance", href: "/staff-portal/invoices" },
   },
   {
     key: "quotations",
     label: "Quotations",
     description: "Create and manage quotations.",
     defaultRoles: ["admin", "accounts"],
+    portal: { section: "Finance", href: "/staff-portal/quotations" },
   },
   {
+    // Dependent-read rule: invoices/quotations grants imply read access to the
+    // item master (picker inside their builders) — NOT this module or writes.
     key: "items",
     label: "Item Master",
     description: "Manage the item/service master.",
     defaultRoles: ["admin", "accounts"],
+    portal: { section: "Finance", href: "/staff-portal/items" },
   },
   {
     key: "payroll",
     label: "Payroll",
     description: "Process and manage payroll.",
     defaultRoles: ["admin", "accounts"],
+    portal: { section: "Finance", href: "/staff-portal/payroll" },
   },
   {
     key: "reports",
     label: "Reports",
     description: "Access reporting dashboards.",
     defaultRoles: ["admin", "accounts"],
+    portal: { section: "Insights", href: "/staff-portal/reports" },
   },
 ];
 

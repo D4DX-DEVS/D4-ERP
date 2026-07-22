@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -48,6 +49,7 @@ const conditionBadge: Record<ReturnCondition, string> = {
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const base = useWorkspaceBase();
   const { user } = useAuthStore();
   const { toast } = useToast();
 
@@ -260,7 +262,7 @@ export default function EventDetailPage() {
     return (
       <div className="py-12 text-center text-gray-500">
         Event not found.{" "}
-        <button onClick={() => router.push("/dashboard/assets/events")} className="text-blue-600 underline">Back to Events</button>
+        <button onClick={() => router.push(`${base}/assets/events`)} className="text-blue-600 underline">Back to Events</button>
       </div>
     );
   }
@@ -273,7 +275,7 @@ export default function EventDetailPage() {
     <div className="space-y-6">
       {/* Back + title */}
       <div className="flex items-center gap-3">
-        <button onClick={() => router.push("/dashboard/assets/events")} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+        <button onClick={() => router.push(`${base}/assets/events`)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
         <div className="flex-1 min-w-0">

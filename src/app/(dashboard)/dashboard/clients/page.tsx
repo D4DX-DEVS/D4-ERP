@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -25,6 +26,7 @@ export default function ClientsPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
   const router = useRouter();
+  const base = useWorkspaceBase();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{ id: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -108,7 +110,7 @@ export default function ClientsPage() {
   useEffect(() => {
     if (searchParams.get("new") === "1") {
       handleOpen();
-      router.replace("/dashboard/clients");
+      router.replace(`${base}/clients`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
@@ -120,7 +122,12 @@ export default function ClientsPage() {
       if (editingId) {
         await updateDocument("clients", editingId, form);
       } else {
-        await createDocument("clients", { ...form, createdBy: user?.staffId || "" });
+        await createDocument("clients", {
+          ...form,
+          createdBy: user?.staffId || "",
+          createdByName: user ? `${user.firstName} ${user.lastName}` : "",
+          source: base === "/staff-portal" ? "staff" : "admin",
+        });
       }
       setDialogOpen(false);
       toast("success", editingId ? "Client updated" : "Client added");
@@ -197,7 +204,7 @@ export default function ClientsPage() {
               </TableHeader>
               <TableBody>
                 {clients.map((c) => {
-                  const detailHref = `/dashboard/clients/${c.id}`;
+                  const detailHref = `${base}/clients/${c.id}`;
 
                   return (
                   <TableRow

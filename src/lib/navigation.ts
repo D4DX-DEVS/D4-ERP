@@ -157,7 +157,7 @@ export const navigationModules: NavModule[] = [
       { label: "Shifts", href: "/dashboard/attendance/shifts", icon: Hourglass, roles: ["admin"] },
       { label: "Attendance Reports", href: "/dashboard/attendance/reports", icon: BarChart3, roles: ["admin", "department-head", "accounts"] },
       { label: "Leave Requests", href: "/dashboard/leaves", roles: ["admin", "department-head"] },
-      { label: "Payroll", href: "/dashboard/payroll", roles: ["admin", "accounts"] },
+      { label: "Payroll", href: "/dashboard/payroll", roles: ["admin", "accounts"], feature: "payroll" },
       { label: "Certificates", href: "/dashboard/staff/certificates", roles: ["admin"] },
     ],
   },
@@ -190,7 +190,6 @@ export const navigationModules: NavModule[] = [
         items: [
           { label: "Dashboard", href: "/dashboard/events", roles: ["admin", "department-head"], feature: "events" },
           { label: "All Events", href: "/dashboard/events/list", roles: ["admin", "department-head"], feature: "events" },
-          { label: "Event Calendar", href: "/dashboard/calendar", icon: Calendar, roles: ["admin", "department-head"], feature: "events" },
           { label: "Reports", href: "/dashboard/events/reports", icon: BarChart3, roles: ["admin", "department-head"], feature: "events" },
         ],
       },
@@ -200,7 +199,6 @@ export const navigationModules: NavModule[] = [
         items: [
           { label: "Dashboard", href: "/dashboard/studio", roles: ["admin", "department-head"], feature: "studio-booking" },
           { label: "Bookings", href: "/dashboard/studio/bookings", roles: ["admin", "department-head"], feature: "studio-booking" },
-          { label: "Calendar", href: "/dashboard/calendar", icon: Calendar, roles: ["admin", "department-head"], feature: "studio-booking" },
           { label: "Timeline", href: "/dashboard/studio/timeline", roles: ["admin", "department-head"], feature: "studio-booking" },
           { label: "Availability", href: "/dashboard/studio/availability", roles: ["admin", "department-head"], feature: "studio-booking" },
           { label: "Resources", href: "/dashboard/studio/resources", roles: ["admin"], feature: "studio-manage" },
@@ -235,8 +233,8 @@ export const navigationModules: NavModule[] = [
     icon: DollarSign,
     roles: ["admin", "accounts"],
     items: [
-      { label: "Accounting", href: "/dashboard/accounting", roles: ["admin", "accounts"] },
-      { label: "Item Master", href: "/dashboard/items", roles: ["admin", "accounts"] },
+      { label: "Accounting", href: "/dashboard/accounting", roles: ["admin", "accounts"], feature: "accounting" },
+      { label: "Item Master", href: "/dashboard/items", roles: ["admin", "accounts"], feature: "items" },
     ],
     subGroups: [
       {
@@ -244,15 +242,15 @@ export const navigationModules: NavModule[] = [
         icon: Receipt,
         items: [
           { label: "Clients", href: "/dashboard/clients", icon: UserCheck, roles: ["admin", "department-head", "accounts"] },
-          { label: "Quotations", href: "/dashboard/quotations", roles: ["admin", "accounts"] },
-          { label: "Invoices", href: "/dashboard/invoices", roles: ["admin", "accounts"] },
+          { label: "Quotations", href: "/dashboard/quotations", roles: ["admin", "accounts"], feature: "quotations" },
+          { label: "Invoices", href: "/dashboard/invoices", roles: ["admin", "accounts"], feature: "invoices" },
         ],
       },
       {
         label: "Reports",
         icon: BarChart3,
         items: [
-          { label: "Overview", href: "/dashboard/reports", roles: ["admin", "accounts"] },
+          { label: "Overview", href: "/dashboard/reports", roles: ["admin", "accounts"], feature: "reports" },
           { label: "Department Reports", href: "/dashboard/reports/department", icon: FileText, roles: ["admin", "department-head", "accounts"] },
           { label: "Company Report", href: "/dashboard/reports/company", icon: BarChart3, roles: ["admin"] },
           { label: "KPI Management", href: "/dashboard/reports/kpis", roles: ["admin", "department-head"] },

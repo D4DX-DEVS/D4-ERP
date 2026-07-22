@@ -44,3 +44,7 @@ firebase-debug.log
 .firebase/
 next-env.d.ts
 serviceAccountKey.json
+
+# tooling artifacts (Playwright MCP snapshots, shell crash dumps)
+.playwright-mcp/
+*.stackdump

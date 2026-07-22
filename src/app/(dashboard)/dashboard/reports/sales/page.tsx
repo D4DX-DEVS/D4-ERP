@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -32,6 +33,7 @@ const toDate = (ts?: { seconds: number } | null): Date | null =>
   ts && typeof ts.seconds === "number" ? new Date(ts.seconds * 1000) : null;
 
 export default function SalesReportsPage() {
+  const base = useWorkspaceBase();
   const { toast } = useToast();
   const [reportType, setReportType] = useState<ReportType>("quotations");
   const [loading, setLoading] = useState(true);
@@ -271,7 +273,7 @@ export default function SalesReportsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/dashboard/reports">
+        <Link href={`${base}/reports`}>
           <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
         </Link>
         <div>

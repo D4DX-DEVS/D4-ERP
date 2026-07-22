@@ -1,4 +1,5 @@
 "use client";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -12,6 +13,7 @@ import type { StudioBooking, Studio } from "@/types";
 
 export default function StudioDashboardPage() {
   const router = useRouter();
+  const base = useWorkspaceBase();
   const [bookings, setBookings] = useState<StudioBooking[]>([]);
   const [studios, setStudios] = useState<Studio[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,7 @@ export default function StudioDashboardPage() {
         title="Studio Management"
         description="Dashboard overview of studio bookings and utilization."
         action={
-          <Button onClick={() => router.push("/dashboard/studio/bookings")}>
+          <Button onClick={() => router.push(`${base}/studio/bookings`)}>
             New Booking
           </Button>
         }
@@ -105,7 +107,7 @@ export default function StudioDashboardPage() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold tracking-[-0.02em] text-slate-950">Today&apos;s Bookings</h3>
           <button
-            onClick={() => router.push("/dashboard/studio/calendar")}
+            onClick={() => router.push(`${base}/studio/calendar`)}
             className="text-sm font-medium text-teal-700 flex items-center gap-1 hover:text-teal-800 hover:underline"
           >
             Calendar <ArrowRight className="h-3 w-3" />
@@ -139,10 +141,10 @@ export default function StudioDashboardPage() {
       {/* Quick Links */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "All Bookings", href: "/dashboard/studio/bookings" },
-          { label: "Calendar View", href: "/dashboard/studio/calendar" },
-          { label: "Timeline View", href: "/dashboard/studio/timeline" },
-          { label: "Availability", href: "/dashboard/studio/availability" },
+          { label: "All Bookings", href: `${base}/studio/bookings` },
+          { label: "Calendar View", href: `${base}/studio/calendar` },
+          { label: "Timeline View", href: `${base}/studio/timeline` },
+          { label: "Availability", href: `${base}/studio/availability` },
         ].map((link) => (
           <button
             key={link.href}

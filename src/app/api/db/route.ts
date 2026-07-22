@@ -4,12 +4,16 @@ import { getModel } from "@/models";
 import { getAuthUser } from "@/lib/auth";
 import {
   authorize,
+  authorizeReadDoc,
+  featureReadFilter,
   sanitizeDoc,
+  isWriteAction,
   MAX_QUERY_LIMIT,
   isReadAction,
   scopeFilter,
   DEPT_SCOPED_BY_FIELD,
   DEPT_SCOPED_BY_STAFF,
+  type AuthzUser,
 } from "@/lib/db-authz";
 import type { TokenPayload } from "@/lib/auth";
 import { canTransitionTask, transitionNeedsRemark } from "@/lib/task-workflow";
@@ -186,9 +190,9 @@ async function deptStaffIds(departmentId: string): Promise<string[]> {
   return docs.map((d) => d._id.toString());
 }
 
-/** AND a role-based scope into a read filter. Returns the (possibly wrapped) filter. */
+/** AND role scope + feature type-restrictions into a read filter. */
 async function applyReadScope(
-  user: TokenPayload,
+  user: TokenPayload & AuthzUser,
   collectionName: string,
   filter: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
@@ -200,9 +204,13 @@ async function applyReadScope(
     needsDept && deptId && DEPT_SCOPED_BY_STAFF.has(collectionName)
       ? await deptStaffIds(deptId)
       : null;
-  const scope = scopeFilter(user, collectionName, deptId, staffIds);
-  if (!scope) return filter;
-  return Object.keys(filter).length ? { $and: [filter, scope] } : scope;
+  const clauses = [
+    scopeFilter(user, collectionName, deptId, staffIds),
+    featureReadFilter(user, collectionName),
+  ].filter((c): c is Record<string, unknown> => !!c);
+  if (!clauses.length) return filter;
+  const all = Object.keys(filter).length ? [filter, ...clauses] : clauses;
+  return all.length === 1 ? all[0] : { $and: all };
 }
 
 /**
@@ -311,8 +319,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
-    // ── Authorization: role-based collection access ─────────────────────────
-    const denied = authorize(user, action, collectionName);
+    // ── Authorization on CURRENT grants (never the JWT claim, which can be
+    // stale for up to the token TTL after an admin edits permissions) ────────
+    const staffDoc = (await getModel("staff")
+      .findById(user.uid)
+      .select("role grantedFeatures")
+      .lean()) as { role?: string; grantedFeatures?: unknown } | null;
+    const authzUser: TokenPayload & AuthzUser = {
+      ...user,
+      role: staffDoc?.role || user.role,
+      grantedFeatures: Array.isArray(staffDoc?.grantedFeatures)
+        ? (staffDoc.grantedFeatures as unknown[]).filter((f): f is string => typeof f === "string")
+        : [],
+    };
+
+    // Writes to the type-split invoices collection are authorized per document
+    // type: payload type on create, the stored type on update/delete.
+    let docType: unknown;
+    if (collectionName === "invoices" && isWriteAction(action)) {
+      if (action === "create") {
+        docType = (body.data as Record<string, unknown> | undefined)?.type;
+      } else {
+        const existing = (await getModel("invoices")
+          .findById(body.id)
+          .select("type")
+          .lean()) as { type?: string } | null;
+        docType = existing?.type;
+      }
+    }
+
+    const denied = authorize(authzUser, action, collectionName, docType);
     if (denied) {
       return NextResponse.json({ error: denied }, { status: 403 });
     }
@@ -327,7 +363,7 @@ export async function POST(req: NextRequest) {
       case "find": {
         const { constraints = [] } = body;
         const { filter: rawFilter, sort, limit: lim } = buildQuery(constraints);
-        const filter = await applyReadScope(user, collectionName, rawFilter);
+        const filter = await applyReadScope(authzUser, collectionName, rawFilter);
         let q = Model.find(filter);
         if (Object.keys(sort).length) q = q.sort(sort);
         q = q.limit(Math.min(lim || MAX_QUERY_LIMIT, MAX_QUERY_LIMIT));
@@ -343,6 +379,10 @@ export async function POST(req: NextRequest) {
         const doc = await Model.findById(id).lean();
         if (!doc) return NextResponse.json(null);
         const d = doc as Record<string, unknown>;
+        const deniedDoc = authorizeReadDoc(authzUser, collectionName, d);
+        if (deniedDoc) {
+          return NextResponse.json({ error: deniedDoc }, { status: 403 });
+        }
         return NextResponse.json(dateToTs(sanitizeDoc({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined })));
       }
 
@@ -362,13 +402,13 @@ export async function POST(req: NextRequest) {
         const { id, data: rawData } = body;
         const data = tsToDate(rawData) as Record<string, unknown>;
         if (collectionName === "leaveRequests") {
-          const deniedUpdate = await guardRequestUpdate(user, id, data);
+          const deniedUpdate = await guardRequestUpdate(authzUser, id, data);
           if (deniedUpdate) {
             return NextResponse.json({ error: deniedUpdate }, { status: 403 });
           }
         }
         if (collectionName === "tasks") {
-          const deniedUpdate = await guardTaskUpdate(user, id, data);
+          const deniedUpdate = await guardTaskUpdate(authzUser, id, data);
           if (deniedUpdate) {
             return NextResponse.json({ error: deniedUpdate }, { status: 403 });
           }
@@ -446,7 +486,7 @@ export async function POST(req: NextRequest) {
       case "count": {
         const { constraints = [] } = body;
         const { filter: rawFilter } = buildQuery(constraints);
-        const filter = await applyReadScope(user, collectionName, rawFilter);
+        const filter = await applyReadScope(authzUser, collectionName, rawFilter);
         const total = await Model.countDocuments(filter);
         return NextResponse.json({ total });
       }
@@ -455,7 +495,7 @@ export async function POST(req: NextRequest) {
       case "paginate": {
         const { constraints = [], pageSize = 25, page = 0 } = body;
         const { filter: rawFilter, sort } = buildQuery(constraints);
-        const filter = await applyReadScope(user, collectionName, rawFilter);
+        const filter = await applyReadScope(authzUser, collectionName, rawFilter);
         const total = await Model.countDocuments(filter);
         let q = Model.find(filter);
         if (Object.keys(sort).length) q = q.sort(sort);

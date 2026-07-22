@@ -14,8 +14,11 @@ import { PageLoader, EmptyState } from "@/components/ui/loading";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ArrowLeft, Calendar, DollarSign, Clock, History } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { hasFeature } from "@/lib/permissions";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 export default function StaffPayrollDossierPage() {
+  const base = useWorkspaceBase();
   const params = useParams();
   const router = useRouter();
   const staffId = params.id as string;
@@ -32,15 +35,15 @@ export default function StaffPayrollDossierPage() {
 
   const fetchData = async () => {
     try {
-      // Check access: admin or accounts only
-      if (!currentUser || !["admin", "accounts"].includes(currentUser.role)) {
-        router.push("/dashboard");
+      // Check access: admin/accounts role, or an explicit payroll grant.
+      if (!currentUser || !(["admin", "accounts"].includes(currentUser.role) || hasFeature(currentUser, "payroll"))) {
+        router.push(base === "/staff-portal" ? "/staff-portal" : "/dashboard");
         return;
       }
 
       const staffData = await getDocument<Staff>("staff", staffId);
       if (!staffData) {
-        router.push("/dashboard/payroll");
+        router.push(`${base}/payroll`);
         return;
       }
       setStaff(staffData);
@@ -170,7 +173,7 @@ export default function StaffPayrollDossierPage() {
                       {payroll && (
                         <Button size="sm" variant="ghost" onClick={() => {
                           // Show payslip breakdown
-                          router.push(`/dashboard/payroll/staff/${staffId}/payslip?month=${payroll.month}`);
+                          router.push(`${base}/payroll/staff/${staffId}/payslip?month=${payroll.month}`);
                         }}>
                           View
                         </Button>
