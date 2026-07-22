@@ -382,6 +382,16 @@ export async function POST(req: NextRequest) {
       // ── DELETE ──────────────────────────────────────────────────────────
       case "delete": {
         const { id } = body;
+        if (collectionName === "staff") {
+          const target = (await Model.findById(id).select("email").lean()) as { email?: string } | null;
+          // Demo login accounts are protected — reseed via scripts/seed-demo.mjs.
+          if (target?.email && ["admin@d4media.in", "staff@d4media.in"].includes(target.email)) {
+            return NextResponse.json(
+              { error: "Demo accounts cannot be deleted" },
+              { status: 403 }
+            );
+          }
+        }
         await Model.findByIdAndDelete(id);
         writeAuditLog("delete", collectionName, id, `Deleted ${collectionName} record`, auditUser);
         return NextResponse.json({ success: true });
