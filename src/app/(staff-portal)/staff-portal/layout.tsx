@@ -60,14 +60,15 @@ const portalModules = FEATURES.filter((f) => f.portal).map((f) => ({
 const guardOrder = [...portalModules].sort((a, b) => b.href.length - a.href.length);
 
 const navItems = [
+  // Ordered by daily usage: attendance/tasks/work-log first, occasional items last.
   { href: "/staff-portal", label: "Home", icon: Home },
-  { href: "/staff-portal/leave", label: "Apply Leave", icon: CalendarDays },
-  { href: "/staff-portal/my-leaves", label: "My Leaves", icon: FileText },
+  { href: "/staff-portal/attendance", label: "Attendance", icon: Clock },
   { href: "/staff-portal/my-tasks", label: "My Tasks", icon: ClipboardList },
   { href: "/staff-portal/work-log", label: "Work Log", icon: Pencil },
-  { href: "/staff-portal/attendance", label: "Attendance", icon: Clock },
-  { href: "/staff-portal/holidays", label: "Holidays", icon: CalendarOff },
+  { href: "/staff-portal/leave", label: "Apply Leave", icon: CalendarDays },
+  { href: "/staff-portal/my-leaves", label: "My Leaves", icon: FileText },
   { href: "/staff-portal/calendar", label: "Calendar", icon: CalendarRange },
+  { href: "/staff-portal/holidays", label: "Holidays", icon: CalendarOff },
   { href: "/staff-portal/notifications", label: "Alerts", icon: Bell },
   { href: "/staff-portal/profile", label: "Profile", icon: User },
 ];
@@ -245,19 +246,39 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
 
       <div className="relative z-10 min-h-screen lg:pl-[304px]">
         <header className="px-4 pt-4 sm:px-6 lg:px-8 lg:pt-5">
-          <div className="page-frame glass-panel flex min-h-[var(--header-height)] flex-col justify-between gap-4 rounded-[32px] px-5 py-4 sm:px-6 lg:flex-row lg:items-center lg:px-8">
-            <div>
-              <p className="eyebrow">{currentItem.label}</p>
-              <div className="mt-2 space-y-1">
-                <h1 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-[2rem]">
-                  {currentItem.label}
+          {/* Mobile: one compact row (title + avatar). Full hero from sm up. */}
+          <div className="page-frame glass-panel flex items-center justify-between gap-4 rounded-[24px] px-4 py-3 sm:min-h-[var(--header-height)] sm:rounded-[32px] sm:px-6 sm:py-4 lg:px-8">
+            <div className="min-w-0">
+              {/* .eyebrow is unlayered CSS (display:inline-flex) and outranks the `hidden` utility — hide via wrapper */}
+              <div className="hidden sm:block">
+                <p className="eyebrow">{currentItem.label}</p>
+              </div>
+              <div className="space-y-1 sm:mt-2">
+                <h1 className="truncate text-lg font-semibold tracking-[-0.04em] text-slate-950 sm:text-[2rem]">
+                  {/* Mobile: greet instead of repeating the nav label */}
+                  <span className="sm:hidden">Hi, {user.firstName} 👋</span>
+                  <span className="hidden sm:inline">{currentItem.label}</span>
                 </h1>
-                <p className="max-w-2xl text-sm leading-6 text-slate-500">
+                <p className="hidden max-w-2xl text-sm leading-6 text-slate-500 sm:block">
                   Welcome back, {user.firstName}. Everything you need for your day is organized here.
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3 self-end lg:self-auto">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative"
+                aria-label={unread > 0 ? `Alerts (${unread} unread)` : "Alerts"}
+                onClick={() => router.push("/staff-portal/notifications")}
+              >
+                <Bell className="h-5 w-5" />
+                {unread > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+                    {unread > 9 ? "9+" : unread}
+                  </span>
+                )}
+              </Button>
               <div className="flex items-center gap-3 rounded-full border border-white/70 bg-white/70 px-2 py-2 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl">
                 <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-sm font-semibold text-white">
                   {profileImage ? (

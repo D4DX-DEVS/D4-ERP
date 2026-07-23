@@ -14,7 +14,7 @@ import {
 import { logAudit } from "@/lib/audit";
 import { getAppSettings } from "@/lib/settings";
 import { useAuthStore } from "@/store/auth-store";
-import type { CalendarEvent, LeaveRequest, Task, EventType, EventPriority, EventScope, RecurrenceFrequency, ManagedEvent, StudioBooking } from "@/types";
+import type { CalendarEvent, LeaveRequest, Task, EventType, EventPriority, EventScope, RecurrenceFrequency } from "@/types";
 import type { Holiday } from "@/lib/settings";
 import {
   MANUAL_EVENT_TYPES,
@@ -89,34 +89,10 @@ const emptyForm: FormState = {
   recurrenceInterval: "1", recurrenceUntil: "",
 };
 
-// Unified calendar item with source tracking and optional href for navigation
+// Team calendar item — event/studio bookings live on the Booking Calendar, not here.
 type UnifiedCalendarItem = CalendarItem & {
-  source: "event" | "leave" | "task" | "holiday" | "booking";
   href?: string;
-  itemSource?: "calendar-event" | "managed-event" | "studio-booking";
-};
-
-// Studio conflict detection
-const hasStudioConflict = (
-  bookings: (StudioBooking & { id: string })[],
-  year: number,
-  month: number,
-  day: number
-): boolean => {
-  const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  const dayBookings = bookings.filter((b) => b.date === dateStr);
-  if (dayBookings.length < 2) return false;
-
-  for (let i = 0; i < dayBookings.length; i++) {
-    for (let j = i + 1; j < dayBookings.length; j++) {
-      const b1 = dayBookings[i];
-      const b2 = dayBookings[j];
-      const start1 = b1.startTime.localeCompare(b2.endTime) < 0;
-      const end1 = b1.endTime.localeCompare(b2.startTime) > 0;
-      if (start1 && end1) return true;
-    }
-  }
-  return false;
+  itemSource?: "calendar-event";
 };
 
 export default function CalendarPage() {
@@ -125,8 +101,6 @@ export default function CalendarPage() {
   const { toast } = useToast();
 
   const [events, setEvents] = useState<(CalendarEvent & { id: string })[]>([]);
-  const [managedEvents, setManagedEvents] = useState<(ManagedEvent & { id: string })[]>([]);
-  const [studioBookings, setStudioBookings] = useState<(StudioBooking & { id: string })[]>([]);
   const [leaves, setLeaves] = useState<(LeaveRequest & { id: string })[]>([]);
   const [tasks, setTasks] = useState<(Task & { id: string })[]>([]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -134,9 +108,6 @@ export default function CalendarPage() {
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showForm, setShowForm] = useState(false);
-  const [showChooser, setShowChooser] = useState(false);
-  const [chooserDay, setChooserDay] = useState<number | undefined>(undefined);
-  const [createType, setCreateType] = useState<"calendar" | "event" | "studio" | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [selected, setSelected] = useState<UnifiedCalendarItem | null>(null);
@@ -146,8 +117,6 @@ export default function CalendarPage() {
 
   // Filters for unified calendar sources
   const [showCalendar, setShowCalendar] = useState(true);
-  const [showEvents, setShowEvents] = useState(true);
-  const [showStudio, setShowStudio] = useState(true);
   const [scopeFilter, setScopeFilter] = useState<Set<EventScope>>(new Set());
   const [showLeaves, setShowLeaves] = useState(true);
   const [showTasks, setShowTasks] = useState(true);
@@ -156,17 +125,13 @@ export default function CalendarPage() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [eventData, managedEventData, studioData, leaveData, taskData, settings] = await Promise.all([
+      const [eventData, leaveData, taskData, settings] = await Promise.all([
         getDocuments<CalendarEvent>("calendar_events"),
-        getDocuments<ManagedEvent>("events"),
-        getDocuments<StudioBooking>("studio_bookings"),
         getDocuments<LeaveRequest>("leave_requests", [where("status", "==", "approved")]),
         getDocuments<Task>("tasks"),
         getAppSettings(),
       ]);
       setEvents(eventData);
-      setManagedEvents(managedEventData);
-      setStudioBookings(studioData);
       setLeaves(leaveData);
       setTasks(taskData);
       setHolidays(settings.holidays);
@@ -207,64 +172,6 @@ export default function CalendarPage() {
       }
     }
 
-    // Managed events (Events module) — map string dates to CalendarItem
-    if (showEvents) {
-      for (const e of managedEvents) {
-        const start = new Date(e.startDate);
-        const end = new Date(e.endDate);
-        if (start.getTime() <= rangeEnd.getTime() && end.getTime() >= rangeStart.getTime()) {
-          list.push({
-            key: `managed-event-${e.id}`,
-            id: e.id,
-            title: e.title,
-            source: "booking",
-            type: "event",
-            start,
-            end,
-            isAllDay: !e.startTime,
-            startTime: e.startTime,
-            endTime: e.endTime,
-            location: e.venue || e.location,
-            description: [e.eventId, e.clientName && `Client: ${e.clientName}`, e.status && `Status: ${e.status}`, e.description].filter(Boolean).join("\n"),
-            color: "#9333ea",
-            editable: false,
-            href: `/dashboard/events/${e.id}`,
-            itemSource: "managed-event",
-            raw: undefined,
-          } as UnifiedCalendarItem);
-        }
-      }
-    }
-
-    // Studio bookings — map YYYY-MM-DD + time to CalendarItem
-    if (showStudio) {
-      for (const b of studioBookings) {
-        const start = new Date(`${b.date}T${b.startTime}`);
-        const end = new Date(`${b.date}T${b.endTime}`);
-        if (start.getTime() <= rangeEnd.getTime() && end.getTime() >= rangeStart.getTime()) {
-          list.push({
-            key: `studio-booking-${b.id}`,
-            id: b.id,
-            title: b.studioName ? `${b.studioName} — ${b.purpose}` : b.purpose,
-            source: "booking",
-            type: "studio",
-            start,
-            end,
-            isAllDay: false,
-            startTime: b.startTime,
-            endTime: b.endTime,
-            location: b.studioName,
-            description: [b.bookingId, b.eventName && `Event: ${b.eventName}`, b.clientName && `Client: ${b.clientName}`, b.purpose, b.notes].filter(Boolean).join("\n"),
-            color: "#f97316",
-            editable: false,
-            href: `/dashboard/studio/bookings`,
-            itemSource: "studio-booking",
-            raw: undefined,
-          } as UnifiedCalendarItem);
-        }
-      }
-    }
-
     // Leaves, tasks, holidays (existing)
     if (showLeaves) for (const l of leaves) { const it = leaveToItem(l); if (it) list.push({ ...it, itemSource: "calendar-event" }); }
     if (showTasks) for (const t of tasks) { const it = taskToItem(t); if (it) list.push({ ...it, itemSource: "calendar-event" }); }
@@ -292,33 +199,17 @@ export default function CalendarPage() {
     user ? { uid: user.uid, firstName: user.firstName, lastName: user.lastName } : null;
 
   // ── Form helpers ────────────────────────────────────────────────────────────
-  const openCreate = (day?: number, type?: "calendar" | "event" | "studio") => {
-    if (type) {
-      setShowChooser(false);
-      setCreateType(type);
-      if (type === "calendar") {
-        const base = day ? `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}` : "";
-        setEditingId(null);
-        setForm({ ...emptyForm, startDate: base, endDate: base });
-        setSelected(null);
-        setShowForm(true);
-      } else if (type === "event") {
-        router.push("/dashboard/events/list");
-      } else if (type === "studio") {
-        router.push("/dashboard/studio/bookings");
-      }
-    } else {
-      // Show type chooser dialog
-      setChooserDay(day);
-      setSelected(null);
-      setShowChooser(true);
-    }
+  const openCreate = (day?: number) => {
+    const base = day ? `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}` : "";
+    setEditingId(null);
+    setForm({ ...emptyForm, startDate: base, endDate: base });
+    setSelected(null);
+    setShowForm(true);
   };
 
   const openEdit = (e: CalendarEvent & { id: string }) => {
     const toKey = (ts?: { seconds?: number }) =>
       ts?.seconds ? new Date(ts.seconds * 1000).toISOString().slice(0, 10) : "";
-    setCreateType("calendar");
     setEditingId(e.id);
     setForm({
       title: e.title,
@@ -413,7 +304,6 @@ export default function CalendarPage() {
       setShowForm(false);
       setForm(emptyForm);
       setEditingId(null);
-      setCreateType(null);
       fetchAll();
     } catch (error) {
       console.error("Error:", error);
@@ -573,8 +463,6 @@ export default function CalendarPage() {
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs text-gray-400 mr-1">Show:</span>
             <button onClick={() => setShowCalendar((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showCalendar ? "bg-blue-100 text-blue-700 border-transparent" : "bg-white text-gray-400"}`}>Calendar</button>
-            <button onClick={() => setShowEvents((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showEvents ? "bg-purple-100 text-purple-700 border-transparent" : "bg-white text-gray-400"}`}>Events</button>
-            <button onClick={() => setShowStudio((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showStudio ? "bg-orange-100 text-orange-700 border-transparent" : "bg-white text-gray-400"}`}>Studio</button>
             <button onClick={() => setShowLeaves((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showLeaves ? "bg-amber-100 text-amber-700 border-transparent" : "bg-white text-gray-400"}`}>Leaves</button>
             <button onClick={() => setShowTasks((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showTasks ? "bg-red-100 text-red-700 border-transparent" : "bg-white text-gray-400"}`}>Tasks</button>
             <button onClick={() => setShowHolidays((v) => !v)} className={`px-2.5 py-1 rounded-full text-xs border ${showHolidays ? "bg-green-100 text-green-700 border-transparent" : "bg-white text-gray-400"}`}>Holidays</button>
@@ -611,7 +499,7 @@ export default function CalendarPage() {
             ))}
             {cells.map((day, i) => {
               const dayItems = day ? itemsForDay(items, new Date(year, month, day)) : [];
-              const hasConflict = day ? hasStudioConflict(studioBookings, year, month, day) : false;
+              const hasConflict = false;
               return (
                 <div
                   key={i}
@@ -626,15 +514,8 @@ export default function CalendarPage() {
                           const unified = it as UnifiedCalendarItem;
                           const meta = categoryMeta(it.type);
                           const spanStart = sameDay(it.start, new Date(year, month, day)) || day === 1;
-                          let bgColor = it.color ? it.color + "22" : undefined;
-                          let txtColor = it.color || undefined;
-                          if (unified.itemSource === "managed-event") {
-                            bgColor = "#9333ea22";
-                            txtColor = "#9333ea";
-                          } else if (unified.itemSource === "studio-booking") {
-                            bgColor = "#f9731622";
-                            txtColor = "#f97316";
-                          }
+                          const bgColor = it.color ? it.color + "22" : undefined;
+                          const txtColor = it.color || undefined;
                           return (
                             <div
                               key={it.key}
@@ -721,20 +602,8 @@ export default function CalendarPage() {
         </CardContent>
       </Card>
 
-      {/* Type chooser dialog */}
-      <Dialog open={showChooser} onOpenChange={(o) => setShowChooser(o)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Create New</DialogTitle></DialogHeader>
-          <div className="space-y-2">
-            <Button onClick={() => openCreate(chooserDay, "calendar")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Calendar Event</span><span className="text-xs text-gray-400">Team meeting, holiday, all-day</span></div></Button>
-            <Button variant="outline" onClick={() => openCreate(chooserDay, "event")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Event (Managed)</span><span className="text-xs text-gray-400">Conference, webinar, project</span></div></Button>
-            <Button variant="outline" onClick={() => openCreate(chooserDay, "studio")} className="w-full justify-start"><div className="flex flex-col items-start"><span className="font-medium">Studio Booking</span><span className="text-xs text-gray-400">Video, photo, production</span></div></Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Add / Edit form */}
-      <Dialog open={showForm && createType === "calendar"} onOpenChange={(o) => { setShowForm(o); if (!o) { setEditingId(null); setForm(emptyForm); setCreateType(null); } }}>
+      <Dialog open={showForm} onOpenChange={(o) => { setShowForm(o); if (!o) { setEditingId(null); setForm(emptyForm); } }}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editingId ? "Edit Event" : "Add Event"}</DialogTitle></DialogHeader>
           <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
@@ -832,9 +701,8 @@ export default function CalendarPage() {
               <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Badge variant={categoryMeta(selected.type).badge}>{categoryMeta(selected.type).label}</Badge>
-                  {selected.itemSource === "calendar-event" && selected.priority && <Badge variant={PRIORITY_BADGE[selected.priority]}>{selected.priority}</Badge>}
-                  {selected.itemSource === "calendar-event" && selected.scope && <Badge variant="bg-gray-100 text-gray-600">{selected.scope}</Badge>}
-                  <Badge variant={selected.itemSource === "managed-event" ? "bg-purple-100 text-purple-700" : selected.itemSource === "studio-booking" ? "bg-orange-100 text-orange-700" : "bg-blue-100 text-blue-700"}>{selected.itemSource === "managed-event" ? "Event" : selected.itemSource === "studio-booking" ? "Studio" : "Calendar"}</Badge>
+                  {selected.priority && <Badge variant={PRIORITY_BADGE[selected.priority]}>{selected.priority}</Badge>}
+                  {selected.scope && <Badge variant="bg-gray-100 text-gray-600">{selected.scope}</Badge>}
                 </div>
                 <p className="flex items-center gap-2 text-gray-600">
                   <Clock className="h-4 w-4" />
@@ -842,13 +710,13 @@ export default function CalendarPage() {
                   {!selected.isAllDay && selected.startTime ? ` · ${selected.startTime}${selected.endTime ? ` - ${selected.endTime}` : ""}` : " · All day"}
                 </p>
                 {selected.location && <p className="flex items-center gap-2 text-gray-600"><MapPin className="h-4 w-4" />{selected.location}</p>}
-                {selected.itemSource === "calendar-event" && selected.raw?.recurrence && selected.raw.recurrence.frequency !== "none" && (
+                {selected.raw?.recurrence && selected.raw.recurrence.frequency !== "none" && (
                   <p className="flex items-center gap-2 text-gray-600"><Repeat className="h-4 w-4" />Repeats {selected.raw.recurrence.frequency}</p>
                 )}
                 {selected.description && <p className="text-gray-600 whitespace-pre-wrap">{selected.description}</p>}
 
                 <div className="flex items-center gap-2 pt-2 border-t flex-wrap">
-                  {selected.itemSource === "calendar-event" && selected.raw ? (
+                  {selected.raw ? (
                     <>
                       <Button size="sm" onClick={() => router.push(`/dashboard/calendar/event/${selected.id}`)}><ExternalLink className="h-4 w-4 mr-1" /> Open</Button>
                       <Button size="sm" variant="outline" onClick={() => openEdit(selected.raw!)}><Pencil className="h-4 w-4 mr-1" /> Edit</Button>

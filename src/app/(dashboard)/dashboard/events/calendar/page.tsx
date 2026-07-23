@@ -8,7 +8,7 @@ import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader } from "@/components/ui/listing";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import type { ManagedEvent } from "@/types";
+import type { ManagedEvent, StudioBooking } from "@/types";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -34,6 +34,7 @@ export default function EventCalendarPage() {
   const router = useRouter();
   const base = useWorkspaceBase();
   const [events, setEvents] = useState<ManagedEvent[]>([]);
+  const [studioBookings, setStudioBookings] = useState<StudioBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -43,8 +44,12 @@ export default function EventCalendarPage() {
   useEffect(() => {
     async function fetchEvents() {
       try {
-        const docs = await getDocuments<ManagedEvent>("events", [orderBy("startDate", "asc")]);
+        const [docs, studio] = await Promise.all([
+          getDocuments<ManagedEvent>("events", [orderBy("startDate", "asc")]),
+          getDocuments<StudioBooking>("studio_bookings"),
+        ]);
         setEvents(docs);
+        setStudioBookings(studio);
       } catch (error) {
         console.error("Failed to fetch events:", error);
       } finally {
@@ -70,6 +75,11 @@ export default function EventCalendarPage() {
     });
   };
 
+  const getStudioForDate = (day: number): StudioBooking[] => {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return studioBookings.filter((b) => b.date === dateStr);
+  };
+
   const today = new Date();
   const isToday = (day: number) =>
     today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
@@ -83,8 +93,8 @@ export default function EventCalendarPage() {
   return (
     <div className="space-y-6">
       <ListingHeader
-        title="Event Calendar"
-        description="Visual calendar of all events."
+        title="Booking Calendar"
+        description="Event and studio bookings in one view."
       />
 
       {/* Month Navigation */}
@@ -124,6 +134,7 @@ export default function EventCalendarPage() {
                 return <div key={idx} className="border-b border-r border-slate-200/60 p-2 min-h-[100px] bg-slate-50/40" />;
               }
               const dayEvents = getEventsForDate(day);
+              const dayStudio = getStudioForDate(day);
               return (
                 <div
                   key={idx}
@@ -155,6 +166,20 @@ export default function EventCalendarPage() {
                         +{dayEvents.length - 3} more
                       </p>
                     )}
+                    {dayStudio.slice(0, 2).map((b) => (
+                      <button
+                        key={b.id}
+                        onClick={() => router.push(`${base}/studio/bookings`)}
+                        className="w-full text-left rounded-md px-1 py-0.5 text-[10px] truncate hover:bg-white flex items-center gap-1 text-orange-700"
+                        title={`${b.startTime}–${b.endTime} ${b.studioName ? `${b.studioName} — ` : ""}${b.purpose}`}
+                      >
+                        <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0 bg-orange-500" />
+                        {b.startTime} {b.studioName || b.purpose}
+                      </button>
+                    ))}
+                    {dayStudio.length > 2 && (
+                      <p className="text-[10px] text-orange-400 px-1">+{dayStudio.length - 2} studio</p>
+                    )}
                   </div>
                 </div>
               );
@@ -171,6 +196,10 @@ export default function EventCalendarPage() {
             <span className="capitalize">{status.replace(/-/g, " ")}</span>
           </div>
         ))}
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-orange-500" />
+          <span>Studio booking</span>
+        </div>
       </div>
     </div>
   );

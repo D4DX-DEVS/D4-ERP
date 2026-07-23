@@ -38,9 +38,6 @@ const STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
   { value: "present", label: "Present" },
   { value: "absent", label: "Absent" },
   { value: "half-day", label: "Half Day" },
-  { value: "late", label: "Late" },
-  { value: "leave", label: "Leave" },
-  { value: "wfh", label: "Work From Home" },
   { value: "on-duty", label: "On Duty" },
   { value: "public-holiday", label: "Public Holiday" },
 ];

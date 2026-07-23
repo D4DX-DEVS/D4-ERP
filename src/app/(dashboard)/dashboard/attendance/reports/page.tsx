@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getDocuments, where, orderBy, Timestamp } from "@/lib/firestore";
 import { Attendance, AttendanceStatus, Department, Staff } from "@/types";
+import { normalizeAttendanceStatus } from "@/lib/attendance-status";
 import { useRoleGuard } from "@/hooks/use-role-guard";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/asset-export-utils";
 import { Button } from "@/components/ui/button";
@@ -27,11 +28,9 @@ const REPORT_OPTIONS = [
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "All statuses" },
   { value: "present", label: "Present" },
-  { value: "late", label: "Late" },
   { value: "half-day", label: "Half Day" },
-  { value: "leave", label: "Leave" },
-  { value: "wfh", label: "Work From Home" },
   { value: "on-duty", label: "On Duty" },
+  { value: "public-holiday", label: "Public Holiday" },
   { value: "absent", label: "Absent" },
 ];
 
@@ -141,7 +140,7 @@ export default function AttendanceReportsPage() {
   const scopedRecords = useMemo(() => {
     let list = records.filter((r) => scopedStaffIds.has(r.staffId));
     if (statusFilter !== "all") {
-      list = statusFilter === "late" ? list.filter((r) => r.isLate) : list.filter((r) => r.status === statusFilter);
+      list = list.filter((r) => normalizeAttendanceStatus(r.status) === statusFilter);
     }
     return list;
   }, [records, scopedStaffIds, statusFilter]);
@@ -154,12 +153,9 @@ export default function AttendanceReportsPage() {
         Code: s.employeeCode || "",
         Department: deptMap.get(s.departmentId) || "—",
         Present: recs.filter((r) => isPresentLike(r.status)).length,
-        Late: recs.filter((r) => r.isLate).length,
         "Half Day": recs.filter((r) => r.status === "half-day").length,
-        Leave: recs.filter((r) => r.status === "leave").length,
-        WFH: recs.filter((r) => r.status === "wfh").length,
         "On Duty": recs.filter((r) => r.status === "on-duty").length,
-        Absent: recs.filter((r) => r.status === "absent").length,
+        Absent: recs.filter((r) => normalizeAttendanceStatus(r.status) === "absent").length,
         "Total Hrs": Math.round(recs.reduce((sum, r) => sum + (r.workingHours || 0), 0) * 10) / 10,
         "OT Hrs": Math.round(recs.reduce((sum, r) => sum + (r.overtimeHours || 0), 0) * 10) / 10,
       };
@@ -180,12 +176,9 @@ export default function AttendanceReportsPage() {
       .map(([day, recs]) => ({
         Date: day,
         Present: recs.filter((r) => isPresentLike(r.status)).length,
-        Late: recs.filter((r) => r.isLate).length,
         "Half Day": recs.filter((r) => r.status === "half-day").length,
-        Leave: recs.filter((r) => r.status === "leave").length,
-        WFH: recs.filter((r) => r.status === "wfh").length,
         "On Duty": recs.filter((r) => r.status === "on-duty").length,
-        Absent: recs.filter((r) => r.status === "absent").length,
+        Absent: recs.filter((r) => normalizeAttendanceStatus(r.status) === "absent").length,
         "OT Hrs": Math.round(recs.reduce((sum, r) => sum + (r.overtimeHours || 0), 0) * 10) / 10,
       }));
   }, [scopedRecords]);
@@ -206,9 +199,7 @@ export default function AttendanceReportsPage() {
         Department: deptMap.get(deptId) || "—",
         Headcount: staff.size,
         "Present Days": recs.filter((r) => isPresentLike(r.status)).length,
-        "Leave Days": recs.filter((r) => r.status === "leave").length,
-        "Absent Days": recs.filter((r) => r.status === "absent").length,
-        "Late Count": recs.filter((r) => r.isLate).length,
+        "Absent Days": recs.filter((r) => normalizeAttendanceStatus(r.status) === "absent").length,
         "OT Hrs": Math.round(recs.reduce((sum, r) => sum + (r.overtimeHours || 0), 0) * 10) / 10,
       }))
       .sort((a, b) => a.Department.localeCompare(b.Department));
@@ -229,12 +220,9 @@ export default function AttendanceReportsPage() {
     const statusMap: Record<string, string> = {
       present: "P",
       absent: "A",
-      "half-day": "½",
-      late: "L",
-      leave: "LV",
-      wfh: "W",
+      "half-day": "H",
       "on-duty": "OD",
-      "public-holiday": "H",
+      "public-holiday": "PH",
     };
     return scopedStaff.map((s) => {
       const row: Record<string, string | number> = {
@@ -244,12 +232,10 @@ export default function AttendanceReportsPage() {
       for (let day = 1; day <= daysInMonth; day++) {
         const key = `${year}-${String(monthNum).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         const rec = gridLookup.get(`${s.id}_${key}`);
-        row[String(day)] = rec ? statusMap[rec.status] || "?" : "—";
+        row[String(day)] = rec ? statusMap[normalizeAttendanceStatus(rec.status)] || "?" : "—";
       }
       row["Present"] = scopedRecords.filter((r) => r.staffId === s.id && isPresentLike(r.status)).length;
-      row["Absent"] = scopedRecords.filter((r) => r.staffId === s.id && r.status === "absent").length;
-      row["Late"] = scopedRecords.filter((r) => r.staffId === s.id && r.isLate).length;
-      row["Leave"] = scopedRecords.filter((r) => r.staffId === s.id && r.status === "leave").length;
+      row["Absent"] = scopedRecords.filter((r) => r.staffId === s.id && normalizeAttendanceStatus(r.status) === "absent").length;
       row["Half-Day"] = scopedRecords.filter((r) => r.staffId === s.id && r.status === "half-day").length;
       row["OT Hrs"] = Math.round(scopedRecords.filter((r) => r.staffId === s.id).reduce((sum, r) => sum + (r.overtimeHours || 0), 0) * 10) / 10;
       return row;

@@ -187,6 +187,11 @@ export default function EventsListPage() {
       toast("error", "Please fill required fields");
       return;
     }
+    const todayKey = new Date().toLocaleDateString("en-CA");
+    if (!editingId && form.startDate < todayKey) {
+      toast("error", "Cannot book a past date — pick today or an upcoming date");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -430,6 +435,7 @@ export default function EventsListPage() {
             <Label>Start Date *</Label>
             <DatePicker
               value={form.startDate}
+              min={editingId ? undefined : new Date().toLocaleDateString("en-CA")}
               onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))}
             />
           </div>

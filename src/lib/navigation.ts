@@ -122,12 +122,12 @@ export const navigationModules: NavModule[] = [
     roles: ["staff"],
     items: [
       { label: "Home", href: "/staff-portal", roles: ["staff"] },
-      { label: "Apply Leave", href: "/staff-portal/leave", roles: ["staff"] },
-      { label: "My Leaves", href: "/staff-portal/my-leaves", roles: ["staff"] },
       { label: "Attendance", href: "/staff-portal/attendance", roles: ["staff"] },
       { label: "My Tasks", href: "/staff-portal/my-tasks", roles: ["staff"] },
       { label: "Team Board", href: "/staff-portal/tasks", roles: ["staff"] },
       { label: "Work Log", href: "/staff-portal/work-log", roles: ["staff"] },
+      { label: "Apply Leave", href: "/staff-portal/leave", roles: ["staff"] },
+      { label: "My Leaves", href: "/staff-portal/my-leaves", roles: ["staff"] },
       { label: "Calendar", href: "/staff-portal/calendar", icon: Calendar, roles: ["staff"] },
       { label: "Holidays", href: "/staff-portal/holidays", roles: ["staff"] },
       { label: "Profile", href: "/staff-portal/profile", roles: ["staff"] },
@@ -183,6 +183,9 @@ export const navigationModules: NavModule[] = [
     label: "Bookings",
     icon: PartyPopper,
     roles: ["admin", "department-head"],
+    items: [
+      { label: "Booking Calendar", href: "/dashboard/events/calendar", icon: Calendar, roles: ["admin", "department-head"] },
+    ],
     subGroups: [
       {
         label: "Events",
