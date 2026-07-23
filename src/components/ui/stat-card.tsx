@@ -29,7 +29,7 @@ export function StatCard({ title, value, icon: Icon, color, bg, href, onClick, a
         (active ? " ring-2 ring-slate-900/70" : "")
       }
     >
-      <CardContent className="p-4 sm:p-6">
+      <CardContent className="p-3 sm:p-6">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate text-xs font-medium text-gray-500 sm:text-sm">{title}</p>

@@ -93,9 +93,11 @@ describe("parseAttendancePdf (ESSL basic work duration)", () => {
       expect(emp2.records[4]).toMatchObject({ date: "2026-07-05", status: "public-holiday", rawStatus: "WO" });
       expect(emp2.records[4].checkIn).toBeUndefined();
       expect(emp2.records[4].checkOut).toBeUndefined();
-      // Day 7: unknown "H" code defaults to absent with a warning, not silently dropped.
-      expect(emp2.records[6].status).toBe("absent");
-      expect(emp2.records[6].warnings.some((w) => w.includes("Unknown status"))).toBe(true);
+      // Day 2 (index 1): raw "A" but has a punch — any punch that day means present.
+      expect(emp2.records[1]).toMatchObject({ status: "present", rawStatus: "A", checkIn: "09:59" });
+      // Day 7: unknown "H" code, but the punch wins — present, no unknown-status warning.
+      expect(emp2.records[6].status).toBe("present");
+      expect(emp2.records[6].warnings.some((w) => w.includes("Unknown status"))).toBe(false);
     } finally {
       restore();
     }

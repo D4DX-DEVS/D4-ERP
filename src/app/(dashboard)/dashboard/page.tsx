@@ -14,7 +14,7 @@ import { REQUEST_TYPE_LABELS } from "@/lib/requests";
 import { useAuthStore } from "@/store/auth-store";
 import {
   Users,
-  Building2,
+  UserCheck,
   FileText,
   DollarSign,
   CalendarDays,
@@ -35,7 +35,7 @@ import type { StaffRequest, Transaction, Task, Attendance } from "@/types";
 
 interface DashboardStats {
   totalStaff: number;
-  totalCompanies: number;
+  presentToday: number;
   totalClients: number;
   pendingLeaves: number;
   totalInvoices: number;
@@ -68,7 +68,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats>({
     totalStaff: 0,
-    totalCompanies: 0,
+    presentToday: 0,
     totalClients: 0,
     pendingLeaves: 0,
     totalInvoices: 0,
@@ -95,10 +95,9 @@ export default function DashboardPage() {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-        const [staffList, companies, clients, pendingLeaves, invoices, tasks, todayRequests, transactions, attendance] =
+        const [staffList, clients, pendingLeaves, invoices, tasks, todayRequests, transactions, attendance] =
           await Promise.all([
             getDocuments("staff", [where("isActive", "==", true)]),
-            getDocuments("companies", [where("isActive", "==", true)]),
             getDocuments("clients", [where("isActive", "==", true)]),
             getDocuments("leaveRequests", [where("status", "==", "pending")]),
             // Server rejects finance reads without the feature — don't let a 403 sink the whole Promise.all.
@@ -167,9 +166,16 @@ export default function DashboardPage() {
             ...counts,
           }));
 
+        const todayNum = new Date().getDate();
+        const presentToday = (attendance as Attendance[]).filter((a) => {
+          if (!a.date?.seconds) return false;
+          const d = new Date(a.date.seconds * 1000);
+          return d.getDate() === todayNum && ["present", "late", "wfh", "on-duty", "half-day"].includes(a.status);
+        }).length;
+
         setStats({
           totalStaff: staffList.length,
-          totalCompanies: companies.length,
+          presentToday,
           totalClients: clients.length,
           pendingLeaves: pendingLeaves.length,
           totalInvoices: invoices.length,
@@ -199,7 +205,7 @@ export default function DashboardPage() {
 
   const statCards = [
     { title: "Total Staff", value: stats.totalStaff, icon: Users, color: "text-blue-600", bg: "bg-blue-50", href: "/dashboard/staff" },
-    { title: "Companies", value: stats.totalCompanies, icon: Building2, color: "text-purple-600", bg: "bg-purple-50", href: "/dashboard/companies" },
+    { title: "Present Today", value: stats.presentToday, icon: UserCheck, color: "text-purple-600", bg: "bg-purple-50", href: "/dashboard/attendance" },
     { title: "Clients", value: stats.totalClients, icon: Users, color: "text-emerald-600", bg: "bg-emerald-50", href: "/dashboard/clients" },
     { title: "Pending Leaves", value: stats.pendingLeaves, icon: CalendarDays, color: "text-orange-600", bg: "bg-orange-50", href: "/dashboard/leaves" },
     { title: "Invoices", value: stats.totalInvoices, icon: FileText, color: "text-indigo-600", bg: "bg-indigo-50", href: "/dashboard/invoices" },

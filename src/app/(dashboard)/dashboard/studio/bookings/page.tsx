@@ -247,6 +247,10 @@ export default function StudioBookingsPage() {
       toast("error", "End time must be after start time");
       return;
     }
+    if (!editingId && form.date < new Date().toLocaleDateString("en-CA")) {
+      toast("error", "Cannot book a past date — pick today or an upcoming date");
+      return;
+    }
     if (conflictWarning && !conflictWarning.includes("End time")) {
       toast("error", "Cannot save — time conflict exists");
       return;
@@ -535,6 +539,7 @@ export default function StudioBookingsPage() {
             <Label>Date *</Label>
             <DatePicker
               value={form.date}
+              min={editingId ? undefined : new Date().toLocaleDateString("en-CA")}
               onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
             />
           </div>

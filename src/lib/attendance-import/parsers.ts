@@ -194,7 +194,6 @@ function parseEsslBasicWorkDuration(data: Output): ParsedImport {
   for (const emp of employees) {
     for (const rec of emp.records) {
       const mapped = STATUS_MAP[rec.rawStatus];
-      if (!mapped) rec.warnings.push(`Unknown status code "${rec.rawStatus}"`);
       rec.status = mapped ?? "absent";
 
       if (rec.checkIn && !TIME_RE.test(rec.checkIn)) {
@@ -208,6 +207,10 @@ function parseEsslBasicWorkDuration(data: Output): ParsedImport {
       if (rec.checkIn && rec.checkOut && rec.checkOut < rec.checkIn) {
         rec.warnings.push("Check-out is earlier than check-in — treated as an overnight shift rolling into the next day");
       }
+
+      // Any valid punch that day = present. Late/half-day refinement is a manual admin edit.
+      if (rec.checkIn || rec.checkOut) rec.status = "present";
+      else if (!mapped) rec.warnings.push(`Unknown status code "${rec.rawStatus}"`);
     }
   }
 

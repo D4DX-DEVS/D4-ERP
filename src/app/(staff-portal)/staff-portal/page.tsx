@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { StatCard, StatGrid } from "@/components/ui/stat-card";
+import { StatCard } from "@/components/ui/stat-card";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocument, getDocuments, where, orderBy, Timestamp } from "@/lib/firestore";
 import { getAppSettings, isNonWorkingDay, AppSettings } from "@/lib/settings";
@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getStatusColor, formatDate } from "@/lib/utils";
 import { CalendarCheck, CalendarDays, ClipboardList, Eye, HeartPulse, Umbrella, UserX, Zap } from "lucide-react";
-import { AttendanceTrendChart } from "@/components/charts";
+import { AttendanceMonthGrid } from "@/components/staff/attendance-month-grid";
 
 // Leave policy (calendar year, Jan–Dec):
 //  CL: 15/year, accrues 1.25/month from joining month; unused carries over within the year.
@@ -52,13 +52,6 @@ function leaveDays(leave: LeaveRequest, settings: AppSettings | null, companyId?
 
 const fmtDays = (n: number) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
 
-interface AttendanceTrendData {
-  day: string;
-  present: number;
-  late: number;
-  absent: number;
-}
-
 export default function StaffPortalHome() {
   const { user } = useAuthStore();
   const [recentLeaves, setRecentLeaves] = useState<(LeaveRequest & { id: string })[]>([]);
@@ -74,7 +67,6 @@ export default function StaffPortalHome() {
     clAccrued: 0,
     slAccrued: 0,
   });
-  const [attendanceData, setAttendanceData] = useState<AttendanceTrendData[]>([]);
   const [overtimeCount, setOvertimeCount] = useState(0);
   const router = useRouter();
 
@@ -87,7 +79,6 @@ export default function StaffPortalHome() {
       try {
         const now = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
         const [leaves, tasks, attendance, staffDoc, overtimeRequests] = await Promise.all([
           getDocuments<LeaveRequest>("leaveRequests", [
@@ -118,39 +109,16 @@ export default function StaffPortalHome() {
         let present = 0;
         let leaveTaken = 0;
         let absent = 0;
-        const dayMap: Record<number, { present: number; late: number; absent: number }> = {};
 
         for (const record of attendance) {
           if (record.isDeleted || !record.date?.seconds) continue;
-
-          // Year stats
           if (record.date.seconds >= yearStartSec) {
             if (record.status === "present" || record.status === "late" || record.status === "wfh" || record.status === "on-duty") present += 1;
             else if (record.status === "half-day") present += 0.5;
             else if (record.status === "leave") leaveTaken += 1;
             else if (record.status === "absent") absent += 1;
           }
-
-          // Current month trend data
-          const d = new Date(record.date.seconds * 1000);
-          const monthSec = monthStart.getTime() / 1000;
-          const monthEndSec = monthEnd.getTime() / 1000;
-          if (record.date.seconds >= monthSec && record.date.seconds < monthEndSec) {
-            const dayNum = d.getDate();
-            if (!dayMap[dayNum]) dayMap[dayNum] = { present: 0, late: 0, absent: 0 };
-            if (record.status === "present" || record.status === "wfh" || record.status === "on-duty") dayMap[dayNum].present++;
-            else if (record.status === "late") dayMap[dayNum].late++;
-            else if (record.status === "absent") dayMap[dayNum].absent++;
-          }
         }
-
-        const attendanceData: AttendanceTrendData[] = Object.entries(dayMap)
-          .sort(([a], [b]) => Number(a) - Number(b))
-          .map(([day, counts]) => ({
-            day,
-            ...counts,
-          }));
-        setAttendanceData(attendanceData);
 
         let clUsed = 0;
         let slUsed = 0;
@@ -220,7 +188,8 @@ export default function StaffPortalHome() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold">Welcome, {user?.firstName}!</h1>
+      {/* ponytail: hidden on mobile — the hero header already greets the user */}
+      <h1 className="hidden text-xl font-bold sm:block">Welcome, {user?.firstName}!</h1>
 
       {/* Banners */}
       {banners.length > 0 && (
@@ -250,9 +219,10 @@ export default function StaffPortalHome() {
       )}
 
       {/* Quick Stats */}
-      <StatGrid cols={2}>
+      {/* 3 across at every size — StatGrid's 2-col mobile base orphans the third card */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <StatCard
-          title="Pending Leaves"
+          title="Leaves"
           value={pendingLeaves}
           icon={CalendarDays}
           color="text-orange-600"
@@ -260,7 +230,7 @@ export default function StaffPortalHome() {
           href="/staff-portal/my-leaves"
         />
         <StatCard
-          title="Active Tasks"
+          title="Tasks"
           value={pendingTasks.length}
           icon={ClipboardList}
           color="text-blue-600"
@@ -268,27 +238,16 @@ export default function StaffPortalHome() {
           href="/staff-portal/my-tasks"
         />
         <StatCard
-          title="Overtime This Month"
+          title="Overtime"
           value={overtimeCount}
           icon={Zap}
           color="text-amber-600"
           bg="bg-amber-50"
         />
-      </StatGrid>
+      </div>
 
-      {/* Personal Attendance Graph This Month */}
-      <Card>
-        <CardHeader><CardTitle className="text-base">Attendance • {new Date().toLocaleString("default", { month: "long", year: "numeric" })}</CardTitle></CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="w-full h-56 sm:h-64 animate-pulse bg-slate-200 rounded" />
-          ) : attendanceData.length === 0 ? (
-            <p className="text-sm text-gray-500">No attendance records this month.</p>
-          ) : (
-            <AttendanceTrendChart data={attendanceData} />
-          )}
-        </CardContent>
-      </Card>
+      {/* Personal attendance grid — current month at a glance */}
+      {user?.staffId ? <AttendanceMonthGrid staffId={user.staffId} /> : null}
 
       {/* Attendance Year Stats */}
       <Card>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createDocument, getDocuments, orderBy, where, Timestamp, updateDocument } from "@/lib/firestore";
 import { Attendance, AttendanceStatus, Staff } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
+import { ATTENDANCE_STATUS_CONFIG, attendanceStatusMeta, normalizeAttendanceStatus, type ActiveAttendanceStatus } from "@/lib/attendance-status";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,16 +44,7 @@ const VIEWS: { id: ViewMode; label: string; icon: typeof Rows3 }[] = [
   { id: "grid", label: "Monthly Grid", icon: Grid3x3 },
 ];
 
-const STATUS_CONFIG: Record<AttendanceStatus, { code: string; label: string; cell: string; badge: string }> = {
-  present: { code: "P", label: "Present", cell: "bg-emerald-100 text-emerald-700", badge: "bg-emerald-100 text-emerald-700" },
-  absent: { code: "A", label: "Absent", cell: "bg-rose-100 text-rose-700", badge: "bg-rose-100 text-rose-700" },
-  "half-day": { code: "H", label: "Half Day", cell: "bg-amber-100 text-amber-700", badge: "bg-amber-100 text-amber-700" },
-  late: { code: "L", label: "Late", cell: "bg-yellow-100 text-yellow-700", badge: "bg-yellow-100 text-yellow-700" },
-  leave: { code: "LV", label: "Leave", cell: "bg-sky-100 text-sky-700", badge: "bg-sky-100 text-sky-700" },
-  wfh: { code: "W", label: "WFH", cell: "bg-indigo-100 text-indigo-700", badge: "bg-indigo-100 text-indigo-700" },
-  "on-duty": { code: "OD", label: "On Duty", cell: "bg-violet-100 text-violet-700", badge: "bg-violet-100 text-violet-700" },
-  "public-holiday": { code: "PH", label: "Public Holiday", cell: "bg-purple-100 text-purple-700", badge: "bg-purple-100 text-purple-700" },
-};
+const STATUS_CONFIG = ATTENDANCE_STATUS_CONFIG;
 
 const OFF_CELL = "bg-slate-100 text-slate-400";
 const HOLIDAY_CELL = "bg-rose-100 text-rose-500";
@@ -90,7 +82,7 @@ export default function AttendanceRegisterPage() {
   const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
   const [view, setView] = useState<ViewMode>("logs");
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | AttendanceStatus>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | ActiveAttendanceStatus>("all");
 
   const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
   const [records, setRecords] = useState<Rec[]>([]);
@@ -136,7 +128,7 @@ export default function AttendanceRegisterPage() {
   function beginEdit(record: Rec | null, staffId: string, date: Date) {
     const s = staffList.find((x) => x.id === staffId);
     setEditTarget({ record, staffId, staffName: fullName(s), date });
-    setEditStatus(record?.status ?? "present");
+    setEditStatus(record ? normalizeAttendanceStatus(record.status) : "present");
     const inSec = secOf(record?.checkIn);
     const outSec = secOf(record?.checkOut);
     setEditCheckIn(inSec ? new Date(inSec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }).replace(/\s/g, "") : "");
@@ -257,7 +249,7 @@ export default function AttendanceRegisterPage() {
   const visibleRecords = useMemo(() => {
     return records.filter((r) => {
       if (!filteredStaffIds.has(r.staffId)) return false;
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (statusFilter !== "all" && normalizeAttendanceStatus(r.status) !== statusFilter) return false;
       return true;
     });
   }, [records, filteredStaffIds, statusFilter]);
@@ -349,7 +341,7 @@ export default function AttendanceRegisterPage() {
 
   function cellFor(staff: Staff & { id: string }, meta: (typeof dayMeta)[number]) {
     const rec = gridLookup.get(`${staff.id}_${meta.key}`);
-    if (rec) return STATUS_CONFIG[rec.status];
+    if (rec) return attendanceStatusMeta(rec.status);
     const joinSec = secOf(staff.dateOfJoining);
     if (joinSec && meta.key < dateKeyFromSec(joinSec)) return null; // before joining
     if (meta.isFuture) return null;
@@ -367,7 +359,7 @@ export default function AttendanceRegisterPage() {
         Time: new Date(e.sec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
         Staff: fullName(staffMap.get(e.staffId)),
         Action: e.action,
-        Status: STATUS_CONFIG[e.status]?.label ?? e.status,
+        Status: attendanceStatusMeta(e.status).label,
         Flag: e.isLate ? "Late" : e.isEarly ? "Early" : "",
         Location: e.location ? `${e.location.lat}, ${e.location.lng}` : "",
       }));
@@ -376,7 +368,7 @@ export default function AttendanceRegisterPage() {
       const rows = dailyRows.map((r) => ({
         Date: dateKeyFromSec(secOf(r.date) ?? 0),
         Staff: fullName(staffMap.get(r.staffId)),
-        Status: STATUS_CONFIG[r.status]?.label ?? r.status,
+        Status: attendanceStatusMeta(r.status).label,
         "Check In": timeStr(r.checkIn),
         "Check Out": timeStr(r.checkOut),
         Hours: r.workingHours ? r.workingHours.toFixed(1) : "",
@@ -493,7 +485,7 @@ export default function AttendanceRegisterPage() {
           {view !== "grid" ? (
             <Select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as "all" | AttendanceStatus)}
+              onChange={(e) => setStatusFilter(e.target.value as "all" | ActiveAttendanceStatus)}
               className="w-auto min-w-[170px]"
               options={[
                 { value: "all", label: "All statuses" },
@@ -532,7 +524,7 @@ export default function AttendanceRegisterPage() {
                 </TableRow>
               ) : (
                 logEvents.map((e) => {
-                  const cfg = STATUS_CONFIG[e.status];
+                  const cfg = attendanceStatusMeta(e.status);
                   return (
                     <TableRow key={e.key}>
                       <TableCell className="font-medium text-slate-950">
@@ -607,7 +599,7 @@ export default function AttendanceRegisterPage() {
                 </TableRow>
               ) : (
                 dailyRows.map((r) => {
-                  const cfg = STATUS_CONFIG[r.status];
+                  const cfg = attendanceStatusMeta(r.status);
                   const dateKey = dateKeyFromSec(secOf(r.date) ?? 0);
                   const detailHref = `/dashboard/attendance/${r.staffId}?date=${dateKey}`;
                   return (

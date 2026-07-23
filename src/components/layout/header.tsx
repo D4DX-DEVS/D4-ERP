@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
+import { getDocuments, where } from "@/lib/firestore";
 import { Bell, ChevronRight, LogOut, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -40,6 +41,21 @@ export function Header() {
   const { user } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
+  const [hasUnread, setHasUnread] = useState(false);
+
+  // Re-checked on route change so the dot clears after visiting Notifications.
+  useEffect(() => {
+    if (!user?.uid) return;
+    let active = true;
+    getDocuments("notifications", [where("recipientId", "==", user.uid), where("isRead", "==", false)])
+      .then((docs) => {
+        if (active) setHasUnread(docs.length > 0);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [user?.uid, pathname]);
 
   const todayLabel = useMemo(
     () =>
@@ -108,7 +124,7 @@ export function Header() {
           </Button>
           <Button variant="outline" size="icon" className="relative" onClick={() => router.push("/dashboard/notifications")}>
             <Bell className="h-4.5 w-4.5" />
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-orange-500" />
+            {hasUnread && <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-orange-500" />}
           </Button>
 
           <div className="flex items-center gap-2 rounded-2xl border border-white/70 bg-white/70 px-2 py-1.5 shadow-[0_10px_20px_rgba(15,23,42,0.06)] backdrop-blur-md">
