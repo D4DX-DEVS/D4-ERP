@@ -286,7 +286,7 @@ export default function PayrollPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Payroll</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Payroll</h1>
         <div className="flex items-center gap-3">
           <DatePicker mode="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-auto" />
           <Dialog open={showGenerate} onOpenChange={setShowGenerate}>
@@ -357,9 +357,9 @@ export default function PayrollPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Staff</TableHead>
-                  <TableHead>Basic</TableHead>
-                  <TableHead>Earnings</TableHead>
-                  <TableHead>Deductions</TableHead>
+                  <TableHead className="hidden md:table-cell">Basic</TableHead>
+                  <TableHead className="hidden md:table-cell">Earnings</TableHead>
+                  <TableHead className="hidden md:table-cell">Deductions</TableHead>
                   <TableHead>Net Salary</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -369,16 +369,16 @@ export default function PayrollPage() {
                 {filtered.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell className="font-medium">
-                      <Link href={`${base}/payroll/staff/${p.staffId}`} className="text-teal-600 hover:text-teal-700 flex items-center gap-1">
+                      <Link href={`${base}/payroll/staff/${p.staffId}`} className="text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
                         {staffMap[p.staffId]
                           ? `${staffMap[p.staffId].firstName} ${staffMap[p.staffId].lastName}`
                           : p.staffId}
                         <ExternalLink className="h-3 w-3" />
                       </Link>
                     </TableCell>
-                    <TableCell>{formatCurrency(p.basicSalary || p.baseSalary)}</TableCell>
-                    <TableCell className="text-green-600">{formatCurrency(p.totalEarnings)}</TableCell>
-                    <TableCell className="text-red-600">{formatCurrency(p.totalDeductions)}</TableCell>
+                    <TableCell className="hidden md:table-cell">{formatCurrency(p.basicSalary || p.baseSalary)}</TableCell>
+                    <TableCell className="hidden text-green-600 md:table-cell">{formatCurrency(p.totalEarnings)}</TableCell>
+                    <TableCell className="hidden text-red-600 md:table-cell">{formatCurrency(p.totalDeductions)}</TableCell>
                     <TableCell className="font-bold">{formatCurrency(p.netSalary)}</TableCell>
                     <TableCell>
                       <Badge variant={p.status === "paid" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}>

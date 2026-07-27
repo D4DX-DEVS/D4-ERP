@@ -124,7 +124,7 @@ export default function AssetAvailabilityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Check Availability</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Check Availability</h1>
         <p className="text-sm text-gray-500 mt-1">
           Filter by category or asset. Optionally add a date range to check future availability.
         </p>

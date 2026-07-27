@@ -12,10 +12,11 @@ export function ListingHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
       <div>
-        <h1 className="text-[1.65rem] font-semibold tracking-[-0.04em] text-slate-950">{title}</h1>
-        {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
+        {/* ponytail: phone titles run a size down — 1.65rem eats the fold */}
+        <h1 className="text-xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.65rem]">{title}</h1>
+        {description ? <p className="mt-0.5 text-xs text-slate-500 sm:mt-1 sm:text-sm">{description}</p> : null}
       </div>
       {action ? <div className="self-start sm:self-auto">{action}</div> : null}
     </div>
@@ -23,7 +24,13 @@ export function ListingHeader({
 }
 
 export function ListingStatGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">{children}</div>;
+  // ponytail: 2-up on phones instead of a tall single-column stack.
+  // Odd count → last card spans the full row so it doesn't sit orphaned beside a gap.
+  return (
+    <div className="grid grid-cols-2 gap-2 [&>*:last-child:nth-child(odd)]:col-span-2 sm:gap-3 md:grid-cols-2 xl:grid-cols-4 xl:[&>*:last-child:nth-child(odd)]:col-span-1">
+      {children}
+    </div>
+  );
 }
 
 export function ListingStatCard({
@@ -41,19 +48,19 @@ export function ListingStatCard({
 }) {
   return (
     <Card>
-      <CardContent className="flex items-center gap-3 p-4">
+      <CardContent className="flex flex-col items-start gap-2 p-3 sm:flex-row sm:items-center sm:gap-3 sm:p-4">
         <div
           className={cn(
-            "flex h-10 w-10 items-center justify-center rounded-[18px] bg-slate-100 text-slate-700",
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-[16px] bg-slate-100 text-slate-700 sm:h-10 sm:w-10 sm:rounded-[18px]",
             toneClassName
           )}
         >
           {icon}
         </div>
-        <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">{label}</p>
-          <p className="mt-0.5 text-[1.7rem] font-semibold tracking-[-0.04em] text-slate-950">{value}</p>
-          {meta ? <p className="mt-0.5 text-xs text-slate-500">{meta}</p> : null}
+        <div className="min-w-0">
+          <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400 sm:text-[11px] sm:tracking-[0.16em]">{label}</p>
+          <p className="mt-0.5 text-2xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.7rem]">{value}</p>
+          {meta ? <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">{meta}</p> : null}
         </div>
       </CardContent>
     </Card>

@@ -276,7 +276,8 @@ export default function StaffPortalHome() {
       {/* Leave Balance */}
       <Card>
         <CardHeader><CardTitle className="text-base">Leave Balance • {new Date().getFullYear()}</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
+        {/* ponytail: CL/SL sit side by side on phones — two stacked bars wasted half a screen */}
+        <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-1 sm:gap-3">
           {[
             { label: "Casual Leave (CL)", icon: Umbrella, color: "text-orange-500", used: yearStats.clUsed, accrued: yearStats.clAccrued, note: "Accrues 1.25 days/month from your joining month" },
             { label: "Sick Leave (SL)", icon: HeartPulse, color: "text-rose-500", used: yearStats.slUsed, accrued: yearStats.slAccrued, note: "15/year pool • needs medical report + coordinator approval" },
@@ -285,9 +286,9 @@ export default function StaffPortalHome() {
             const pct = row.accrued > 0 ? Math.min(100, (row.used / row.accrued) * 100) : 0;
             return (
               <div key={row.label}>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2 font-medium">
-                    <row.icon className={`h-4 w-4 ${row.color}`} />
+                <div className="flex flex-col gap-0.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:text-sm">
+                  <span className="flex items-center gap-1.5 font-medium sm:gap-2">
+                    <row.icon className={`h-4 w-4 shrink-0 ${row.color}`} />
                     {row.label}
                   </span>
                   <span className="text-gray-600">
@@ -297,7 +298,7 @@ export default function StaffPortalHome() {
                 <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
                   <div className="h-full rounded-full bg-emerald-500" style={{ width: `${100 - pct}%` }} />
                 </div>
-                <p className="mt-1 text-[11px] text-gray-400">
+                <p className="mt-1 hidden text-[11px] text-gray-400 sm:block">
                   Used {fmtDays(row.used)} day{row.used === 1 ? "" : "s"} this year • {row.note}
                 </p>
               </div>
@@ -307,7 +308,8 @@ export default function StaffPortalHome() {
       </Card>
 
       {/* Recent Leave Requests */}
-      <Card>
+      {/* ponytail: an empty card is dead weight on a phone — bottom nav already links to Leave */}
+      <Card className={!loading && recentLeaves.length === 0 ? "hidden sm:block" : undefined}>
         <CardHeader><CardTitle className="text-base">Recent Leave Requests</CardTitle></CardHeader>
         <CardContent>
           {loading ? (
@@ -316,13 +318,14 @@ export default function StaffPortalHome() {
             <p className="text-sm text-gray-500">No leave requests yet</p>
           ) : (
             <div className="space-y-3">
-              {recentLeaves.map((leave) => {
+              {recentLeaves.map((leave, i) => {
                 const detailHref = `/staff-portal/my-leaves/${leave.id}`;
 
                 return (
                 <div
                   key={leave.id}
-                  className="flex cursor-pointer items-center justify-between border-b pb-2 last:border-0"
+                  // ponytail: phones show only the newest row; rest live on the leaves page
+                  className={`${i > 0 ? "hidden sm:flex" : "flex"} cursor-pointer items-center justify-between border-b pb-2 last:border-0`}
                   role="button"
                   tabIndex={0}
                   onClick={() => router.push(detailHref)}
@@ -345,13 +348,18 @@ export default function StaffPortalHome() {
                   </div>
                 </div>
               )})}
+              {recentLeaves.length > 1 && (
+                <Link href="/staff-portal/my-leaves" className="block pt-1 text-sm font-semibold text-emerald-700 sm:hidden">
+                  View all {recentLeaves.length} requests →
+                </Link>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* Pending Tasks */}
-      <Card>
+      <Card className={!loading && pendingTasks.length === 0 ? "hidden sm:block" : undefined}>
         <CardHeader><CardTitle className="text-base">My Tasks</CardTitle></CardHeader>
         <CardContent>
           {loading ? (
@@ -360,13 +368,14 @@ export default function StaffPortalHome() {
             <p className="text-sm text-gray-500">No active tasks!</p>
           ) : (
             <div className="space-y-3">
-              {pendingTasks.map((task) => {
+              {pendingTasks.map((task, i) => {
                 const detailHref = `/staff-portal/my-tasks/${task.id}`;
 
                 return (
                 <div
                   key={task.id}
-                  className="flex cursor-pointer items-center justify-between border-b pb-2 last:border-0"
+                  // ponytail: phones show only the first task; rest live on the tasks page
+                  className={`${i > 0 ? "hidden sm:flex" : "flex"} cursor-pointer items-center justify-between border-b pb-2 last:border-0`}
                   role="button"
                   tabIndex={0}
                   onClick={() => router.push(detailHref)}
@@ -389,6 +398,11 @@ export default function StaffPortalHome() {
                   </div>
                 </div>
               )})}
+              {pendingTasks.length > 1 && (
+                <Link href="/staff-portal/my-tasks" className="block pt-1 text-sm font-semibold text-emerald-700 sm:hidden">
+                  View all {pendingTasks.length} tasks →
+                </Link>
+              )}
             </div>
           )}
         </CardContent>

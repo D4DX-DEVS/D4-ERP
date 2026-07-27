@@ -83,7 +83,7 @@ export default function CalendarEventDetailPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-bold">{event.title}</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">{event.title}</h1>
         <div className="flex items-center gap-2">
           <Link href="/dashboard/calendar"><Button variant="outline"><ArrowLeft className="h-4 w-4 mr-2" /> Back</Button></Link>
           {!event.isArchived && (

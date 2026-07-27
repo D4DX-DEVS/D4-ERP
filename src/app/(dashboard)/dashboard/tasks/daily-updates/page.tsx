@@ -56,13 +56,13 @@ export default function DailyUpdatesPage() {
           onChange={(e) => setDateFilter(e.target.value)}
           className="w-[170px]"
         />
-        <button onClick={() => setDateFilter("")} className="text-sm font-medium text-teal-600 hover:text-teal-700 hover:underline">
+        <button onClick={() => setDateFilter("")} className="text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:underline">
           All dates
         </button>
       </div>
 
       <ListingStatGrid>
-        <ListingStatCard label="Submissions" value={filtered.length} icon={<FileText className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white" />
+        <ListingStatCard label="Submissions" value={filtered.length} icon={<FileText className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-indigo-500 to-violet-600 text-white" />
         <ListingStatCard label="Staff Logged" value={uniqueStaff} icon={<Users className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white" />
         <ListingStatCard label="Total Hours" value={`${totalHoursToday}h`} icon={<Clock className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white" />
         <ListingStatCard label="With Blockers" value={withBlockers} icon={<AlertTriangle className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-rose-500 to-red-500 text-white" />
@@ -80,7 +80,7 @@ export default function DailyUpdatesPage() {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h4 className="font-semibold text-slate-900">{log.staffName}</h4>
-                  <p className="text-xs text-slate-500">{log.date} • {log.totalHours}h total</p>
+                  <p className="text-xs text-slate-500">{log.date} â€¢ {log.totalHours}h total</p>
                 </div>
                 <Badge variant={STATUS_COLORS[log.status]} className="capitalize">
                   {log.status.replace(/-/g, " ")}
@@ -88,11 +88,11 @@ export default function DailyUpdatesPage() {
               </div>
               <div className="space-y-2">
                 {log.entries.map((entry, idx) => (
-                  <div key={idx} className="flex items-start gap-3 text-sm border-l-2 border-teal-100 pl-3 py-1">
+                  <div key={idx} className="flex items-start gap-3 text-sm border-l-2 border-indigo-100 pl-3 py-1">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-800">{entry.project || "—"}</span>
-                        <span className="text-[10px] rounded-full bg-teal-50 text-teal-700 px-2 py-0.5 capitalize">{entry.activityType}</span>
+                        <span className="font-medium text-slate-800">{entry.project || "â€”"}</span>
+                        <span className="text-[10px] rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 capitalize">{entry.activityType}</span>
                         <span className="text-xs text-slate-500">{entry.hours}h</span>
                       </div>
                       <p className="text-slate-500 text-xs mt-0.5">{entry.description}</p>

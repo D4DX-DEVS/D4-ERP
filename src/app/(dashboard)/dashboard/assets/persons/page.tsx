@@ -91,7 +91,7 @@ export default function AssetPersonsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Asset Persons</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Asset Persons</h1>
           <p className="text-sm text-gray-500 mt-1">{totalCount} persons</p>
         </div>
         <Button onClick={() => { setEditingId(null); setForm({ name: "", phone: "", email: "", department: "", isActive: true }); setDialogOpen(true); }}>

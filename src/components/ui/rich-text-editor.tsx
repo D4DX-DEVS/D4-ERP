@@ -116,7 +116,7 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
   return (
     <div
       className={cn(
-        "rounded-[18px] border border-slate-200/90 bg-white/95 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] overflow-hidden focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-500/14 transition-all",
+        "rounded-[18px] border border-slate-200/90 bg-white/95 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] overflow-hidden focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/14 transition-all",
         className
       )}
     >

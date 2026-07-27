@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocument, Timestamp } from "@/lib/firestore";
-import { createStaffRequest, REQUEST_TYPE_LABELS } from "@/lib/requests";
+import { createStaffRequest, getCompOffBalance, REQUEST_TYPE_LABELS, type CompOffBalance } from "@/lib/requests";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -41,6 +41,13 @@ export default function NewRequestPage() {
   const [submitted, setSubmitted] = useState(false);
   // Earned Leave is a permanent-staff benefit; contract staff and interns don't accrue it.
   const [isPermanent, setIsPermanent] = useState(false);
+  // Comp-off earned from approved overtime, spent by approved CO leaves.
+  const [coBalance, setCoBalance] = useState<CompOffBalance | null>(null);
+
+  useEffect(() => {
+    if (!user?.staffId) return;
+    getCompOffBalance(user.staffId).then(setCoBalance).catch(() => {});
+  }, [user?.staffId]);
 
   useEffect(() => {
     if (!user?.staffId) return;
@@ -74,6 +81,8 @@ export default function NewRequestPage() {
     return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
   })();
   const exceedsClCap = form.leaveType === "CL" && requestedDays > CL_MAX_WITHOUT_APPROVAL;
+  const isCoLeave = (form.type === "leave" || form.type === "long-leave") && form.leaveType === "CO";
+  const exceedsCoBalance = isCoLeave && coBalance !== null && requestedDays > coBalance.available;
 
   const handleAddAttachment = (url: string, meta?: { name: string; size: number }) => {
     if (!url) return;
@@ -88,6 +97,10 @@ export default function NewRequestPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (exceedsCoBalance) {
+      toast("error", `Not enough comp-off balance (available: ${coBalance?.available ?? 0} day(s)).`);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -135,7 +148,7 @@ export default function NewRequestPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold">New Request</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">New Request</h1>
         <p className="text-sm text-gray-500 mt-1">Submit leave, WFH, overtime, salary increment, or other requests.</p>
       </div>
 
@@ -169,6 +182,12 @@ export default function NewRequestPage() {
                       { value: "LOP", label: "Loss of Pay" },
                     ]}
                   />
+                  {isCoLeave && coBalance !== null && (
+                    <p className={`text-xs ${exceedsCoBalance ? "text-rose-600" : "text-slate-600"}`}>
+                      Comp-off available: <b>{coBalance.available}</b> day(s) (earned {coBalance.earned} from approved overtime, used {coBalance.used}).
+                      {exceedsCoBalance && " Not enough balance for this request."}
+                    </p>
+                  )}
                   {form.leaveType === "SL" && (
                     <p className="text-xs text-rose-600">Attach a medical report — approved by your coordinator. Up to 15 days/year.</p>
                   )}
@@ -183,7 +202,7 @@ export default function NewRequestPage() {
                         checked={form.isHalfDay}
                         onChange={(e) => setForm({ ...form, isHalfDay: e.target.checked })}
                       />
-                      <div className="h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-emerald-600 peer-checked:after:translate-x-full" />
+                      <div className="h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-indigo-600 peer-checked:after:translate-x-full" />
                     </label>
                     <Label className="cursor-pointer text-sm">Half Day Leave</Label>
                   </div>
@@ -248,7 +267,7 @@ export default function NewRequestPage() {
                     value={form.requestedAmount || ""}
                     onChange={(e) => setForm({ ...form, requestedAmount: e.target.value ? parseInt(e.target.value, 10) : undefined })}
                     placeholder="0"
-                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="flex h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     required
                   />
                 </div>
@@ -315,7 +334,7 @@ export default function NewRequestPage() {
               )}
             </div>
 
-            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={saving}>
+            <Button type="submit" className="w-full " disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Submit Request
             </Button>

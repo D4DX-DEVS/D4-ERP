@@ -424,7 +424,7 @@ export default function CalendarPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-2xl font-bold">Calendar</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Calendar</h1>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setShowArchived((s) => !s)}>
             <Archive className="h-4 w-4 mr-2" /> {showArchived ? "Hide Archived" : "Archived"}

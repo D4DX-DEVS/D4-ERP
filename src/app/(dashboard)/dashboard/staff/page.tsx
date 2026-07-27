@@ -364,7 +364,7 @@ export default function StaffPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Staff Management</h1>
+          <h1 className="text-xl font-bold sm:text-2xl text-gray-900">Staff Management</h1>
           <p className="text-sm text-gray-500 mt-1">{totalCount} total staff members</p>
         </div>
         <Button onClick={() => handleOpen()}>
@@ -376,8 +376,9 @@ export default function StaffPage() {
       {/* Filters */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
+          {/* ponytail: nowrap keeps search + both filters on one line on phones */}
+          <div className="flex flex-nowrap items-center gap-2 sm:gap-4">
+            <div className="min-w-0 flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
@@ -392,7 +393,7 @@ export default function StaffPage() {
               value={filterDept}
               onChange={(e) => setFilterDept(e.target.value)}
               options={[{ value: "", label: "All Departments" }, ...departments.map((d) => ({ value: d.id, label: d.name }))]}
-              className="w-[200px]"
+              className="w-[104px] shrink-0 px-2 text-xs sm:w-[200px] sm:px-4 sm:text-sm"
             />
             <Select
               value={filterStatus}
@@ -403,7 +404,7 @@ export default function StaffPage() {
                 { value: "suspended", label: "Suspended" },
                 { value: "terminated", label: "Terminated" },
               ]}
-              className="w-[180px]"
+              className="w-[92px] shrink-0 px-2 text-xs sm:w-[180px] sm:px-4 sm:text-sm"
             />
           </div>
         </CardContent>
@@ -434,9 +435,10 @@ export default function StaffPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Employee</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Designation</TableHead>
+                  {/* ponytail: secondary columns drop off on phones so the row fits without side-scrolling */}
+                  <TableHead className="hidden sm:table-cell">Code</TableHead>
+                  <TableHead className="hidden md:table-cell">Department</TableHead>
+                  <TableHead className="hidden lg:table-cell">Designation</TableHead>
                   <TableHead>Salary</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -472,9 +474,9 @@ export default function StaffPage() {
                         </Badge>
                       </div>
                     </TableCell>
-                    <TableCell className="font-mono text-sm">{staff.employeeCode}</TableCell>
-                    <TableCell>{getDeptName(staff.departmentId)}</TableCell>
-                    <TableCell>{staff.designation || "—"}</TableCell>
+                    <TableCell className="hidden font-mono text-sm sm:table-cell">{staff.employeeCode}</TableCell>
+                    <TableCell className="hidden md:table-cell">{getDeptName(staff.departmentId)}</TableCell>
+                    <TableCell className="hidden lg:table-cell">{staff.designation || "—"}</TableCell>
                     <TableCell>{formatCurrency(staff.currentSalary || staff.baseSalary)}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusColor(staff.status)}>
@@ -768,7 +770,7 @@ export default function StaffPage() {
               </p>
               {form.role === "admin" ? (
                 <div className="text-center py-8">
-                  <Shield className="h-8 w-8 text-teal-400 mx-auto mb-2" />
+                  <Shield className="h-8 w-8 text-indigo-400 mx-auto mb-2" />
                   <p className="text-sm text-gray-600 font-medium">Admins have access to all features</p>
                 </div>
               ) : (
@@ -784,7 +786,7 @@ export default function StaffPage() {
                       <label
                         key={f.key}
                         className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
-                          auto ? "bg-teal-50/50 border-teal-200" : granted ? "border-teal-500 bg-teal-50/30" : unsupported ? "opacity-60" : "cursor-pointer hover:bg-gray-50"
+                          auto ? "bg-indigo-50/50 border-indigo-200" : granted ? "border-indigo-500 bg-indigo-50/30" : unsupported ? "opacity-60" : "cursor-pointer hover:bg-gray-50"
                         }`}
                       >
                         <input
@@ -792,13 +794,13 @@ export default function StaffPage() {
                           checked={auto || granted}
                           disabled={auto || unsupported}
                           onChange={() => toggleGrantedFeature(f.key)}
-                          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                         />
                         <div>
                           <p className="text-sm font-medium">
                             {f.label}
                             {auto && (
-                              <span className="ml-2 text-[10px] uppercase tracking-wider text-teal-600 bg-teal-100 px-1.5 py-0.5 rounded">
+                              <span className="ml-2 text-[10px] uppercase tracking-wider text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded">
                                 Role default
                               </span>
                             )}

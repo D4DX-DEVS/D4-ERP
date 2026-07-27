@@ -26,7 +26,7 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   error: <AlertTriangle className="h-5 w-5 text-red-500" />,
   reminder: <Bell className="h-5 w-5 text-purple-500" />,
   announcement: <Megaphone className="h-5 w-5 text-purple-500" />,
-  event: <Bell className="h-5 w-5 text-teal-500" />,
+  event: <Bell className="h-5 w-5 text-indigo-500" />,
   payroll: <CheckCircle className="h-5 w-5 text-emerald-500" />,
 };
 
@@ -238,7 +238,7 @@ export default function NotificationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold">Notifications</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Notifications</h1>
           {unreadCount > 0 && (
             <Badge variant="bg-red-100 text-red-700">{unreadCount} unread</Badge>
           )}

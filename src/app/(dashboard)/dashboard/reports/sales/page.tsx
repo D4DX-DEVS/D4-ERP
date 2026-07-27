@@ -277,7 +277,7 @@ export default function SalesReportsPage() {
           <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold">Sales &amp; Payment Reports</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Sales &amp; Payment Reports</h1>
           <p className="text-sm text-gray-500">Quotations, invoices, pending payments, collections and receipts.</p>
         </div>
       </div>

@@ -110,7 +110,7 @@ export function AttendanceMonthGrid({ staffId }: { staffId: string }) {
           <CardTitle className="text-base">Attendance • {monthLabel}</CardTitle>
           <Link
             href="/staff-portal/attendance"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-teal-600 hover:text-teal-700"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700"
           >
             Open <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
@@ -137,7 +137,7 @@ export function AttendanceMonthGrid({ staffId }: { staffId: string }) {
                   title={cell.meta?.label}
                   className={
                     "flex h-9 flex-col items-center justify-center rounded-md " +
-                    (cell.key === todayKey ? "outline outline-1 outline-teal-400 " : "") +
+                    (cell.key === todayKey ? "outline outline-1 outline-indigo-400 " : "") +
                     (cell.meta ? cell.meta.cell : "bg-slate-50 text-slate-300")
                   }
                 >
@@ -168,7 +168,7 @@ export function AttendanceMonthGrid({ staffId }: { staffId: string }) {
                       title={`${cell.day} — ${cell.meta?.label ?? "Upcoming"}`}
                       className={
                         "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold " +
-                        (cell.key === todayKey ? "outline outline-1 outline-teal-400 " : "") +
+                        (cell.key === todayKey ? "outline outline-1 outline-indigo-400 " : "") +
                         (cell.meta ? cell.meta.cell : "bg-slate-50 text-slate-300")
                       }
                     >

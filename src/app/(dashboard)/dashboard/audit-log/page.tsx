@@ -20,7 +20,7 @@ const ACTION_META: Record<string, { badge: string; icon: typeof Plus; dot: strin
   delete: { badge: "bg-red-50 text-red-700", icon: Trash2, dot: "bg-red-500" },
   login: { badge: "bg-violet-50 text-violet-700", icon: LogIn, dot: "bg-violet-500" },
   logout: { badge: "bg-slate-100 text-slate-600", icon: LogOut, dot: "bg-slate-400" },
-  approve: { badge: "bg-teal-50 text-teal-700", icon: CheckCircle2, dot: "bg-teal-500" },
+  approve: { badge: "bg-indigo-50 text-indigo-700", icon: CheckCircle2, dot: "bg-indigo-500" },
   reject: { badge: "bg-orange-50 text-orange-700", icon: XCircle, dot: "bg-orange-500" },
 };
 
@@ -104,7 +104,7 @@ export default function AuditLogPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Audit Log</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Audit Log</h1>
         <Badge variant="bg-gray-100 text-gray-700">{totalCount} entries</Badge>
       </div>
 

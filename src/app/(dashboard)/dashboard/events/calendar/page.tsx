@@ -138,13 +138,13 @@ export default function EventCalendarPage() {
               return (
                 <div
                   key={idx}
-                  className={`border-b border-r border-slate-200/60 p-2 min-h-[100px] hover:bg-teal-50/40 transition-colors ${
-                    isToday(day) ? "bg-teal-50/60" : ""
+                  className={`border-b border-r border-slate-200/60 p-2 min-h-[100px] hover:bg-indigo-50/40 transition-colors ${
+                    isToday(day) ? "bg-indigo-50/60" : ""
                   }`}
                 >
                   <span
                     className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
-                      isToday(day) ? "bg-gradient-to-r from-teal-600 to-emerald-500 text-white shadow-[0_6px_14px_rgba(15,118,110,0.3)]" : "text-slate-700"
+                      isToday(day) ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-[0_6px_14px_rgba(55,48,163,0.3)]" : "text-slate-700"
                     }`}
                   >
                     {day}
@@ -171,7 +171,7 @@ export default function EventCalendarPage() {
                         key={b.id}
                         onClick={() => router.push(`${base}/studio/bookings`)}
                         className="w-full text-left rounded-md px-1 py-0.5 text-[10px] truncate hover:bg-white flex items-center gap-1 text-orange-700"
-                        title={`${b.startTime}–${b.endTime} ${b.studioName ? `${b.studioName} — ` : ""}${b.purpose}`}
+                        title={`${b.startTime}â€“${b.endTime} ${b.studioName ? `${b.studioName} â€” ` : ""}${b.purpose}`}
                       >
                         <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0 bg-orange-500" />
                         {b.startTime} {b.studioName || b.purpose}

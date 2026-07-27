@@ -140,7 +140,8 @@ export default function AttendanceCorrectionsPage() {
       const data: Record<string, unknown> = {
         staffId: c.staffId,
         date: Timestamp.fromDate(base),
-        status: c.requestedStatus ?? existing[0]?.status ?? "present",
+        // Approval means the day is accounted for — default to present, never keep a stale "absent"
+        status: c.requestedStatus ?? "present",
         notes: `Correction approved: ${c.reason}`,
         source: "correction",
         correctionId: c.id,

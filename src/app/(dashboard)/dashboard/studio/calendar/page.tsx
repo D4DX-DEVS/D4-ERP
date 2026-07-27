@@ -115,12 +115,12 @@ export default function StudioCalendarPage() {
               return (
                 <div
                   key={idx}
-                  className={`border-b border-r border-slate-100 p-2 min-h-[100px] hover:bg-teal-50/40 transition-colors ${
-                    isToday(day) ? "bg-teal-50/50" : ""
+                  className={`border-b border-r border-slate-100 p-2 min-h-[100px] hover:bg-indigo-50/40 transition-colors ${
+                    isToday(day) ? "bg-indigo-50/50" : ""
                   }`}
                 >
                   <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${
-                    isToday(day) ? "bg-gradient-to-br from-teal-600 to-emerald-500 text-white shadow-sm" : "text-slate-600"
+                    isToday(day) ? "bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-sm" : "text-slate-600"
                   }`}>
                     {day}
                   </span>
@@ -128,9 +128,9 @@ export default function StudioCalendarPage() {
                     {dayBookings.slice(0, 3).map((b) => (
                       <div
                         key={b.id}
-                        className="w-full text-left rounded-lg px-1.5 py-0.5 text-[10px] truncate hover:bg-teal-50 flex items-center gap-1 cursor-pointer"
+                        className="w-full text-left rounded-lg px-1.5 py-0.5 text-[10px] truncate hover:bg-indigo-50 flex items-center gap-1 cursor-pointer"
                         onClick={() => router.push(`${base}/studio/bookings`)}
-                        title={`${b.startTime}–${b.endTime} ${b.purpose}`}
+                        title={`${b.startTime}â€“${b.endTime} ${b.purpose}`}
                       >
                         <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT_COLORS[b.status] || "bg-gray-400"}`} />
                         <span className="truncate text-slate-600">{b.startTime} {b.studioName}</span>

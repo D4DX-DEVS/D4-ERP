@@ -82,7 +82,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
           onClick={toggle}
           data-open={open}
           className={cn(
-            "flex h-12 w-full items-center justify-between gap-2 rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-left text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] ring-offset-white/80 backdrop-blur-sm hover:border-teal-300/70 hover:bg-white focus-visible:border-teal-500 focus-visible:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/14 focus-visible:ring-offset-0 data-[open=true]:border-teal-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100",
+            "flex h-12 w-full items-center justify-between gap-2 rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-left text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] ring-offset-white/80 backdrop-blur-sm hover:border-indigo-300/70 hover:bg-white focus-visible:border-indigo-500 focus-visible:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/14 focus-visible:ring-offset-0 data-[open=true]:border-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100",
             className
           )}
         >
@@ -90,7 +90,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
             {selected ? selected.label : placeholder || "Select..."}
           </span>
           <ChevronDown
-            className={cn("h-4 w-4 shrink-0 text-slate-400 transition-transform", open && "rotate-180 text-teal-600")}
+            className={cn("h-4 w-4 shrink-0 text-slate-400 transition-transform", open && "rotate-180 text-indigo-600")}
           />
         </button>
 
@@ -119,7 +119,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
                       className={cn(
                         "group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors",
                         isSelected
-                          ? "bg-teal-50 text-teal-700 font-medium"
+                          ? "bg-indigo-50 text-indigo-700 font-medium"
                           : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                       )}
                     >
@@ -127,7 +127,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
                       <Check
                         className={cn(
                           "h-3.5 w-3.5 shrink-0 transition-opacity",
-                          isSelected ? "opacity-100 text-teal-600" : "opacity-0"
+                          isSelected ? "opacity-100 text-indigo-600" : "opacity-0"
                         )}
                       />
                     </div>
@@ -137,7 +137,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
                   <a
                     href={footerAction.href}
                     onClick={() => setOpen(false)}
-                    className="flex items-center gap-2 rounded-xl border-t border-slate-100 mt-1 px-3 py-2.5 text-sm font-medium text-teal-700 hover:bg-teal-50 transition-colors"
+                    className="flex items-center gap-2 rounded-xl border-t border-slate-100 mt-1 px-3 py-2.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50 transition-colors"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     <span>{footerAction.label}</span>
@@ -186,13 +186,13 @@ function SelectTrigger({ children, className }: { children: React.ReactNode; cla
       type="button"
       onClick={() => setOpen(!open)}
       className={cn(
-        "flex h-12 w-full items-center justify-between rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-left text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] ring-offset-white/80 backdrop-blur-sm hover:border-teal-300/70 hover:bg-white focus:outline-none focus:ring-4 focus:ring-teal-500/14 focus:ring-offset-0 data-[open=true]:border-teal-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100",
+        "flex h-12 w-full items-center justify-between rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-left text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] ring-offset-white/80 backdrop-blur-sm hover:border-indigo-300/70 hover:bg-white focus:outline-none focus:ring-4 focus:ring-indigo-500/14 focus:ring-offset-0 data-[open=true]:border-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100",
         className
       )}
       data-open={open}
     >
       {children}
-      <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", open && "rotate-180 text-teal-600")} />
+      <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", open && "rotate-180 text-indigo-600")} />
     </button>
   );
 }
@@ -244,7 +244,7 @@ function SelectItem({ children, value }: { children: React.ReactNode; value: str
       className={cn(
         "group flex cursor-pointer items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-colors",
         isSelected
-          ? "bg-teal-50 text-teal-700 font-medium"
+          ? "bg-indigo-50 text-indigo-700 font-medium"
           : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
       )}
     >
@@ -252,7 +252,7 @@ function SelectItem({ children, value }: { children: React.ReactNode; value: str
       <Check
         className={cn(
           "h-3.5 w-3.5 shrink-0 transition-opacity",
-          isSelected ? "opacity-100 text-teal-600" : "opacity-0"
+          isSelected ? "opacity-100 text-indigo-600" : "opacity-0"
         )}
       />
     </div>

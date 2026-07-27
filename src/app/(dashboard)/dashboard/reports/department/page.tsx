@@ -204,7 +204,7 @@ export default function DepartmentReportsPage() {
               <CardContent className="p-5">
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3 flex-1">
-                    <FileText className="h-5 w-5 text-teal-600 mt-0.5" />
+                    <FileText className="h-5 w-5 text-indigo-600 mt-0.5" />
                     <div className="flex-1">
                       <h4 className="font-semibold text-slate-900">{report.departmentName}</h4>
                       <p className="text-xs text-slate-500 capitalize">

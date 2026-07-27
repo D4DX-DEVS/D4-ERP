@@ -34,7 +34,7 @@ import { ListingHeader, ListingPanel } from "@/components/ui/listing";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-// ── View + status configuration ──────────────────────────────────────────────
+// â”€â”€ View + status configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type ViewMode = "logs" | "daily" | "grid";
 
@@ -51,7 +51,7 @@ const HOLIDAY_CELL = "bg-rose-100 text-rose-500";
 
 const PRESENT_STATUSES: AttendanceStatus[] = ["present", "late", "half-day", "wfh", "on-duty"];
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 type Rec = Attendance & { id: string };
 
@@ -62,7 +62,7 @@ const secOf = (ts: unknown): number | undefined =>
 
 const timeStr = (ts: unknown): string => {
   const s = secOf(ts);
-  return s ? new Date(s * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
+  return s ? new Date(s * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "â€”";
 };
 
 // Local-date key (YYYY-MM-DD). Never toISOString here: that shifts IST
@@ -89,7 +89,7 @@ export default function AttendanceRegisterPage() {
   const [weeklyOff, setWeeklyOff] = useState<string[]>(["Sunday"]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
-  // record === null → creating a new entry for that staff/day (grid cell with no log)
+  // record === null â†’ creating a new entry for that staff/day (grid cell with no log)
   const [editTarget, setEditTarget] = useState<{ record: Rec | null; staffId: string; staffName: string; date: Date } | null>(null);
   const [editStatus, setEditStatus] = useState<AttendanceStatus>("present");
   const [editCheckIn, setEditCheckIn] = useState("");
@@ -254,7 +254,7 @@ export default function AttendanceRegisterPage() {
     });
   }, [records, filteredStaffIds, statusFilter]);
 
-  // ── Stats ───────────────────────────────────────────────────────────────────
+  // â”€â”€ Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const stats = useMemo(() => {
     const presentDays = records.filter((r) => PRESENT_STATUSES.includes(r.status)).length;
     const leaveDays = records.filter((r) => r.status === "leave").length;
@@ -262,7 +262,7 @@ export default function AttendanceRegisterPage() {
     return { staff: staffList.length, presentDays, leaveDays, lateMarks };
   }, [records, staffList.length]);
 
-  // ── Log stream events (every check-in / check-out) ───────────────────────────
+  // â”€â”€ Log stream events (every check-in / check-out) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const logEvents = useMemo(() => {
     const events: {
       key: string;
@@ -305,12 +305,12 @@ export default function AttendanceRegisterPage() {
     return events.sort((a, b) => b.sec - a.sec);
   }, [visibleRecords]);
 
-  // ── Daily register rows (one per record, newest first) ───────────────────────
+  // â”€â”€ Daily register rows (one per record, newest first) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const dailyRows = useMemo(() => {
     return [...visibleRecords].sort((a, b) => (secOf(b.date) ?? 0) - (secOf(a.date) ?? 0));
   }, [visibleRecords]);
 
-  // ── Monthly grid lookup ──────────────────────────────────────────────────────
+  // â”€â”€ Monthly grid lookup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const gridLookup = useMemo(() => {
     const map = new Map<string, Rec>();
     for (const r of records) {
@@ -350,7 +350,7 @@ export default function AttendanceRegisterPage() {
     return STATUS_CONFIG.absent;
   }
 
-  // ── Export ────────────────────────────────────────────────────────────────────
+  // â”€â”€ Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function handleExport() {
     const monthText = monthStart.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
     if (view === "logs") {
@@ -461,7 +461,7 @@ export default function AttendanceRegisterPage() {
                 className={
                   "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all " +
                   (active
-                    ? "bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-500 text-white shadow-[0_10px_24px_rgba(15,118,110,0.24)]"
+                    ? "bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-600 text-white shadow-[0_10px_24px_rgba(55,48,163,0.24)]"
                     : "text-slate-600 hover:text-slate-950")
                 }
               >
@@ -476,7 +476,7 @@ export default function AttendanceRegisterPage() {
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
-              placeholder="Search staff…"
+              placeholder="Search staffâ€¦"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="w-auto min-w-[200px] pl-9"
@@ -496,7 +496,7 @@ export default function AttendanceRegisterPage() {
         </div>
       </div>
 
-      {/* ── Log stream ── */}
+      {/* â”€â”€ Log stream â”€â”€ */}
       {view === "logs" ? (
         <ListingPanel
           title={`Log Stream (${logEvents.length})`}
@@ -554,11 +554,11 @@ export default function AttendanceRegisterPage() {
                         ) : e.isEarly ? (
                           <Badge variant="bg-yellow-100 text-yellow-700">Early</Badge>
                         ) : (
-                          <span className="text-xs text-slate-400">—</span>
+                          <span className="text-xs text-slate-400">â€”</span>
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-slate-500">
-                        {e.location ? `${e.location.lat.toFixed(4)}, ${e.location.lng.toFixed(4)}` : "—"}
+                        {e.location ? `${e.location.lat.toFixed(4)}, ${e.location.lng.toFixed(4)}` : "â€”"}
                       </TableCell>
                     </TableRow>
                   );
@@ -569,7 +569,7 @@ export default function AttendanceRegisterPage() {
         </ListingPanel>
       ) : null}
 
-      {/* ── Daily register ── */}
+      {/* â”€â”€ Daily register â”€â”€ */}
       {view === "daily" ? (
         <ListingPanel
           title={`Daily Register (${dailyRows.length})`}
@@ -629,12 +629,12 @@ export default function AttendanceRegisterPage() {
                       </TableCell>
                       <TableCell>{timeStr(r.checkIn)}</TableCell>
                       <TableCell>{timeStr(r.checkOut)}</TableCell>
-                      <TableCell>{r.workingHours ? `${r.workingHours.toFixed(1)}h` : "—"}</TableCell>
+                      <TableCell>{r.workingHours ? `${r.workingHours.toFixed(1)}h` : "â€”"}</TableCell>
                       <TableCell>
                         {r.overtimeHours ? (
                           <Badge variant="bg-orange-100 text-orange-700">+{r.overtimeHours.toFixed(1)}h</Badge>
                         ) : (
-                          <span className="text-xs text-slate-400">—</span>
+                          <span className="text-xs text-slate-400">â€”</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -663,10 +663,10 @@ export default function AttendanceRegisterPage() {
         </ListingPanel>
       ) : null}
 
-      {/* ── Monthly grid ── */}
+      {/* â”€â”€ Monthly grid â”€â”€ */}
       {view === "grid" ? (
         <ListingPanel
-          title={`Monthly Grid — ${monthLabel}`}
+          title={`Monthly Grid â€” ${monthLabel}`}
           description="Staff down the side, days across the top. Each cell is the logged status."
           contentClassName="p-0"
         >
@@ -713,7 +713,7 @@ export default function AttendanceRegisterPage() {
                             {c ? (
                               <button
                                 type="button"
-                                title={`${m.day} — ${c.label} (tap to edit)`}
+                                title={`${m.day} â€” ${c.label} (tap to edit)`}
                                 onClick={() =>
                                   beginEdit(
                                     gridLookup.get(`${s.id}_${m.key}`) ?? null,
@@ -729,7 +729,7 @@ export default function AttendanceRegisterPage() {
                                 {c.code}
                               </button>
                             ) : (
-                              <span className="text-slate-200">·</span>
+                              <span className="text-slate-200">Â·</span>
                             )}
                           </td>
                         );
@@ -769,7 +769,7 @@ export default function AttendanceRegisterPage() {
               {editTarget.record ? "Edit Attendance" : "Add Attendance"}
             </h3>
             <p className="mb-4 mt-0.5 text-sm text-slate-500">
-              {editTarget.staffName} —{" "}
+              {editTarget.staffName} â€”{" "}
               {editTarget.date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
             </p>
             <div className="space-y-4">

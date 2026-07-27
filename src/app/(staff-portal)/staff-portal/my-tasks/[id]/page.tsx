@@ -28,7 +28,7 @@ const statusDots: Record<TaskStatus, string> = {
   todo: "bg-slate-400",
   "in-progress": "bg-sky-500",
   review: "bg-amber-500",
-  done: "bg-emerald-500",
+  done: "bg-indigo-500",
 };
 
 function actionLabel(from: TaskStatus, to: TaskStatus): string {
@@ -125,7 +125,7 @@ export default function MyTaskDetailPage() {
         <ListingStatCard icon={<CircleDashed className="h-5 w-5" />} label="Status" value={TASK_STATUS_LABELS[task.status]} toneClassName="bg-sky-50 text-sky-700" meta="Current workflow stage" />
         <ListingStatCard icon={<Eye className="h-5 w-5" />} label="Priority" value={task.priority} toneClassName="bg-amber-50 text-amber-700" meta="Work urgency" />
         <ListingStatCard icon={<TimerReset className="h-5 w-5" />} label="Due Date" value={task.dueDate?.seconds ? formatDate(new Date(task.dueDate.seconds * 1000)) : "—"} toneClassName="bg-slate-100 text-slate-700" meta="Scheduled deadline" />
-        <ListingStatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Subtasks" value={task.subtasks.length} toneClassName="bg-emerald-50 text-emerald-700" meta="Checklist items" />
+        <ListingStatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Subtasks" value={task.subtasks.length} toneClassName="bg-indigo-50 text-indigo-700" meta="Checklist items" />
       </ListingStatGrid>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
@@ -188,7 +188,7 @@ export default function MyTaskDetailPage() {
                 <Button
                   key={to}
                   variant={to === "done" ? undefined : "outline"}
-                  className={cn("w-full", to === "done" && "bg-emerald-600 hover:bg-emerald-700")}
+                  className={cn("w-full", to === "done" && "")}
                   disabled={saving}
                   onClick={() => handleStatusChange(to)}
                 >

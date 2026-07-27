@@ -61,7 +61,7 @@ export default function StaffLoginPage() {
         <Card className="order-2 w-full max-w-xl justify-self-center rounded-[36px] lg:order-1">
           <CardHeader className="pb-3 text-center sm:text-left">
             <div className="mb-5 flex items-center justify-center sm:justify-start">
-              <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-500 text-white shadow-[0_18px_44px_rgba(16,185,129,0.25)]">
+              <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-emerald-600 via-indigo-600 to-cyan-500 text-white shadow-[0_18px_44px_rgba(16,185,129,0.25)]">
                 <User className="h-8 w-8" />
               </div>
             </div>
@@ -99,7 +99,7 @@ export default function StaffLoginPage() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -120,7 +120,7 @@ export default function StaffLoginPage() {
           </CardContent>
         </Card>
 
-        <section className="glass-panel order-1 rounded-[36px] px-8 py-10 text-slate-950 lg:order-2">
+        <section className="glass-panel order-1 hidden rounded-[36px] px-8 py-10 text-slate-950 lg:order-2 lg:block">
           <p className="eyebrow">D4 Staff Space</p>
           <div className="mt-6 max-w-xl space-y-5">
             <h1 className="text-5xl font-semibold leading-[1.02] tracking-[-0.06em]">

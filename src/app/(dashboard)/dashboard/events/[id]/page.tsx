@@ -237,7 +237,7 @@ export default function EventDetailPage() {
         </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-[-0.02em] text-slate-950">{event.title}</h1>
+            <h1 className="text-xl font-bold sm:text-2xl tracking-[-0.02em] text-slate-950">{event.title}</h1>
             <Badge variant={STATUS_COLORS[event.status]} className="capitalize">
               {event.status.replace(/-/g, " ")}
             </Badge>
@@ -274,12 +274,12 @@ export default function EventDetailPage() {
             <h3 className="text-lg font-semibold tracking-[-0.02em] text-slate-950 mb-4">Overview</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-teal-600" />
+                <Calendar className="h-4 w-4 text-indigo-600" />
                 <span>{event.startDate}{event.endDate !== event.startDate ? ` → ${event.endDate}` : ""}</span>
               </div>
               {(event.startTime || event.endTime) && (
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-teal-600" />
+                  <Calendar className="h-4 w-4 text-indigo-600" />
                   <span>{event.startTime || "—"} – {event.endTime || "—"}</span>
                 </div>
               )}
@@ -319,7 +319,7 @@ export default function EventDetailPage() {
             {event.tags && event.tags.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-1.5">
                 {event.tags.map((tag) => (
-                  <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-teal-50 text-teal-700 px-2.5 py-0.5 text-xs font-medium">
+                  <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 text-indigo-700 px-2.5 py-0.5 text-xs font-medium">
                     <Tag className="h-3 w-3" /> {tag}
                   </span>
                 ))}
@@ -436,7 +436,7 @@ export default function EventDetailPage() {
                     href={att.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-teal-700 hover:text-teal-800 hover:underline"
+                    className="flex items-center gap-2 text-sm text-indigo-700 hover:text-indigo-800 hover:underline"
                   >
                     <Paperclip className="h-3 w-3" /> {att.name}
                   </a>

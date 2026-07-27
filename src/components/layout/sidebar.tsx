@@ -160,7 +160,7 @@ export function Sidebar() {
       <button
         type="button"
         onClick={() => setMobileOpen((open) => !open)}
-        className="fixed left-4 top-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-white/85 text-slate-700 shadow-[0_12px_30px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:hidden"
+        className="fixed left-4 top-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-indigo-200/70 bg-white/85 text-indigo-900 shadow-[0_12px_30px_rgba(55,48,163,0.2)] backdrop-blur-xl lg:hidden"
         aria-label="Toggle navigation"
       >
         {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -182,7 +182,7 @@ export function Sidebar() {
         )}
       >
         {/* Header / Logo */}
-        <div className="border-b border-slate-200/70 px-3.5 py-3.5">
+        <div className="border-b border-indigo-100 px-3.5 py-3.5">
           <div className="flex items-center justify-between gap-3">
             <Link href="/dashboard" className="flex items-center gap-2.5" onClick={closeSidebar}>
               <div className="relative h-10 w-10 shrink-0 bg-transparent">
@@ -196,8 +196,8 @@ export function Sidebar() {
                 />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">D4Media ERP</p>
-                <p className="text-sm font-semibold tracking-[-0.03em] text-slate-950">Admin Console</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500/70">D4Media ERP</p>
+                <p className="text-sm font-semibold tracking-[-0.03em] text-indigo-950">Admin Console</p>
               </div>
             </Link>
 
@@ -206,10 +206,10 @@ export function Sidebar() {
             </div>
           </div>
 
-          <div className="mt-3 rounded-[18px] bg-slate-950 px-3 py-2.5 text-white shadow-[0_12px_24px_rgba(15,23,42,0.12)]">
+          <div className="mt-3 rounded-[18px] bg-gradient-to-br from-[#1f3a7a] via-[#3730a3] to-[#4c1d95] px-3 py-2.5 text-white shadow-[0_12px_26px_rgba(55,48,163,0.34)]">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10">
-                <Sparkles className="h-4.5 w-4.5 text-emerald-300" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/15">
+                <Sparkles className="h-4.5 w-4.5 text-violet-200" />
               </div>
               <div>
                 <p className="text-[13px] font-semibold">Operations overview</p>
@@ -236,12 +236,12 @@ export function Sidebar() {
         </nav>
 
         {/* Footer / user info */}
-        <div className="border-t border-slate-200/70 px-2.5 py-2.5">
-          <div className="rounded-[16px] bg-white/75 px-3 py-2">
-            <p className="text-[13px] font-semibold text-slate-950">
+        <div className="border-t border-indigo-100 px-2.5 py-2.5">
+          <div className="rounded-[16px] bg-gradient-to-r from-indigo-50/80 to-violet-50/80 px-3 py-2">
+            <p className="text-[13px] font-semibold text-indigo-950">
               {user?.firstName} {user?.lastName}
             </p>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{user?.role?.replace("-", " ")}</p>
+            <p className="text-[10px] uppercase tracking-[0.16em] text-indigo-500/70">{user?.role?.replace("-", " ")}</p>
           </div>
         </div>
       </aside>
@@ -282,14 +282,14 @@ function ModuleItem({
         className={cn(
           "group flex items-center gap-2 rounded-[14px] px-2.5 py-2 text-[13px] font-medium transition-all",
           isActive
-            ? "bg-slate-950 text-white shadow-[0_10px_20px_rgba(15,23,42,0.12)]"
-            : "text-slate-600 hover:bg-white/70 hover:text-slate-950"
+            ? "bg-gradient-to-r from-[#1f3a7a] via-[#3730a3] to-[#4c1d95] text-white shadow-[0_10px_22px_rgba(55,48,163,0.32)]"
+            : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-900"
         )}
       >
         <span
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-[11px] transition-colors",
-            isActive ? "bg-white/10 text-white" : "bg-white/80 text-slate-500 group-hover:text-slate-950"
+            isActive ? "bg-white/15 text-white" : "bg-white/80 text-indigo-600/70 group-hover:text-violet-700"
           )}
         >
           <mod.icon className="h-4 w-4" />
@@ -308,14 +308,16 @@ function ModuleItem({
         className={cn(
           "group flex w-full items-center gap-2 rounded-[14px] px-2.5 py-2 text-[13px] font-medium transition-all text-left",
           moduleActive
-            ? "bg-slate-100 text-slate-950"
-            : "text-slate-600 hover:bg-white/70 hover:text-slate-950"
+            ? "bg-indigo-50 text-indigo-900"
+            : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-900"
         )}
       >
         <span
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-[11px] transition-colors",
-            moduleActive ? "bg-slate-950 text-white" : "bg-white/80 text-slate-500 group-hover:text-slate-950"
+            moduleActive
+              ? "bg-gradient-to-br from-[#1f3a7a] to-[#4c1d95] text-white"
+              : "bg-white/80 text-indigo-600/70 group-hover:text-violet-700"
           )}
         >
           <mod.icon className="h-4 w-4" />
@@ -323,7 +325,7 @@ function ModuleItem({
         <span className="flex-1">{mod.label}</span>
         <ChevronDown
           className={cn(
-            "h-3.5 w-3.5 text-slate-400 transition-transform duration-200",
+            "h-3.5 w-3.5 text-indigo-400 transition-transform duration-200",
             isExpanded && "rotate-180"
           )}
         />
@@ -336,7 +338,7 @@ function ModuleItem({
           isExpanded ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0"
         )}
       >
-        <div className="ml-4 border-l border-slate-200/80 pl-2 pt-0.5 space-y-0.5">
+        <div className="ml-4 border-l border-indigo-200/70 pl-2 pt-0.5 space-y-0.5">
           {/* Flat items */}
           {mod.items?.filter((item) => isVisible(item.roles, item.feature, item.href)).map((item) => (
             <NavLink
@@ -362,7 +364,7 @@ function ModuleItem({
                   onClick={() => onToggle(sgKey)}
                   className={cn(
                     "flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] transition-colors text-left",
-                    sgActive ? "text-slate-950" : "text-slate-400 hover:text-slate-700"
+                    sgActive ? "text-violet-800" : "text-indigo-400 hover:text-violet-700"
                   )}
                 >
                   {sg.icon && <sg.icon className="h-3.5 w-3.5" />}
@@ -419,8 +421,8 @@ function NavLink({
       className={cn(
         "flex items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[12.5px] font-medium transition-all",
         isActive
-          ? "bg-slate-950 text-white shadow-sm"
-          : "text-slate-600 hover:bg-white/70 hover:text-slate-950"
+          ? "bg-gradient-to-r from-[#1f3a7a] via-[#3730a3] to-[#4c1d95] text-white shadow-sm"
+          : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-900"
       )}
     >
       <span className="flex-1">{item.label}</span>

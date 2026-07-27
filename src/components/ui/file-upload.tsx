@@ -103,7 +103,7 @@ export function FileUpload({
               href={value}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-teal-700 hover:underline"
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-indigo-700 hover:underline"
             >
               <FileText className="h-4 w-4" /> View file
             </a>
@@ -130,7 +130,7 @@ export function FileUpload({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={disabled || uploading}
-          className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/60 px-4 py-6 text-sm text-slate-500 transition hover:border-teal-400 hover:text-teal-600 disabled:opacity-50"
+          className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/60 px-4 py-6 text-sm text-slate-500 transition hover:border-indigo-400 hover:text-indigo-600 disabled:opacity-50"
         >
           {uploading ? (
             <>

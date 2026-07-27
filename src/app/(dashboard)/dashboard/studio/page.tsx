@@ -76,7 +76,7 @@ export default function StudioDashboardPage() {
           value={todayBookings.length}
           icon={<Clapperboard className="h-5 w-5" />}
           meta={`${upcomingBookings.length} upcoming`}
-          toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white"
+          toneClassName="bg-gradient-to-br from-indigo-500 to-violet-600 text-white"
         />
         <ListingStatCard
           label="Studios"
@@ -108,7 +108,7 @@ export default function StudioDashboardPage() {
           <h3 className="text-lg font-semibold tracking-[-0.02em] text-slate-950">Today&apos;s Bookings</h3>
           <button
             onClick={() => router.push(`${base}/studio/calendar`)}
-            className="text-sm font-medium text-teal-700 flex items-center gap-1 hover:text-teal-800 hover:underline"
+            className="text-sm font-medium text-indigo-700 flex items-center gap-1 hover:text-indigo-800 hover:underline"
           >
             Calendar <ArrowRight className="h-3 w-3" />
           </button>
@@ -124,8 +124,8 @@ export default function StudioDashboardPage() {
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{b.purpose || b.studioName}</p>
                   <p className="text-xs text-slate-500">
-                    {b.startTime} – {b.endTime} • {b.studioName}
-                    {b.clientName && ` • ${b.clientName}`}
+                    {b.startTime} â€“ {b.endTime} â€¢ {b.studioName}
+                    {b.clientName && ` â€¢ ${b.clientName}`}
                   </p>
                 </div>
                 <Badge variant={getStatusColor(b.status)} className="capitalize">
@@ -152,7 +152,7 @@ export default function StudioDashboardPage() {
             className="rounded-2xl border border-white/70 bg-white/70 p-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.05)] hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_14px_34px_rgba(15,23,42,0.1)] transition-all"
           >
             <p className="text-sm font-semibold text-slate-900">{link.label}</p>
-            <ArrowRight className="h-4 w-4 text-teal-600 mt-1" />
+            <ArrowRight className="h-4 w-4 text-indigo-600 mt-1" />
           </button>
         ))}
       </div>

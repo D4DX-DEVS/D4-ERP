@@ -65,8 +65,8 @@ const navItems = [
   { href: "/staff-portal/attendance", label: "Attendance", icon: Clock },
   { href: "/staff-portal/my-tasks", label: "My Tasks", icon: ClipboardList },
   { href: "/staff-portal/work-log", label: "Work Log", icon: Pencil },
-  { href: "/staff-portal/leave", label: "Apply Leave", icon: CalendarDays },
-  { href: "/staff-portal/my-leaves", label: "My Leaves", icon: FileText },
+  { href: "/staff-portal/leave", label: "New Request", icon: CalendarDays },
+  { href: "/staff-portal/my-leaves", label: "My Requests", icon: FileText },
   { href: "/staff-portal/calendar", label: "Calendar", icon: CalendarRange },
   { href: "/staff-portal/holidays", label: "Holidays", icon: CalendarOff },
   { href: "/staff-portal/notifications", label: "Alerts", icon: Bell },
@@ -76,7 +76,7 @@ const navItems = [
 // Standard 5-slot app bottom bar: 4 primary tabs + "More" sheet for the rest.
 const mobileTabs = [
   { href: "/staff-portal", label: "Home", icon: Home },
-  { href: "/staff-portal/leave", label: "Leave", icon: CalendarDays },
+  { href: "/staff-portal/leave", label: "Requests", icon: CalendarDays },
   { href: "/staff-portal/my-tasks", label: "Tasks", icon: ClipboardList },
   { href: "/staff-portal/attendance", label: "Attendance", icon: Clock },
 ];
@@ -145,7 +145,7 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
     return (
       <div className="mesh-bg flex min-h-screen items-center justify-center px-6">
         <div className="glass-panel flex items-center gap-4 rounded-[28px] px-6 py-5 text-slate-700">
-          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-emerald-600/20 border-t-emerald-600" />
+          <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-indigo-600/20 border-t-indigo-600" />
           <div>
             <p className="text-sm font-semibold text-slate-950">Loading staff portal</p>
             <p className="text-sm text-slate-500">Syncing your schedule, leave data, and quick actions.</p>
@@ -160,7 +160,7 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
       <aside className="glass-panel fixed inset-y-5 left-5 z-20 hidden w-[280px] flex-col overflow-hidden rounded-[32px] lg:flex">
         <div className="border-b border-slate-200/70 px-5 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-500 text-sm font-black tracking-[0.2em] text-white shadow-[0_16px_34px_rgba(16,185,129,0.28)]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-gradient-to-br from-[#1f3a7a] via-[#3730a3] to-[#5b21b6] text-sm font-black tracking-[0.2em] text-white shadow-[0_16px_34px_rgba(55,48,163,0.28)]">
               D4
             </div>
             <div>
@@ -280,7 +280,7 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
                 )}
               </Button>
               <div className="flex items-center gap-3 rounded-full border border-white/70 bg-white/70 px-2 py-2 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-                <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-sm font-semibold text-white">
+                <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#1f3a7a] to-[#5b21b6] text-sm font-semibold text-white">
                   {profileImage ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={profileImage} alt={`${user.firstName} ${user.lastName}`} className="h-full w-full object-cover" />
@@ -388,7 +388,7 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
                 onClick={() => setMoreOpen(false)}
                 className={cn(
                   "flex flex-col items-center gap-1 pb-1.5 pt-2 text-[10px] font-medium transition-colors",
-                  isActive ? "text-emerald-600" : "text-slate-400"
+                  isActive ? "text-indigo-600" : "text-slate-400"
                 )}
               >
                 <item.icon className="h-5 w-5" />
@@ -401,7 +401,7 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
             onClick={() => setMoreOpen((open) => !open)}
             className={cn(
               "flex flex-col items-center gap-1 pb-1.5 pt-2 text-[10px] font-medium transition-colors",
-              moreOpen || moreItems.some((item) => pathname === item.href) ? "text-emerald-600" : "text-slate-400"
+              moreOpen || moreItems.some((item) => pathname === item.href) ? "text-indigo-600" : "text-slate-400"
             )}
           >
             <span className="relative">

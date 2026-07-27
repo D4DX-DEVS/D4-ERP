@@ -640,7 +640,7 @@ export default function InvoiceDetailPage() {
           <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">{invoice.invoiceNumber}</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">{invoice.invoiceNumber}</h1>
           <p className="text-sm text-gray-500">{invoice.type === "quotation" ? "Quotation" : "Invoice"}</p>
         </div>
         <div className="flex flex-wrap gap-2">

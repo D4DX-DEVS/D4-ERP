@@ -5,6 +5,8 @@ import { useAuthStore } from "@/store/auth-store";
 import { createDocument, getDocuments, orderBy, where, Timestamp } from "@/lib/firestore";
 import { Attendance } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
+import { getAdminStaffIds, getDeptHeadStaffId } from "@/lib/requests";
+import { createBulkNotifications } from "@/lib/notifications";
 import {
   ATTENDANCE_STATUS_CONFIG,
   ATTENDANCE_STATUS_OPTIONS,
@@ -21,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
-import { ChevronLeft, ChevronRight, ClipboardEdit, Send } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ClipboardEdit, Send } from "lucide-react";
 
 const CORRECTION_STATUS_OPTIONS = ATTENDANCE_STATUS_OPTIONS.filter((o) => o.value !== "public-holiday");
 
@@ -51,7 +53,7 @@ interface DayCell {
 export default function StaffAttendancePage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
-  const correctionRef = useRef<HTMLDivElement>(null);
+  const correctionRef = useRef<HTMLDetailsElement>(null);
 
   const now = new Date();
   const [view, setView] = useState<"month" | "year">("month");
@@ -193,6 +195,24 @@ export default function StaffAttendancePage() {
         reason: correctionForm.reason.trim(),
         status: "pending",
       });
+      // Notify dept head + admins — review happens on the corrections page
+      try {
+        const [headId, adminIds] = await Promise.all([
+          getDeptHeadStaffId(user.departmentId),
+          getAdminStaffIds(),
+        ]);
+        const recipients = new Set<string>([...adminIds, ...(headId ? [headId] : [])]);
+        recipients.delete(user.staffId);
+        await createBulkNotifications([...recipients], {
+          type: "system",
+          title: "New attendance correction request",
+          message: `${user.firstName} ${user.lastName} requested an attendance correction for ${new Date(correctionForm.date).toLocaleDateString("en-IN")}.`,
+          link: "/dashboard/attendance/corrections",
+        });
+      } catch (error) {
+        // ponytail: notification is a courtesy — submission must not fail on it
+        console.error("Correction notification error:", error);
+      }
       toast("success", "Correction request submitted");
       setCorrectionForm({
         date: new Date().toISOString().split("T")[0],
@@ -218,8 +238,8 @@ export default function StaffAttendancePage() {
       title={`${cell.day} — ${cell.holidayName ?? cell.meta?.label ?? "Upcoming"}`}
       className={
         "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold transition-transform hover:scale-110 " +
-        (selectedKey === cell.key ? "ring-2 ring-teal-500 " : "") +
-        (cell.key === todayKey ? "outline outline-1 outline-teal-400 " : "") +
+        (selectedKey === cell.key ? "ring-2 ring-indigo-500 " : "") +
+        (cell.key === todayKey ? "outline outline-1 outline-indigo-400 " : "") +
         (cell.meta ? cell.meta.cell : "bg-slate-50 text-slate-300")
       }
     >
@@ -294,7 +314,7 @@ export default function StaffAttendancePage() {
                     onClick={() => setView(v)}
                     className={
                       "rounded-full px-3 py-1 text-xs font-semibold transition-colors " +
-                      (view === v ? "bg-teal-600 text-white" : "text-slate-500 hover:text-slate-800")
+                      (view === v ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-slate-800")
                     }
                   >
                     {v === "month" ? "Monthly" : "Yearly"}
@@ -329,8 +349,8 @@ export default function StaffAttendancePage() {
                       title={`${cell.day} — ${cell.holidayName ?? cell.meta?.label ?? "Upcoming"}`}
                       className={
                         "flex h-10 flex-col items-center justify-center rounded-md transition-colors " +
-                        (selectedKey === cell.key ? "ring-2 ring-teal-500 " : "") +
-                        (cell.key === todayKey ? "outline outline-1 outline-teal-400 " : "") +
+                        (selectedKey === cell.key ? "ring-2 ring-indigo-500 " : "") +
+                        (cell.key === todayKey ? "outline outline-1 outline-indigo-400 " : "") +
                         (cell.meta ? cell.meta.cell : "bg-slate-50 text-slate-300")
                       }
                     >
@@ -381,7 +401,10 @@ export default function StaffAttendancePage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => correctionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                      onClick={() => {
+                        if (correctionRef.current) correctionRef.current.open = true;
+                        correctionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
                     >
                       <ClipboardEdit className="mr-1.5 h-3.5 w-3.5" />
                       Request Correction
@@ -423,7 +446,7 @@ export default function StaffAttendancePage() {
                               {cells[i] ? dayCellButton(cells[i]) : null}
                             </td>
                           ))}
-                          <td className="pl-2 text-center text-xs font-semibold text-emerald-600">{counts.P ?? 0}</td>
+                          <td className="pl-2 text-center text-xs font-semibold text-indigo-600">{counts.P ?? 0}</td>
                           <td className="text-center text-xs font-semibold text-rose-600">{counts.A ?? 0}</td>
                         </tr>
                       );
@@ -438,13 +461,15 @@ export default function StaffAttendancePage() {
       </Card>
 
       {/* Request Correction */}
-      <div ref={correctionRef}>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardEdit className="h-5 w-5 text-sky-500" /> Request Attendance Correction
-            </CardTitle>
-          </CardHeader>
+      {/* ponytail: native <details> — collapsed until asked for, no state, no animation lib */}
+      <Card>
+        <details ref={correctionRef} className="group">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 sm:p-5 [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center gap-2 text-base font-semibold tracking-[-0.03em] text-slate-950">
+              <ClipboardEdit className="h-5 w-5 shrink-0 text-sky-500" /> Request Attendance Correction
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+          </summary>
           <CardContent className="space-y-4">
             <p className="text-xs text-gray-500">
               Marked absent when you were present, or forgot to punch? Pick the day on the register above and submit a request for your manager to review.
@@ -497,8 +522,8 @@ export default function StaffAttendancePage() {
               </Button>
             </div>
           </CardContent>
-        </Card>
-      </div>
+        </details>
+      </Card>
     </div>
   );
 }

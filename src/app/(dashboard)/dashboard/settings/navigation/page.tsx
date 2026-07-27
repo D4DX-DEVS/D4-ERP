@@ -165,7 +165,7 @@ export default function NavigationSettingsPage() {
       {/* Header with save button */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Navigation Configuration</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Navigation Configuration</h1>
           <p className="text-sm text-slate-600 mt-1">Configure menu visibility by role and staff member</p>
         </div>
         <Button onClick={handleSave} disabled={saving}>

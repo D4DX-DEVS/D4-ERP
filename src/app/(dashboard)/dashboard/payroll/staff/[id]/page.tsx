@@ -102,7 +102,7 @@ export default function StaffPayrollDossierPage() {
         </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-bold">Payroll Dossier</h1>
+            <h1 className="text-xl font-bold sm:text-2xl">Payroll Dossier</h1>
             <Badge>{staff.status}</Badge>
           </div>
           <p className="text-gray-600">{staff.firstName} {staff.lastName} • {staff.designation}</p>

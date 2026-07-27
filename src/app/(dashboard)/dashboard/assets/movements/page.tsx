@@ -59,7 +59,7 @@ export default function AssetMovementsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Asset Movements</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Asset Movements</h1>
         <p className="text-sm text-gray-500 mt-1">{totalCount} movements tracked</p>
       </div>
 

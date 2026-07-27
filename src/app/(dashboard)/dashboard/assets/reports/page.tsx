@@ -122,7 +122,7 @@ export default function AssetReportsPage() {
 
   const hasFilters = fromDate || toDate || assetName || statusFilter || searchTerm;
 
-  // ── Export helpers ─────────────────────────────────────────────────────
+  // â”€â”€ Export helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function getExportRows() {
     if (reportType === "movement") {
       return (data as MovementRow[]).map(m => ({
@@ -160,7 +160,7 @@ export default function AssetReportsPage() {
     setExporting(false);
   }
 
-  // ── Damage report edit/resolve ────────────────────────────────────────
+  // â”€â”€ Damage report edit/resolve â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function openEditDamage(report: DamageRow) {
     setEditForm({ type: report.type, reason: report.reason, notes: report.notes || "", isResolved: report.isResolved });
     setEditingReport(report);
@@ -221,7 +221,7 @@ export default function AssetReportsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Asset Reports</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Asset Reports</h1>
           <p className="text-sm text-gray-500 mt-1">View and export movement, damage, and activity reports</p>
         </div>
         <div className="flex gap-2">
@@ -244,7 +244,7 @@ export default function AssetReportsPage() {
           const active = reportType === tab.key;
           return (
             <button key={tab.key} onClick={() => setReportType(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${active ? "bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"}`}>
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${active ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-800 hover:bg-gray-100"}`}>
               <Icon className="h-4 w-4" />
               {tab.label}
             </button>
@@ -325,8 +325,8 @@ export default function AssetReportsPage() {
                     <TableCell><p className="font-medium">{m.assetName}</p><p className="text-xs text-gray-400">{m.assetCategory}</p></TableCell>
                     <TableCell><p>{m.eventName}</p><p className="text-xs text-gray-400">{m.eventLocation}</p></TableCell>
                     <TableCell>{m.allocatedPersonName}</TableCell>
-                    <TableCell>{m.outDate ? formatDate(new Date(m.outDate)) : "—"}</TableCell>
-                    <TableCell>{m.inDate ? formatDate(new Date(m.inDate)) : "—"}</TableCell>
+                    <TableCell>{m.outDate ? formatDate(new Date(m.outDate)) : "â€”"}</TableCell>
+                    <TableCell>{m.inDate ? formatDate(new Date(m.inDate)) : "â€”"}</TableCell>
                     <TableCell><Badge variant={m.status === "OUT" ? "bg-orange-100 text-orange-800" : "bg-green-100 text-green-800"}>{m.status}</Badge></TableCell>
                     <TableCell><Badge>{m.condition}</Badge></TableCell>
                   </TableRow>
@@ -363,7 +363,7 @@ export default function AssetReportsPage() {
                         {d.isResolved ? "Resolved" : "Open"}
                       </Badge>
                     </TableCell>
-                    <TableCell>{d.createdAt ? formatDate(new Date(d.createdAt)) : "—"}</TableCell>
+                    <TableCell>{d.createdAt ? formatDate(new Date(d.createdAt)) : "â€”"}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEditDamage(d)}>
@@ -399,7 +399,7 @@ export default function AssetReportsPage() {
                     <TableCell><Badge>{a.action}</Badge></TableCell>
                     <TableCell>{a.module}</TableCell>
                     <TableCell className="max-w-[300px] truncate text-gray-500">{a.details}</TableCell>
-                    <TableCell>{a.createdAt ? formatDate(new Date(a.createdAt)) : "—"}</TableCell>
+                    <TableCell>{a.createdAt ? formatDate(new Date(a.createdAt)) : "â€”"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

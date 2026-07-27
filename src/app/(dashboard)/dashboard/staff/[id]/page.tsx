@@ -305,7 +305,7 @@ export default function StaffProfilePage() {
 
         <div className="flex-1 flex items-center gap-4">
           {/* Avatar */}
-          <div className="h-16 w-16 rounded-full overflow-hidden bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0">
+          <div className="h-16 w-16 rounded-full overflow-hidden bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0">
             {staff.profileImage ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -320,7 +320,7 @@ export default function StaffProfilePage() {
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-gray-900 truncate">
+              <h1 className="text-xl font-bold sm:text-2xl text-gray-900 truncate">
                 {staff.firstName} {staff.lastName}
               </h1>
               <Badge variant={getStatusColor(staff.status)}>{staff.status}</Badge>
@@ -384,7 +384,7 @@ export default function StaffProfilePage() {
               onClick={() => setActiveTab(tab.key)}
               className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.key
-                  ? "border-teal-600 text-teal-700"
+                  ? "border-indigo-600 text-indigo-700"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
@@ -641,7 +641,7 @@ export default function StaffProfilePage() {
           <CardContent>
             {staff.role === "admin" ? (
               <div className="text-center py-8">
-                <Shield className="h-8 w-8 text-teal-400 mx-auto mb-2" />
+                <Shield className="h-8 w-8 text-indigo-400 mx-auto mb-2" />
                 <p className="text-sm text-gray-600 font-medium">Admins have access to all features</p>
               </div>
             ) : (
@@ -654,9 +654,9 @@ export default function StaffProfilePage() {
                       key={f.key}
                       className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
                         auto
-                          ? "bg-teal-50/50 border-teal-200"
+                          ? "bg-indigo-50/50 border-indigo-200"
                           : granted
-                          ? "border-teal-500 bg-teal-50/30"
+                          ? "border-indigo-500 bg-indigo-50/30"
                           : "hover:bg-gray-50"
                       }`}
                     >
@@ -665,13 +665,13 @@ export default function StaffProfilePage() {
                         checked={auto || granted}
                         disabled={auto || !canEditFeatures}
                         onChange={() => toggleFeature(f.key)}
-                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                       />
                       <div>
                         <p className="text-sm font-medium">
                           {f.label}
                           {auto && (
-                            <span className="ml-2 text-[10px] uppercase tracking-wider text-teal-600 bg-teal-100 px-1.5 py-0.5 rounded">
+                            <span className="ml-2 text-[10px] uppercase tracking-wider text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded">
                               Role default
                             </span>
                           )}

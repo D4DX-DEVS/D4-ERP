@@ -59,7 +59,7 @@ export default function EventReportsPage() {
           label="Total Events"
           value={events.length}
           icon={<BarChart3 className="h-5 w-5" />}
-          toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white"
+          toneClassName="bg-gradient-to-br from-indigo-500 to-violet-600 text-white"
         />
         <ListingStatCard
           label="Success Rate"
@@ -101,7 +101,7 @@ export default function EventReportsPage() {
                     <div className="flex items-center gap-2">
                       <div className="w-24 h-2 rounded-full bg-slate-100 overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-teal-600 to-emerald-500 rounded-full"
+                          className="h-full bg-gradient-to-r from-indigo-600 to-violet-600 rounded-full"
                           style={{ width: `${(count / events.length) * 100}%` }}
                         />
                       </div>
@@ -128,7 +128,7 @@ export default function EventReportsPage() {
                 return (
                   <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
                     <span className="text-xs font-semibold text-slate-900">{m.count}</span>
-                    <div className="w-full rounded-t-lg bg-gradient-to-t from-teal-600 to-emerald-400 shadow-[0_4px_12px_rgba(15,118,110,0.25)]" style={{ height: `${height}%`, minHeight: "4px" }} />
+                    <div className="w-full rounded-t-lg bg-gradient-to-t from-indigo-600 to-violet-500 shadow-[0_4px_12px_rgba(55,48,163,0.25)]" style={{ height: `${height}%`, minHeight: "4px" }} />
                     <span className="text-[10px] text-slate-400">{m.month}</span>
                   </div>
                 );

@@ -94,7 +94,7 @@ export default function AssetCategoriesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Asset Categories</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Asset Categories</h1>
           <p className="text-sm text-gray-500 mt-1">{totalCount} categories</p>
         </div>
         <Button onClick={() => { setEditingId(null); setForm({ name: "", description: "", isActive: true }); setDialogOpen(true); }}>

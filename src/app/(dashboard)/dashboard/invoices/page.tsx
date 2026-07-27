@@ -222,7 +222,7 @@ export default function InvoicesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
+          <h1 className="text-xl font-bold sm:text-2xl text-gray-900">Invoices</h1>
           <p className="text-sm text-gray-500 mt-1">Create and manage invoices</p>
         </div>
         <Button onClick={() => setDialogOpen(true)}>

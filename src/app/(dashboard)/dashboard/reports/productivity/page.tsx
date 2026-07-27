@@ -62,14 +62,14 @@ export default function ProductivityPage() {
   const staff = Array.from(staffMap.values()).sort((a, b) => b.totalHours - a.totalHours);
   const totalHours = staff.reduce((s, r) => s + r.totalHours, 0);
   const avgOverall = staff.length > 0 ? Math.round((totalHours / staff.length) * 10) / 10 : 0;
-  const topPerformer = staff[0]?.staffName || "—";
+  const topPerformer = staff[0]?.staffName || "â€”";
 
   return (
     <div className="space-y-6">
       <ListingHeader title="Productivity" description="Last 30 days staff productivity analysis." />
 
       <ListingStatGrid>
-        <ListingStatCard label="Active Staff" value={staff.length} icon={<Users className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white" />
+        <ListingStatCard label="Active Staff" value={staff.length} icon={<Users className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-indigo-500 to-violet-600 text-white" />
         <ListingStatCard label="Total Hours" value={`${totalHours}h`} icon={<Clock className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white" />
         <ListingStatCard label="Avg per Staff" value={`${avgOverall}h`} icon={<TrendingUp className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white" />
         <ListingStatCard label="Top Performer" value={topPerformer} icon={<Target className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white" />
@@ -106,7 +106,7 @@ export default function ProductivityPage() {
                       <div className="flex items-center gap-2">
                         <div className="w-16 h-2 rounded-full bg-slate-100 overflow-hidden">
                           <div
-                            className={`h-full rounded-full ${utilization >= 75 ? "bg-gradient-to-r from-teal-600 to-emerald-500" : utilization >= 50 ? "bg-gradient-to-r from-amber-500 to-yellow-500" : "bg-gradient-to-r from-red-500 to-rose-500"}`}
+                            className={`h-full rounded-full ${utilization >= 75 ? "bg-gradient-to-r from-indigo-600 to-violet-600" : utilization >= 50 ? "bg-gradient-to-r from-amber-500 to-yellow-500" : "bg-gradient-to-r from-red-500 to-rose-500"}`}
                             style={{ width: `${utilization}%` }}
                           />
                         </div>

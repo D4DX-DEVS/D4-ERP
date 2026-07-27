@@ -159,7 +159,7 @@ export default function BannersPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Banners</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Banners</h1>
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4 mr-2" /> New Banner
         </Button>
@@ -167,7 +167,7 @@ export default function BannersPage() {
 
       {loading ? (
         <div className="text-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-600 border-t-transparent mx-auto" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent mx-auto" />
         </div>
       ) : banners.length === 0 ? (
         <Card>
