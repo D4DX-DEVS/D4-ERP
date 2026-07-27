@@ -164,7 +164,7 @@ export default function TasksPage() {
         completionPercentage,
       };
       if (editingId) {
-        // Status moves go through the workflow helper (history + guards) — not the edit form.
+        // Status moves go through the workflow helper (history + guards) â€” not the edit form.
         const editPayload: Record<string, unknown> = { ...payload };
         delete editPayload.status;
         await updateDocument("tasks", editingId, editPayload);
@@ -288,7 +288,7 @@ export default function TasksPage() {
     <div className="space-y-6">
       <ListingHeader
         title="Task Board"
-        description="Coordinate deliverables across your team — drag cards between columns to update status."
+        description="Coordinate deliverables across your team â€” drag cards between columns to update status."
         action={
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> New Task
@@ -349,7 +349,7 @@ export default function TasksPage() {
               className={cn(
                 "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all",
                 active
-                  ? "bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-500 text-white shadow-[0_10px_24px_rgba(15,118,110,0.24)]"
+                  ? "bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-600 text-white shadow-[0_10px_24px_rgba(55,48,163,0.24)]"
                   : "text-slate-600 hover:text-slate-950"
               )}
             >
@@ -360,21 +360,22 @@ export default function TasksPage() {
         })}
       </div>
 
-      {/* Filters — apply to both Board and Table views */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
+      {/* Filters â€” apply to both Board and Table views */}
+      {/* ponytail: 2-up grid on phones â€” flex-wrap with min-widths left ragged orphan rows */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="relative col-span-2 sm:col-span-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
-            placeholder="Search tasks…"
+            placeholder="Search tasksâ€¦"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-auto min-w-[200px] pl-9"
+            className="w-full min-w-0 pl-9 sm:w-auto sm:min-w-[200px]"
           />
         </div>
         <Select
           value={assigneeFilter}
           onChange={(e) => setAssigneeFilter(e.target.value)}
-          className="w-auto min-w-[170px]"
+          className="w-full min-w-0 sm:w-auto sm:min-w-[170px]"
           options={[
             { value: "all", label: "All staff" },
             ...staffList.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` })),
@@ -383,19 +384,19 @@ export default function TasksPage() {
         <Select
           value={departmentFilter}
           onChange={(e) => setDepartmentFilter(e.target.value)}
-          className="w-auto min-w-[170px]"
+          className="w-full min-w-0 sm:w-auto sm:min-w-[170px]"
           options={[{ value: "all", label: "All departments" }, ...departments.map((d) => ({ value: d.id, label: d.name }))]}
         />
         <Select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as "all" | Task["status"])}
-          className="w-auto min-w-[150px]"
+          className="w-full min-w-0 sm:w-auto sm:min-w-[150px]"
           options={[{ value: "all", label: "All statuses" }, ...statusColumns.map((c) => ({ value: c.key, label: c.label }))]}
         />
         <Select
           value={priorityFilter}
           onChange={(e) => setPriorityFilter(e.target.value as "all" | Task["priority"])}
-          className="w-auto min-w-[150px]"
+          className="w-full min-w-0 sm:w-auto sm:min-w-[150px]"
           options={[
             { value: "all", label: "All priorities" },
             { value: "low", label: "Low" },
@@ -501,7 +502,7 @@ export default function TasksPage() {
                               </div>
                               <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
                                 <div
-                                  className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all"
+                                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-600 transition-all"
                                   style={{ width: `${subTotal ? (subDone / subTotal) * 100 : 0}%` }}
                                 />
                               </div>
@@ -518,7 +519,7 @@ export default function TasksPage() {
 
                           <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-[11px]">
                             <span className="flex items-center gap-1.5 text-slate-500">
-                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-500 text-[9px] font-semibold uppercase text-white">
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-[9px] font-semibold uppercase text-white">
                                 {task.assigneeName ? task.assigneeName.charAt(0) : "?"}
                               </span>
                               <span className="max-w-[90px] truncate">{task.assigneeName || "Unassigned"}</span>
@@ -588,7 +589,7 @@ export default function TasksPage() {
                     </TableCell>
                     <TableCell>
                       <span className="flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-500 text-[10px] font-semibold uppercase text-white">
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-[10px] font-semibold uppercase text-white">
                           {task.assigneeName ? task.assigneeName.charAt(0) : "?"}
                         </span>
                         <span className="text-sm text-slate-600">{task.assigneeName || "Unassigned"}</span>
@@ -620,7 +621,7 @@ export default function TasksPage() {
                           {formatDate(new Date(task.dueDate.seconds * 1000))}
                         </span>
                       ) : (
-                        <span className="text-sm text-slate-400">—</span>
+                        <span className="text-sm text-slate-400">â€”</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -628,14 +629,14 @@ export default function TasksPage() {
                         <span className="flex items-center gap-2">
                           <span className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
                             <span
-                              className="block h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500"
+                              className="block h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-600"
                               style={{ width: `${(subDone / subTotal) * 100}%` }}
                             />
                           </span>
                           <span className="text-xs text-slate-500">{subDone}/{subTotal}</span>
                         </span>
                       ) : (
-                        <span className="text-sm text-slate-400">—</span>
+                        <span className="text-sm text-slate-400">â€”</span>
                       )}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -643,7 +644,7 @@ export default function TasksPage() {
                         <button
                           type="button"
                           onClick={() => openEdit(task)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-500 transition-colors hover:border-teal-300 hover:text-teal-600"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-500 transition-colors hover:border-indigo-300 hover:text-indigo-600"
                           aria-label="Edit task"
                         >
                           <Pencil className="h-3.5 w-3.5" />
@@ -697,7 +698,7 @@ export default function TasksPage() {
               <Label>Status</Label>
               {editingId ? (
                 <p className="flex h-10 items-center rounded-xl border border-slate-200/70 bg-slate-50/60 px-3 text-sm text-slate-500">
-                  {statusColumns.find((c) => c.key === form.status)?.label} — change from the board
+                  {statusColumns.find((c) => c.key === form.status)?.label} â€” change from the board
                 </p>
               ) : (
                 <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Task["status"] })}
@@ -716,8 +717,8 @@ export default function TasksPage() {
               <div className="space-y-1.5">
                 {subtasks.map((s, idx) => (
                   <div key={idx} className="flex items-center gap-2 rounded-xl border border-slate-200/70 bg-slate-50/60 px-3 py-1.5">
-                    <button type="button" onClick={() => toggleSubtask(idx)} className="cursor-pointer text-slate-500 hover:text-teal-600">
-                      {s.isCompleted ? <CheckSquare className="h-4 w-4 text-teal-600" /> : <Square className="h-4 w-4" />}
+                    <button type="button" onClick={() => toggleSubtask(idx)} className="cursor-pointer text-slate-500 hover:text-indigo-600">
+                      {s.isCompleted ? <CheckSquare className="h-4 w-4 text-indigo-600" /> : <Square className="h-4 w-4" />}
                     </button>
                     <span className={cn("flex-1 text-sm", s.isCompleted ? "text-slate-400 line-through" : "text-slate-700")}>{s.title}</span>
                     <button type="button" onClick={() => removeSubtask(idx)} className="cursor-pointer text-slate-400 hover:text-red-500">
@@ -748,7 +749,7 @@ export default function TasksPage() {
                 step="5"
                 value={completionPercentage}
                 onChange={(e) => setCompletionPercentage(parseInt(e.target.value, 10))}
-                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
               />
               <span className="inline-flex h-8 w-12 items-center justify-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-700">
                 {completionPercentage}%
@@ -761,7 +762,7 @@ export default function TasksPage() {
                   const completed = subtasks.filter((s) => s.isCompleted).length;
                   setCompletionPercentage(subtasks.length ? Math.round((completed / subtasks.length) * 100) : 0);
                 }}
-                className="text-xs text-teal-600 hover:text-teal-700 font-medium"
+                className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
               >
                 Sync from subtasks
               </button>
@@ -816,7 +817,7 @@ export default function TasksPage() {
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Tell {returnTarget?.assigneeName || "the assignee"} what needs fixing on “{returnTarget?.title}”. This is posted as a comment.
+            Tell {returnTarget?.assigneeName || "the assignee"} what needs fixing on â€œ{returnTarget?.title}â€. This is posted as a comment.
           </p>
           <Textarea
             value={returnRemark}

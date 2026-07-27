@@ -374,7 +374,7 @@ export default function AssetEventsPage() {
       {/* Header with export buttons */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Asset Events</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Asset Events</h1>
           <p className="text-sm text-gray-500 mt-1">{totalCount} events</p>
         </div>
         <div className="flex items-center gap-2">

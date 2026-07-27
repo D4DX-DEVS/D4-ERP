@@ -152,7 +152,7 @@ export default function AssetsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Asset Management</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Asset Management</h1>
           <p className="text-sm text-gray-500 mt-1">{totalCount} assets tracked</p>
         </div>
         <Button onClick={() => { setEditingId(null); setForm({ name: "", category: categoryOptions[0]?.value ?? "", brand: "", model: "", serialNumber: "", purchaseDate: "", purchasePrice: 0, currentValue: 0, companyId: "", status: "available", currentAssigneeId: "", notes: "", isActive: true, productCode: "", allowOutside: false, warrantyDetails: "", warrantyExpiryDate: "", noWarranty: false, billUrl: "" }); setDialogOpen(true); }}>

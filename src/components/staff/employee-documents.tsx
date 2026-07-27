@@ -129,7 +129,7 @@ export function EmployeeDocuments({ staffId, canManage = false, uploadedBy = "" 
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base flex items-center gap-2">
-          <FolderOpen className="h-4 w-4 text-teal-500" /> Documents
+          <FolderOpen className="h-4 w-4 text-indigo-500" /> Documents
         </CardTitle>
         {canManage && !adding && (
           <Button size="sm" onClick={() => setAdding(true)}>

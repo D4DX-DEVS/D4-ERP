@@ -360,7 +360,7 @@ export default function QuotationDetailPage() {
           <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold">{quotation.invoiceNumber}</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">{quotation.invoiceNumber}</h1>
           <p className="flex items-center gap-2 text-sm text-gray-500">
             {docLabel}
             <Badge variant={getStatusColor(quotation.status)}>{quotation.status}</Badge>

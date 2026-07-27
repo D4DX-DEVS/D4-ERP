@@ -29,7 +29,7 @@ export const EVENT_CATEGORIES: CategoryMeta[] = [
   { value: "delivery", label: "Delivery", badge: "bg-orange-100 text-orange-700", bar: "bg-orange-100 text-orange-700", hex: "#f97316" },
   { value: "program", label: "Program", badge: "bg-indigo-100 text-indigo-700", bar: "bg-indigo-100 text-indigo-700", hex: "#6366f1" },
   { value: "leave", label: "Leave", badge: "bg-amber-100 text-amber-700", bar: "bg-amber-100 text-amber-700", hex: "#f59e0b" },
-  { value: "training", label: "Training", badge: "bg-teal-100 text-teal-700", bar: "bg-teal-100 text-teal-700", hex: "#14b8a6" },
+  { value: "training", label: "Training", badge: "bg-indigo-100 text-indigo-700", bar: "bg-indigo-100 text-indigo-700", hex: "#14b8a6" },
   { value: "payroll", label: "Payroll", badge: "bg-emerald-100 text-emerald-700", bar: "bg-emerald-100 text-emerald-700", hex: "#10b981" },
   { value: "personal", label: "Personal", badge: "bg-slate-100 text-slate-700", bar: "bg-slate-100 text-slate-700", hex: "#64748b" },
   { value: "announcement", label: "Announcement", badge: "bg-cyan-100 text-cyan-700", bar: "bg-cyan-100 text-cyan-700", hex: "#06b6d4" },

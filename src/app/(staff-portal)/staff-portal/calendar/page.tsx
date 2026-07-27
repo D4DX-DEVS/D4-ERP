@@ -108,7 +108,7 @@ export default function StaffCalendarPage() {
 
       {loading ? (
         <div className="text-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent mx-auto" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent mx-auto" />
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -131,13 +131,13 @@ export default function StaffCalendarPage() {
                       className={[
                         "min-h-[68px] rounded-xl border p-1.5 text-left transition",
                         inMonth ? "bg-white" : "bg-slate-50/60 text-gray-400",
-                        isSelected ? "border-emerald-500 ring-2 ring-emerald-500/30" : "border-slate-200 hover:border-emerald-300",
+                        isSelected ? "border-indigo-500 ring-2 ring-indigo-500/30" : "border-slate-200 hover:border-emerald-300",
                       ].join(" ")}
                     >
                       <div className="flex items-center justify-between">
                         <span className={[
                           "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold",
-                          isToday ? "bg-emerald-600 text-white" : off && inMonth ? "text-rose-500" : "",
+                          isToday ? "bg-indigo-600 text-white" : off && inMonth ? "text-rose-500" : "",
                         ].join(" ")}>{d.getDate()}</span>
                       </div>
                       <div className="mt-1 space-y-0.5">
@@ -185,7 +185,7 @@ export default function StaffCalendarPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
-                  <CalendarRange className="h-4 w-4 text-emerald-500" /> Holidays this month
+                  <CalendarRange className="h-4 w-4 text-indigo-500" /> Holidays this month
                 </CardTitle>
               </CardHeader>
               <CardContent>

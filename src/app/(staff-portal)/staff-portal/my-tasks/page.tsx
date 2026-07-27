@@ -105,7 +105,7 @@ export default function MyTasksPage() {
         <ListingStatCard icon={<ClipboardList className="h-5 w-5" />} label="Total Tasks" value={tasks.length} toneClassName="bg-slate-100 text-slate-700" meta="Assigned to you" />
         <ListingStatCard icon={<CircleDashed className="h-5 w-5" />} label="Active" value={activeTasks.length} toneClassName="bg-sky-50 text-sky-700" meta="Not yet completed" />
         <ListingStatCard icon={<TimerReset className="h-5 w-5" />} label="In Review" value={reviewTasks.length} toneClassName="bg-amber-50 text-amber-700" meta="Waiting for approval" />
-        <ListingStatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Completed" value={doneTasks.length} toneClassName="bg-emerald-50 text-emerald-700" meta="Finished tasks" />
+        <ListingStatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Completed" value={doneTasks.length} toneClassName="bg-indigo-50 text-indigo-700" meta="Finished tasks" />
       </ListingStatGrid>
 
       <ListingPanel title="Active Tasks" description="Track progress, update status, or open the full task detail page." contentClassName="space-y-4">

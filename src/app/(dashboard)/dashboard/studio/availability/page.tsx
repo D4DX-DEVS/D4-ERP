@@ -119,9 +119,9 @@ export default function StudioAvailabilityPage() {
             ]}
           />
         </div>
-        <div className="ml-auto rounded-full border border-teal-200 bg-teal-50 px-4 py-2 text-sm">
-          <span className="text-teal-600">Occupancy: </span>
-          <span className="font-semibold text-teal-700">{occupancy}%</span>
+        <div className="ml-auto rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm">
+          <span className="text-indigo-600">Occupancy: </span>
+          <span className="font-semibold text-indigo-700">{occupancy}%</span>
         </div>
       </div>
 

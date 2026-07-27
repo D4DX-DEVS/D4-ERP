@@ -79,7 +79,7 @@ export default function PerformancePage() {
             onClick={() => setPeriod(p)}
             className={`rounded-full px-3.5 py-1.5 text-xs font-semibold border transition-colors capitalize ${
               period === p
-                ? "bg-gradient-to-r from-teal-600 to-emerald-500 text-white border-transparent shadow-sm"
+                ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white border-transparent shadow-sm"
                 : "border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
           >
@@ -89,7 +89,7 @@ export default function PerformancePage() {
       </div>
 
       <ListingStatGrid>
-        <ListingStatCard label="Staff Active" value={summaries.length} icon={<Users className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white" />
+        <ListingStatCard label="Staff Active" value={summaries.length} icon={<Users className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-indigo-500 to-violet-600 text-white" />
         <ListingStatCard label="Total Hours" value={`${totalHours}h`} icon={<Clock className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white" />
         <ListingStatCard label="Avg per Staff" value={`${avgPerStaff}h`} icon={<BarChart3 className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white" />
         <ListingStatCard label="Submissions" value={filtered.length} icon={<TrendingUp className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white" />
@@ -110,11 +110,11 @@ export default function PerformancePage() {
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm font-medium text-slate-700">{s.staffName}</span>
-                    <span className="text-xs text-slate-500">{s.totalHours}h • {s.totalLogs} logs</span>
+                    <span className="text-xs text-slate-500">{s.totalHours}h â€¢ {s.totalLogs} logs</span>
                   </div>
                   <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-teal-600 to-emerald-500 rounded-full transition-all"
+                      className="h-full bg-gradient-to-r from-indigo-600 to-violet-600 rounded-full transition-all"
                       style={{ width: `${(s.totalHours / maxHours) * 100}%` }}
                     />
                   </div>

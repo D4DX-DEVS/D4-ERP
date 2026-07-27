@@ -1,18 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --background: #edf2ec;
-  --foreground: #14231d;
-  --muted: #5f746c;
+  --background: #edecf8;
+  --foreground: #17162e;
+  --muted: #62638a;
   --surface: rgba(255, 255, 255, 0.72);
   --surface-strong: rgba(255, 255, 255, 0.92);
-  --border: rgba(20, 35, 29, 0.08);
-  --accent: #0f766e;
-  --accent-strong: #115e59;
-  --accent-soft: #d8f1eb;
+  --border: rgba(23, 22, 46, 0.08);
+  /* brand ramp: logo navy #244385 → violet #4c1d95 */
+  --accent: #3730a3;
+  --accent-strong: #2a2472;
+  --accent-violet: #5b21b6;
+  --accent-soft: #e3e0f8;
+  --accent-gradient: linear-gradient(135deg, #1f3a7a 0%, #3730a3 55%, #4c1d95 100%);
   --danger: #c2410c;
-  --shadow-lg: 0 20px 64px rgba(20, 35, 29, 0.11);
-  --shadow-md: 0 14px 40px rgba(20, 35, 29, 0.08);
+  --shadow-lg: 0 20px 64px rgba(35, 27, 82, 0.14);
+  --shadow-md: 0 14px 40px rgba(35, 27, 82, 0.1);
   --sidebar-width: 248px;
   --sidebar-width-collapsed: 92px;
   --header-height: 64px;
@@ -28,9 +31,9 @@
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 24%),
-    radial-gradient(circle at 85% 15%, rgba(245, 158, 11, 0.14), transparent 20%),
-    linear-gradient(180deg, #f8fbf7 0%, var(--background) 42%, #e6eeea 100%);
+    radial-gradient(circle at top left, rgba(31, 58, 122, 0.16), transparent 26%),
+    radial-gradient(circle at 88% 12%, rgba(124, 58, 237, 0.14), transparent 24%),
+    linear-gradient(160deg, #f6f6fd 0%, var(--background) 45%, #e4e0f5 100%);
   color: var(--foreground);
   font-family: var(--font-sans), Helvetica, sans-serif;
   text-rendering: optimizeLegibility;
@@ -42,7 +45,7 @@ html {
 }
 
 ::selection {
-  background: rgba(15, 118, 110, 0.18);
+  background: rgba(87, 51, 176, 0.2);
   color: var(--foreground);
 }
 
@@ -126,7 +129,7 @@ textarea {
   right: 8%;
   width: 18rem;
   height: 18rem;
-  background: radial-gradient(circle, rgba(15, 118, 110, 0.18), transparent 68%);
+  background: radial-gradient(circle, rgba(31, 58, 122, 0.22), transparent 68%);
 }
 
 .mesh-bg::after {
@@ -134,7 +137,7 @@ textarea {
   left: 6%;
   width: 22rem;
   height: 22rem;
-  background: radial-gradient(circle, rgba(245, 158, 11, 0.16), transparent 70%);
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.18), transparent 70%);
 }
 
 .glass-panel {

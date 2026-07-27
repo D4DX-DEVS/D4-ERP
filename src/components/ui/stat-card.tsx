@@ -29,16 +29,16 @@ export function StatCard({ title, value, icon: Icon, color, bg, href, onClick, a
         (active ? " ring-2 ring-slate-900/70" : "")
       }
     >
-      <CardContent className="p-3 sm:p-6">
-        <div className="flex items-center justify-between gap-2">
+      <CardContent className="p-2 sm:p-6">
+        <div className="flex items-center justify-between gap-1.5 sm:gap-2">
           <div className="min-w-0">
-            <p className="truncate text-xs font-medium text-gray-500 sm:text-sm">{title}</p>
-            <p className="mt-1 text-lg font-bold text-gray-900 sm:mt-2 sm:text-2xl">
+            <p className="truncate text-[10px] font-medium text-gray-500 sm:text-sm">{title}</p>
+            <p className="mt-0.5 text-base font-bold tracking-[-0.02em] text-gray-900 sm:mt-2 sm:text-2xl">
               {loading ? "—" : value}
             </p>
           </div>
-          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 ${bg}`}>
-            <Icon className={`h-4 w-4 sm:h-6 sm:w-6 ${color}`} />
+          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:h-12 sm:w-12 sm:rounded-xl ${bg}`}>
+            <Icon className={`h-3.5 w-3.5 sm:h-6 sm:w-6 ${color}`} />
           </div>
         </div>
       </CardContent>
@@ -65,8 +65,13 @@ export function StatCard({ title, value, icon: Icon, color, bg, href, onClick, a
 /** Standard responsive wrapper for StatCard groups. */
 export function StatGrid({ children, cols = 4 }: { children: React.ReactNode; cols?: 2 | 3 | 4 }) {
   const lgColsClass = cols === 2 ? "lg:grid-cols-2" : cols === 3 ? "lg:grid-cols-3" : "lg:grid-cols-4";
+  // A 3-card group stays 3-up on phones; 2- and 4-card groups go 2-up, and an odd
+  // last card spans the row rather than sitting orphaned beside a gap.
+  const baseCols = cols === 3 ? "grid-cols-3" : "grid-cols-2";
+  const orphanSpan =
+    cols === 3 ? "" : "[&>*:last-child:nth-child(odd)]:col-span-2 lg:[&>*:last-child:nth-child(odd)]:col-span-1";
   return (
-    <div className={`grid grid-cols-2 gap-3 sm:gap-4 ${lgColsClass}`}>
+    <div className={`grid ${baseCols} gap-2 ${orphanSpan} sm:gap-4 ${lgColsClass}`}>
       {children}
     </div>
   );

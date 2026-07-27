@@ -197,12 +197,12 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
           onClick={toggle}
           data-open={open}
           className={cn(
-            "flex h-12 w-full items-center justify-between gap-2 rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-left text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] ring-offset-white/80 backdrop-blur-sm hover:border-teal-300/70 hover:bg-white focus-visible:border-teal-500 focus-visible:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-teal-500/14 focus-visible:ring-offset-0 data-[open=true]:border-teal-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100",
+            "flex h-12 w-full items-center justify-between gap-2 rounded-2xl border border-slate-200/90 bg-white/95 px-4 py-3 text-left text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.03),0_10px_30px_rgba(15,23,42,0.05)] ring-offset-white/80 backdrop-blur-sm hover:border-indigo-300/70 hover:bg-white focus-visible:border-indigo-500 focus-visible:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/14 focus-visible:ring-offset-0 data-[open=true]:border-indigo-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-500 disabled:opacity-100",
             className
           )}
         >
           <span className={cn("truncate", selected ? "text-slate-800" : "text-slate-400")}>{displayLabel}</span>
-          <CalendarIcon className={cn("h-4 w-4 shrink-0 transition-colors", open ? "text-teal-600" : "text-slate-400")} />
+          <CalendarIcon className={cn("h-4 w-4 shrink-0 transition-colors", open ? "text-indigo-600" : "text-slate-400")} />
         </button>
 
         {mounted &&
@@ -237,7 +237,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
                             : new Date(v.getFullYear(), v.getMonth() - 1, 1)
                         )
                       }
-                      className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-teal-600"
+                      className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-indigo-600"
                       aria-label="Previous"
                     >
                       <ChevronLeft className="h-4 w-4" />
@@ -251,7 +251,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
                             : new Date(v.getFullYear(), v.getMonth() + 1, 1)
                         )
                       }
-                      className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-teal-600"
+                      className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-indigo-600"
                       aria-label="Next"
                     >
                       <ChevronRight className="h-4 w-4" />
@@ -274,7 +274,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
                           }}
                           className={cn(
                             "rounded-lg py-2 text-sm transition-colors",
-                            isSel ? "bg-teal-600 text-white font-medium" : "text-slate-600 hover:bg-slate-100"
+                            isSel ? "bg-indigo-600 text-white font-medium" : "text-slate-600 hover:bg-slate-100"
                           )}
                         >
                           {yr}
@@ -299,7 +299,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
                           onClick={() => pickMonth(i)}
                           className={cn(
                             "rounded-lg py-2.5 text-sm transition-colors disabled:cursor-not-allowed disabled:text-slate-300",
-                            isSel ? "bg-teal-600 text-white font-medium" : "text-slate-600 hover:bg-slate-100"
+                            isSel ? "bg-indigo-600 text-white font-medium" : "text-slate-600 hover:bg-slate-100"
                           )}
                         >
                           {m}
@@ -332,11 +332,11 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
                             className={cn(
                               "flex h-9 items-center justify-center rounded-lg text-sm transition-colors disabled:cursor-not-allowed disabled:text-slate-300",
                               isSel
-                                ? "bg-teal-600 text-white font-semibold hover:bg-teal-600"
+                                ? "bg-indigo-600 text-white font-semibold hover:bg-indigo-600"
                                 : inMonth
                                   ? "text-slate-700 hover:bg-slate-100"
                                   : "text-slate-300 hover:bg-slate-50",
-                              !isSel && isToday && "ring-1 ring-inset ring-teal-400 text-teal-700"
+                              !isSel && isToday && "ring-1 ring-inset ring-indigo-400 text-indigo-700"
                             )}
                           >
                             {d.getDate()}
@@ -367,7 +367,7 @@ const DatePicker = React.forwardRef<HTMLButtonElement, DatePickerProps>(
                       }
                       setOpen(false);
                     }}
-                    className="rounded-lg px-2 py-1 text-xs font-semibold text-teal-600 hover:bg-teal-50"
+                    className="rounded-lg px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50"
                   >
                     Today
                   </button>

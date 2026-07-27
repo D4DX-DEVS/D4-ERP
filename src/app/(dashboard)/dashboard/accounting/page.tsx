@@ -158,7 +158,7 @@ export default function AccountingPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Accounting</h1>
+          <h1 className="text-xl font-bold sm:text-2xl text-gray-900">Accounting</h1>
           <p className="text-sm text-gray-500 mt-1">Manage income & expenses</p>
         </div>
         <div className="flex gap-2">
@@ -174,37 +174,37 @@ export default function AccountingPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <Card>
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-50">
+          <CardContent className="flex flex-col items-start gap-2 p-3 sm:flex-row sm:items-center sm:gap-4 sm:p-6">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 bg-green-50">
               <TrendingUp className="h-6 w-6 text-green-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Total Income</p>
-              <p className="text-xl font-bold text-green-600">{formatCurrency(totalIncome)}</p>
+              <p className="text-xs text-gray-500 sm:text-sm">Total Income</p>
+              <p className="text-base font-bold sm:text-xl text-green-600">{formatCurrency(totalIncome)}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50">
+          <CardContent className="flex flex-col items-start gap-2 p-3 sm:flex-row sm:items-center sm:gap-4 sm:p-6">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 bg-red-50">
               <TrendingDown className="h-6 w-6 text-red-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Total Expense</p>
-              <p className="text-xl font-bold text-red-600">{formatCurrency(totalExpense)}</p>
+              <p className="text-xs text-gray-500 sm:text-sm">Total Expense</p>
+              <p className="text-base font-bold sm:text-xl text-red-600">{formatCurrency(totalExpense)}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50">
+          <CardContent className="flex flex-col items-start gap-2 p-3 sm:flex-row sm:items-center sm:gap-4 sm:p-6">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 bg-blue-50">
               <DollarSign className="h-6 w-6 text-blue-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">Net Balance</p>
-              <p className={`text-xl font-bold ${totalIncome - totalExpense >= 0 ? "text-green-600" : "text-red-600"}`}>
+              <p className="text-xs text-gray-500 sm:text-sm">Net Balance</p>
+              <p className={`text-base font-bold sm:text-xl ${totalIncome - totalExpense >= 0 ? "text-green-600" : "text-red-600"}`}>
                 {formatCurrency(totalIncome - totalExpense)}
               </p>
             </div>

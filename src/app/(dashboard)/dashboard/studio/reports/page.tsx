@@ -56,7 +56,7 @@ export default function StudioReportsPage() {
       ) : (<>
 
       <ListingStatGrid>
-        <ListingStatCard label="Total Bookings" value={bookings.length} icon={<BarChart3 className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white" />
+        <ListingStatCard label="Total Bookings" value={bookings.length} icon={<BarChart3 className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-indigo-500 to-violet-600 text-white" />
         <ListingStatCard label="Completed" value={completed.length} icon={<TrendingUp className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white" />
         <ListingStatCard label="Avg Duration" value={`${avgDuration} min`} icon={<Clock className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white" />
         <ListingStatCard label="Cancellation Rate" value={`${cancellationRate}%`} icon={<XCircle className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-rose-500 to-red-500 text-white" />
@@ -76,7 +76,7 @@ export default function StudioReportsPage() {
                   <div className="flex items-center gap-2">
                     <div className="w-24 h-2 rounded-full bg-slate-100 overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-teal-600 to-emerald-500 rounded-full"
+                        className="h-full bg-gradient-to-r from-indigo-600 to-violet-600 rounded-full"
                         style={{ width: `${(count / bookings.length) * 100}%` }}
                       />
                     </div>

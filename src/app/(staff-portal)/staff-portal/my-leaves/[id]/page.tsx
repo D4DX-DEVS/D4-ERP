@@ -73,7 +73,7 @@ export default function MyLeaveDetailPage() {
         <ListingStatCard icon={<CalendarRange className="h-5 w-5" />} label="Start Date" value={start} toneClassName="bg-slate-100 text-slate-700" meta="Request start" />
         <ListingStatCard icon={<CalendarRange className="h-5 w-5" />} label="End Date" value={end} toneClassName="bg-sky-50 text-sky-700" meta="Request end" />
         <ListingStatCard icon={<CircleDashed className="h-5 w-5" />} label="Status" value={leave.status} toneClassName="bg-amber-50 text-amber-700" meta="Current approval state" />
-        <ListingStatCard icon={<ShieldCheck className="h-5 w-5" />} label="Leave Type" value={leave.leaveType || typeLabels[leave.type]} toneClassName="bg-emerald-50 text-emerald-700" meta="Request category" />
+        <ListingStatCard icon={<ShieldCheck className="h-5 w-5" />} label="Leave Type" value={leave.leaveType || typeLabels[leave.type]} toneClassName="bg-indigo-50 text-indigo-700" meta="Request category" />
       </ListingStatGrid>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">

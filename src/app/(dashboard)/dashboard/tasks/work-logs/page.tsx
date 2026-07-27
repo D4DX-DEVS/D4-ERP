@@ -97,7 +97,7 @@ export default function WorkLogsAdminPage() {
             onClick={() => { setStatusFilter(s); setLoading(true); }}
             className={`rounded-full px-3.5 py-1.5 text-xs font-semibold border transition-colors capitalize ${
               statusFilter === s
-                ? "bg-gradient-to-r from-teal-600 to-emerald-500 text-white border-transparent shadow-sm"
+                ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white border-transparent shadow-sm"
                 : "border-slate-200 text-slate-600 hover:bg-slate-50"
             }`}
           >
@@ -160,7 +160,7 @@ export default function WorkLogsAdminPage() {
           <DialogTitle>Request Revision</DialogTitle>
         </DialogHeader>
         {reviewLog && (
-          <p className="text-sm text-slate-500 -mt-2 mb-4">{reviewLog.staffName} — {reviewLog.date}</p>
+          <p className="text-sm text-slate-500 -mt-2 mb-4">{reviewLog.staffName} â€” {reviewLog.date}</p>
         )}
         <div className="space-y-2">
           <Label>Remarks *</Label>

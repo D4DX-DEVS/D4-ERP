@@ -9,7 +9,7 @@ interface BeforeInstallPromptEvent extends Event {
 
 const DISMISSED_KEY = "pwa-install-dismissed";
 
-/** Custom install banner — Chrome only fires beforeinstallprompt after its own engagement heuristics, so we capture and show it ourselves instead of waiting on the native mini-infobar. */
+/** Custom install banner â€” Chrome only fires beforeinstallprompt after its own engagement heuristics, so we capture and show it ourselves instead of waiting on the native mini-infobar. */
 export function PwaInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
@@ -47,12 +47,12 @@ export function PwaInstallBanner() {
       </div>
       <button
         onClick={install}
-        className="shrink-0 cursor-pointer rounded-lg bg-gradient-to-br from-teal-700 via-teal-600 to-emerald-500 px-4 py-2 text-sm font-medium text-white shadow-[0_10px_24px_rgba(15,118,110,0.25)] transition-opacity hover:opacity-90"
+        className="shrink-0 cursor-pointer rounded-lg bg-gradient-to-br from-indigo-700 via-indigo-600 to-violet-600 px-4 py-2 text-sm font-medium text-white shadow-[0_10px_24px_rgba(55,48,163,0.25)] transition-opacity hover:opacity-90"
       >
         Install
       </button>
       <button onClick={dismiss} aria-label="Dismiss" className="shrink-0 text-slate-400 transition-colors hover:text-slate-700">
-        ✕
+        âœ•
       </button>
     </div>
   );

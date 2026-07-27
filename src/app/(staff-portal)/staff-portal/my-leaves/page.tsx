@@ -77,7 +77,7 @@ export default function MyRequestsPage() {
       <ListingStatGrid>
         <ListingStatCard icon={<CalendarRange className="h-5 w-5" />} label="Total Requests" value={requests.length} toneClassName="bg-slate-100 text-slate-700" meta="All submitted requests" />
         <ListingStatCard icon={<CircleDashed className="h-5 w-5" />} label="Pending" value={pendingRequests} toneClassName="bg-amber-50 text-amber-700" meta="Awaiting approval" />
-        <ListingStatCard icon={<ShieldCheck className="h-5 w-5" />} label="Approved" value={approvedRequests} toneClassName="bg-emerald-50 text-emerald-700" meta="Confirmed requests" />
+        <ListingStatCard icon={<ShieldCheck className="h-5 w-5" />} label="Approved" value={approvedRequests} toneClassName="bg-indigo-50 text-indigo-700" meta="Confirmed requests" />
         <ListingStatCard icon={<XCircle className="h-5 w-5" />} label="Rejected" value={rejectedRequests} toneClassName="bg-rose-50 text-rose-700" meta="Requests not approved" />
       </ListingStatGrid>
 
@@ -146,9 +146,11 @@ export default function MyRequestsPage() {
                               </div>
                               <div className="flex-1">
                                 <p className="font-medium text-slate-700">Department Head</p>
-                                {req.deptHead?.status === "pending" && <p className="text-slate-500">Pending</p>}
+                                {req.deptHead?.status === "pending" && (
+                                  <p className="text-slate-500">{req.adminOverride ? `Covered by admin approval (${req.admin?.byName || "admin"})` : "Pending"}</p>
+                                )}
                                 {req.deptHead?.status === "approved" && (
-                                  <p className="text-emerald-600">Approved by {req.deptHead.byName} on {req.deptHead.at ? formatDate(new Date(req.deptHead.at.seconds * 1000)) : "—"}</p>
+                                  <p className="text-indigo-600">Approved by {req.deptHead.byName} on {req.deptHead.at ? formatDate(new Date(req.deptHead.at.seconds * 1000)) : "—"}</p>
                                 )}
                                 {req.deptHead?.status === "rejected" && (
                                   <p className="text-red-600">Rejected by {req.deptHead.byName} on {req.deptHead.at ? formatDate(new Date(req.deptHead.at.seconds * 1000)) : "—"}
@@ -169,7 +171,7 @@ export default function MyRequestsPage() {
                                 <p className="font-medium text-slate-700">Admin {req.adminOverride && <span className="text-xs text-amber-600">(override)</span>}</p>
                                 {req.admin?.status === "pending" && <p className="text-slate-500">Pending</p>}
                                 {req.admin?.status === "approved" && (
-                                  <p className="text-emerald-600">Approved by {req.admin.byName} on {req.admin.at ? formatDate(new Date(req.admin.at.seconds * 1000)) : "—"}</p>
+                                  <p className="text-indigo-600">Approved by {req.admin.byName} on {req.admin.at ? formatDate(new Date(req.admin.at.seconds * 1000)) : "—"}</p>
                                 )}
                                 {req.admin?.status === "rejected" && (
                                   <p className="text-red-600">Rejected by {req.admin.byName} on {req.admin.at ? formatDate(new Date(req.admin.at.seconds * 1000)) : "—"}

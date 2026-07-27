@@ -117,7 +117,7 @@ export default function StaffProfilePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
       </div>
     );
   }
@@ -140,7 +140,7 @@ export default function StaffProfilePage() {
             <button
               type="button"
               onClick={() => !uploading && fileInputRef.current?.click()}
-              className="group relative h-24 w-24 rounded-full overflow-hidden ring-4 ring-emerald-100 focus:outline-none focus-visible:ring-emerald-400"
+              className="group relative h-24 w-24 rounded-full overflow-hidden ring-4 ring-indigo-100 focus:outline-none focus-visible:ring-indigo-400"
               aria-label="Change profile photo"
             >
               {staff.profileImage ? (
@@ -151,7 +151,7 @@ export default function StaffProfilePage() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <span className="flex h-full w-full items-center justify-center bg-emerald-100 text-emerald-700 text-3xl font-bold">
+                <span className="flex h-full w-full items-center justify-center bg-indigo-100 text-indigo-700 text-3xl font-bold">
                   {staff.firstName?.charAt(0) || "?"}
                 </span>
               )}
@@ -191,7 +191,7 @@ export default function StaffProfilePage() {
         <button
           onClick={() => setActiveTab("overview")}
           className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === "overview" ? "border-emerald-600 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-700"
+            activeTab === "overview" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
         >
           Overview
@@ -199,7 +199,7 @@ export default function StaffProfilePage() {
         <button
           onClick={() => setActiveTab("salary")}
           className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === "salary" ? "border-emerald-600 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-700"
+            activeTab === "salary" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
         >
           Salary
@@ -207,7 +207,7 @@ export default function StaffProfilePage() {
         <button
           onClick={() => setActiveTab("documents")}
           className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === "documents" ? "border-emerald-600 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-700"
+            activeTab === "documents" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
         >
           Documents
@@ -215,7 +215,7 @@ export default function StaffProfilePage() {
         <button
           onClick={() => setActiveTab("assets")}
           className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-            activeTab === "assets" ? "border-emerald-600 text-emerald-600" : "border-transparent text-gray-500 hover:text-gray-700"
+            activeTab === "assets" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
         >
           My Assets
@@ -269,7 +269,7 @@ export default function StaffProfilePage() {
           <Card>
             <CardHeader><CardTitle>Current Salary</CardTitle></CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-emerald-600">{formatCurrency(staff.currentSalary || 0)}</p>
+              <p className="text-3xl font-bold text-indigo-600">{formatCurrency(staff.currentSalary || 0)}</p>
               <p className="text-xs text-gray-500 mt-2">Per Month</p>
             </CardContent>
           </Card>
@@ -312,7 +312,7 @@ export default function StaffProfilePage() {
                         <p className="text-sm font-medium">{payslipLabel(payroll)}</p>
                         <p className="text-xs text-gray-500">Net Salary</p>
                       </div>
-                      <p className="text-sm font-medium text-emerald-600">{formatCurrency(payroll.netSalary || 0)}</p>
+                      <p className="text-sm font-medium text-indigo-600">{formatCurrency(payroll.netSalary || 0)}</p>
                     </div>
                   ))}
                 </div>

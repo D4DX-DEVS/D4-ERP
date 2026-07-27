@@ -177,7 +177,7 @@ export default function StudioResourcesPage() {
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-semibold capitalize border-b-2 transition-colors ${
-              tab === t ? "border-teal-600 text-teal-700" : "border-transparent text-slate-500 hover:text-slate-900"
+              tab === t ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-900"
             }`}
           >
             {t}
@@ -225,7 +225,7 @@ export default function StudioResourcesPage() {
               {s.facilities && s.facilities.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {s.facilities.map((f) => (
-                    <span key={f} className="text-[10px] rounded-full bg-teal-50 text-teal-700 px-2 py-0.5 font-medium">{f}</span>
+                    <span key={f} className="text-[10px] rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 font-medium">{f}</span>
                   ))}
                 </div>
               )}

@@ -41,7 +41,7 @@ export default function CompanyReportPage() {
       <ListingHeader title="Company Report" description="Aggregated metrics across all departments." />
 
       <ListingStatGrid>
-        <ListingStatCard label="Departments" value={departments.size} icon={<Building2 className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white" />
+        <ListingStatCard label="Departments" value={departments.size} icon={<Building2 className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-indigo-500 to-violet-600 text-white" />
         <ListingStatCard label="Published Reports" value={published.length} icon={<FileText className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white" />
         <ListingStatCard label="Total Hours" value={`${totalHours}h`} icon={<BarChart3 className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white" />
         <ListingStatCard label="Task Completion" value={`${avgCompletion}%`} icon={<TrendingUp className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white" />

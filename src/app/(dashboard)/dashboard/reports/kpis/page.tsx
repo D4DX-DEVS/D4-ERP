@@ -127,7 +127,7 @@ export default function KPIManagementPage() {
                       <span className="font-semibold text-slate-700">{progress}%</span>
                     </div>
                     <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-teal-600 to-emerald-500 rounded-full" style={{ width: `${progress}%` }} />
+                      <div className="h-full bg-gradient-to-r from-indigo-600 to-violet-600 rounded-full" style={{ width: `${progress}%` }} />
                     </div>
                   </div>
                 )}

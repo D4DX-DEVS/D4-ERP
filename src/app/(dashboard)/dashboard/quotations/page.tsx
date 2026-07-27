@@ -312,7 +312,7 @@ export default function QuotationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quotations</h1>
+          <h1 className="text-xl font-bold sm:text-2xl text-gray-900">Quotations</h1>
           <p className="mt-1 text-sm text-gray-500">Create, search, and convert quotations to invoices</p>
         </div>
         <Dialog open={showAdd} onOpenChange={(open) => { setShowAdd(open); if (!open) setEditingId(null); }}>
@@ -340,13 +340,14 @@ export default function QuotationsPage() {
                     <SelectTrigger><SelectValue placeholder="Select Client">{clientMap[form.clientId]?.companyName}</SelectValue></SelectTrigger>
                     <SelectContent>
                       {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}
-                      <a
-                        href="/dashboard/clients?new=1"
-                        className="flex items-center gap-2 rounded-xl border-t border-slate-100 mt-1 px-3 py-2.5 text-sm font-medium text-teal-700 hover:bg-teal-50 transition-colors"
+                      {/* base, not /dashboard — this page is re-exported at /staff-portal/quotations */}
+                      <Link
+                        href={`${base}/clients?new=1`}
+                        className="flex items-center gap-2 rounded-xl border-t border-slate-100 mt-1 px-3 py-2.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50 transition-colors"
                       >
                         <Plus className="h-3.5 w-3.5" />
                         <span>New Client</span>
-                      </a>
+                      </Link>
                     </SelectContent>
                   </SelectRoot>
                 </div>

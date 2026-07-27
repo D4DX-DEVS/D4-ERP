@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveRequestStatus, isLegacyRequest } from "@/lib/requests";
+import { resolveRequestStatus, isLegacyRequest, overtimeCompOffDays } from "@/lib/requests";
 import type { ApprovalStep } from "@/types";
 
 const pending: ApprovalStep = { status: "pending" };
@@ -50,5 +50,22 @@ describe("isLegacyRequest (pre two-step documents)", () => {
   it("treats docs with step fields as new-style", () => {
     expect(isLegacyRequest({ deptHead: pending, admin: pending })).toBe(false);
     expect(isLegacyRequest({ deptHead: approved } as never)).toBe(false);
+  });
+});
+
+describe("overtimeCompOffDays", () => {
+  it("8h OT = 1 day", () => {
+    expect(overtimeCompOffDays({ startTime: "10:00", endTime: "18:00" })).toBe(1);
+  });
+  it("4h OT = 0.5 day, floors to 0.5 steps", () => {
+    expect(overtimeCompOffDays({ startTime: "18:00", endTime: "22:00" })).toBe(0.5);
+    expect(overtimeCompOffDays({ startTime: "18:00", endTime: "21:00" })).toBe(0);
+  });
+  it("handles overnight OT", () => {
+    expect(overtimeCompOffDays({ startTime: "22:00", endTime: "06:00" })).toBe(1);
+  });
+  it("returns 0 for missing/bad times", () => {
+    expect(overtimeCompOffDays({ startTime: "", endTime: "18:00" })).toBe(0);
+    expect(overtimeCompOffDays({ startTime: "x", endTime: "18:00" })).toBe(0);
   });
 });

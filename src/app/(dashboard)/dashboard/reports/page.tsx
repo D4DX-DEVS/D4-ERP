@@ -86,7 +86,7 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Reports & Analytics</h1>
+      <h1 className="text-xl font-bold sm:text-2xl">Reports & Analytics</h1>
 
       {/* Financial Overview */}
       <div>
@@ -152,8 +152,8 @@ export default function ReportsPage() {
             title="Approved Leaves"
             value={stats.approvedLeaves}
             icon={Calendar}
-            color="text-teal-600"
-            bg="bg-teal-50"
+            color="text-indigo-600"
+            bg="bg-indigo-50"
           />
         </StatGrid>
       </div>

@@ -35,7 +35,7 @@ const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
 const STATUS_STYLES: Record<string, string> = {
   draft: "bg-slate-100 text-slate-700 border-slate-200",
   submitted: "bg-blue-50 text-blue-700 border-blue-200",
-  reviewed: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  reviewed: "bg-indigo-50 text-indigo-700 border-indigo-200",
   "needs-revision": "bg-amber-50 text-amber-700 border-amber-200",
 };
 
@@ -193,7 +193,7 @@ export default function StaffWorkLogPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">My Work Log</h1>
+          <h1 className="text-xl font-bold sm:text-2xl tracking-tight text-slate-900">My Work Log</h1>
           <p className="mt-1 text-sm text-slate-500">Submit your daily work updates and track your progress.</p>
         </div>
         {!showForm && (
@@ -238,10 +238,10 @@ export default function StaffWorkLogPage() {
                   className="w-48"
                 />
               </div>
-              <div className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-100 px-4 py-2.5">
-                <Clock className="h-4 w-4 text-teal-600" />
+              <div className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-100 px-4 py-2.5">
+                <Clock className="h-4 w-4 text-indigo-600" />
                 <span className="text-sm text-slate-600">Total:</span>
-                <span className="text-lg font-bold text-teal-700">{totalHours}h</span>
+                <span className="text-lg font-bold text-indigo-700">{totalHours}h</span>
               </div>
             </div>
 
@@ -338,7 +338,7 @@ export default function StaffWorkLogPage() {
               ))}
             </div>
 
-            <Button variant="ghost" onClick={addEntry} className="text-teal-700 hover:text-teal-800 hover:bg-teal-50">
+            <Button variant="ghost" onClick={addEntry} className="text-indigo-700 hover:text-indigo-800 hover:bg-indigo-50">
               <Plus className="h-4 w-4" /> Add entry
             </Button>
 

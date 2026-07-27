@@ -71,7 +71,7 @@ export default function EventsDashboardPage() {
           label="Total Events"
           value={events.length}
           icon={<PartyPopper className="h-5 w-5" />}
-          toneClassName="bg-gradient-to-br from-teal-500 to-emerald-500 text-white"
+          toneClassName="bg-gradient-to-br from-indigo-500 to-violet-600 text-white"
         />
         <ListingStatCard
           label="Upcoming"
@@ -103,7 +103,7 @@ export default function EventsDashboardPage() {
           <h3 className="text-lg font-semibold tracking-[-0.02em] text-slate-950">Upcoming Events</h3>
           <button
             onClick={() => router.push(`${base}/events/list`)}
-            className="text-sm font-medium text-teal-700 flex items-center gap-1 hover:text-teal-800 hover:underline"
+            className="text-sm font-medium text-indigo-700 flex items-center gap-1 hover:text-indigo-800 hover:underline"
           >
             View all <ArrowRight className="h-3 w-3" />
           </button>
@@ -124,8 +124,8 @@ export default function EventsDashboardPage() {
                 <div className="flex-1">
                   <h4 className="text-sm font-semibold text-slate-900">{event.title}</h4>
                   <p className="text-xs text-slate-500">
-                    {event.eventType} • {event.startDate}
-                    {event.venue && ` • ${event.venue}`}
+                    {event.eventType} â€¢ {event.startDate}
+                    {event.venue && ` â€¢ ${event.venue}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

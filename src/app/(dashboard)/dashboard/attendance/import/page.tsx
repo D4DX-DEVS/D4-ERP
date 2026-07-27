@@ -57,7 +57,7 @@ const STATUS_BADGE: Record<string, string> = {
   late: "bg-orange-100 text-orange-700",
   leave: "bg-blue-100 text-blue-700",
   wfh: "bg-purple-100 text-purple-700",
-  "on-duty": "bg-teal-100 text-teal-700",
+  "on-duty": "bg-indigo-100 text-indigo-700",
   "public-holiday": "bg-slate-200 text-slate-600",
 };
 
@@ -419,7 +419,7 @@ export default function AttendanceImportPage() {
 
       <ListingPanel title="Upload report">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          <label className="flex h-12 flex-1 cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white/70 px-4 text-sm text-slate-600 hover:border-teal-400">
+          <label className="flex h-12 flex-1 cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white/70 px-4 text-sm text-slate-600 hover:border-indigo-400">
             <Upload className="h-4 w-4 text-slate-400" />
             {file ? file.name : "Choose PDF, Excel, or CSV..."}
             <input

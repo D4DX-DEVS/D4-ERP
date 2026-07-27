@@ -16,8 +16,8 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   warning: <AlertTriangle className="h-5 w-5 text-orange-500" />,
   success: <CheckCircle className="h-5 w-5 text-green-500" />,
   announcement: <Megaphone className="h-5 w-5 text-purple-500" />,
-  event: <Bell className="h-5 w-5 text-teal-500" />,
-  payroll: <CheckCircle className="h-5 w-5 text-emerald-500" />,
+  event: <Bell className="h-5 w-5 text-indigo-500" />,
+  payroll: <CheckCircle className="h-5 w-5 text-indigo-500" />,
 };
 
 export default function StaffNotificationsPage() {
@@ -102,7 +102,7 @@ export default function StaffNotificationsPage() {
 
       {loading ? (
         <div className="text-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent mx-auto" />
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent mx-auto" />
         </div>
       ) : visible.length === 0 ? (
         <Card>
@@ -114,7 +114,7 @@ export default function StaffNotificationsPage() {
       ) : (
         <div className="space-y-2">
           {visible.map((n) => (
-            <Card key={n.id} className={!n.isRead ? "border-l-4 border-l-emerald-500" : ""}>
+            <Card key={n.id} className={!n.isRead ? "border-l-4 border-l-indigo-500" : ""}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5">{TYPE_ICONS[n.type] || TYPE_ICONS.info}</div>
@@ -129,7 +129,7 @@ export default function StaffNotificationsPage() {
                       <img src={n.imageUrl} alt={n.title} className="mt-2 max-h-60 rounded-xl border border-slate-200 object-contain" />
                     )}
                     {n.link && (
-                      <a href={n.link} className="mt-2 inline-block text-xs font-medium text-teal-700 hover:underline">
+                      <a href={n.link} className="mt-2 inline-block text-xs font-medium text-indigo-700 hover:underline">
                         View details →
                       </a>
                     )}

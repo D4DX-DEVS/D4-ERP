@@ -218,7 +218,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* ponytail: hidden on mobile — header hero already shows title/welcome */}
       <div className="hidden lg:block">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <h1 className="text-xl font-bold sm:text-2xl text-gray-900">Dashboard</h1>
         <p className="text-sm text-gray-500 mt-1">
           Welcome back, {user?.firstName}. Here&apos;s your overview.
         </p>
@@ -349,7 +349,9 @@ export default function DashboardPage() {
                       <p className="text-sm font-medium text-slate-900">{req.staffName}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge className="text-xs">{REQUEST_TYPE_LABELS[req.type]}</Badge>
-                        <span className="text-xs text-slate-500">{formatDate(new Date(req.createdAt?.seconds! * 1000))}</span>
+                        {req.createdAt?.seconds ? (
+                          <span className="text-xs text-slate-500">{formatDate(new Date(req.createdAt.seconds * 1000))}</span>
+                        ) : null}
                       </div>
                     </div>
                     <Button

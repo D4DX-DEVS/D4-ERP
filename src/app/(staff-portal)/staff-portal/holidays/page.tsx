@@ -48,7 +48,7 @@ export default function StaffHolidaysPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="h-7 w-7 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+        <div className="h-7 w-7 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
       </div>
     );
   }
@@ -58,13 +58,13 @@ export default function StaffHolidaysPage() {
       <h1 className="text-xl font-bold">Holidays</h1>
 
       {nextHoliday && (
-        <Card className="overflow-hidden border-emerald-100 bg-gradient-to-br from-emerald-50 to-teal-50">
+        <Card className="overflow-hidden border-indigo-100 bg-gradient-to-br from-indigo-50 to-indigo-50">
           <CardContent className="flex items-center gap-4 p-5">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-indigo-600 text-white">
               <PartyPopper className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">Next holiday</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">Next holiday</p>
               <p className="mt-0.5 text-lg font-semibold text-slate-900">{nextHoliday.name}</p>
               <p className="text-sm text-slate-500">
                 {parseDate(nextHoliday.date).toLocaleDateString("en-IN", {
@@ -110,7 +110,7 @@ export default function StaffHolidaysPage() {
                             {d.toLocaleDateString("en-IN", { weekday: "long" })}
                           </p>
                         </div>
-                        {isToday && <Badge variant="bg-emerald-100 text-emerald-700">Today</Badge>}
+                        {isToday && <Badge variant="bg-indigo-100 text-indigo-700">Today</Badge>}
                         {h.companyId && <Badge variant="bg-sky-100 text-sky-700">Company</Badge>}
                       </div>
                     );

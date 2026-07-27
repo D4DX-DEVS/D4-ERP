@@ -356,7 +356,7 @@ export default function CertificatesPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
         </Link>
-        <h1 className="text-2xl font-bold">Certificate Management</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Certificate Management</h1>
       </div>
 
       {/* Template Selection */}

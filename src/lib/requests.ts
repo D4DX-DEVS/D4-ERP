@@ -172,6 +172,22 @@ export async function decideRequest({ request, step, decision, remarks }: Decide
     );
   }
 
+  // Admin's decision is final — keep the dept head in the loop even on override
+  if (step === "admin" && next.status !== "pending") {
+    const headId = await getDeptHeadStaffId(request.departmentId);
+    if (headId && headId !== request.staffId && headId !== user.staffId) {
+      await createNotification({
+        recipientId: headId,
+        type: "leave",
+        title: `${label} request ${next.status} by admin`,
+        message: `${request.staffName}'s ${label.toLowerCase()} request was ${next.status} by admin${next.adminOverride ? " (override — covers department head approval)" : ""}.`,
+        link: "/dashboard/leaves",
+        entityId: request.id,
+        entityType: "staff_request",
+      });
+    }
+  }
+
   if (next.status === "approved" && request.type === "overtime") {
     await createOvertimeCalendarEvent(next, user);
   }
@@ -185,6 +201,45 @@ async function overtimeEventExists(requestId: string): Promise<boolean> {
     where("sourceRequestId", "==", requestId),
   ]);
   return existing.length > 0;
+}
+
+/** Comp-off days earned by one approved overtime request. 8h OT = 1 day, floored to 0.5 steps. */
+export function overtimeCompOffDays(req: Pick<StaffRequest, "startTime" | "endTime">): number {
+  if (!req.startTime || !req.endTime) return 0;
+  const [sh, sm] = req.startTime.split(":").map(Number);
+  const [eh, em] = req.endTime.split(":").map(Number);
+  if ([sh, sm, eh, em].some(Number.isNaN)) return 0;
+  let mins = eh * 60 + em - (sh * 60 + sm);
+  if (mins <= 0) mins += 24 * 60; // overnight OT
+  return Math.floor((mins / 60 / 8) * 2) / 2;
+}
+
+export interface CompOffBalance {
+  earned: number;
+  used: number;
+  available: number;
+}
+
+/**
+ * Comp-off balance derived on the fly from approved requests:
+ * earned by approved overtime, spent by approved CO leaves.
+ */
+export async function getCompOffBalance(staffId: string): Promise<CompOffBalance> {
+  const approved = await getDocuments<StaffRequest>(COLLECTION, [
+    where("staffId", "==", staffId),
+    where("status", "==", "approved"),
+  ]);
+  let earned = 0;
+  let used = 0;
+  for (const r of approved) {
+    if (r.type === "overtime") earned += overtimeCompOffDays(r);
+    if ((r.type === "leave" || r.type === "long-leave") && r.leaveType === "CO") {
+      used += r.isHalfDay
+        ? 0.5
+        : Math.max(1, Math.round(((r.endDate?.seconds ?? 0) - (r.startDate?.seconds ?? 0)) / 86400) + 1);
+    }
+  }
+  return { earned, used, available: Math.max(0, earned - used) };
 }
 
 /** Staff cancels their own still-pending request. */

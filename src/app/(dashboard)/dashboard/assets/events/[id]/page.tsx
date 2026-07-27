@@ -430,7 +430,7 @@ export default function EventDetailPage() {
                               <div className="mt-0.5 space-y-0.5">
                                 {movement?.outByName && <p className="text-xs text-blue-500/70">Issued by: {movement.outByName}</p>}
                                 {movement?.returnBy && <p className="text-xs text-green-600">Ret. by: {movement.returnBy}</p>}
-                                {movement?.verifiedBy && <p className="text-xs text-teal-600">Ver. by: {movement.verifiedBy}</p>}
+                                {movement?.verifiedBy && <p className="text-xs text-indigo-600">Ver. by: {movement.verifiedBy}</p>}
                               </div>
                             )}
                           </div>
