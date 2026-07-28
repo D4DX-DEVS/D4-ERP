@@ -22,6 +22,7 @@ import { CONTRACT_DURATIONS, computeContractEndDate, getContractStatus, getDaysR
 import { FEATURES, roleHasFeature } from "@/lib/permissions";
 import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search, Shield } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
+import { useRoleGuard } from "@/hooks/use-role-guard";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const EMPLOYMENT_TYPES: { value: EmploymentType; label: string }[] = [
@@ -54,6 +55,8 @@ function employmentBadge(type: EmploymentType): string {
 }
 
 export default function StaffPage() {
+  // Staff records are admin-only — department heads manage work, not personnel files.
+  const { authorized, isLoading: authLoading } = useRoleGuard(["admin"]);
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
@@ -358,6 +361,7 @@ export default function StaffPage() {
   };
 
   const getDeptName = (id: string) => departments.find((d) => d.id === id)?.name || "—";
+  if (authLoading || !authorized) return <PageLoader />;
   if (loading || lookupsLoading) return <PageLoader />;
 
   return (

@@ -113,6 +113,9 @@ export function getAllNavItems(): FlatNavItem[] {
   return items;
 }
 
+/** Pinned to the admin mobile bottom bar — hidden from the drawer's item list on mobile so they aren't listed twice. */
+export const PRIMARY_MOBILE_HREFS = ["/dashboard", "/dashboard/attendance", "/dashboard/tasks", "/dashboard/leaves"];
+
 export const navigationModules: NavModule[] = [
   // ─── My Portal (staff-only: shown when staff accesses dashboard via feature) ─
   {
@@ -150,7 +153,7 @@ export const navigationModules: NavModule[] = [
     icon: Users,
     roles: ["admin", "department-head", "accounts"],
     items: [
-      { label: "Staff", href: "/dashboard/staff", roles: ["admin", "department-head"] },
+      { label: "Staff", href: "/dashboard/staff", roles: ["admin"] },
       { label: "Attendance", href: "/dashboard/attendance", icon: Clock, roles: ["admin", "department-head"] },
       { label: "Import Attendance", href: "/dashboard/attendance/import", icon: FileText, roles: ["admin", "department-head"], feature: "attendance-import" },
       { label: "Corrections", href: "/dashboard/attendance/corrections", icon: ClipboardCheck, roles: ["admin", "department-head"] },

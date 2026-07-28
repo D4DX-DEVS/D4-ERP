@@ -204,7 +204,10 @@ export default function DashboardPage() {
   }, [user, toast]);
 
   const statCards = [
-    { title: "Total Staff", value: stats.totalStaff, icon: Users, color: "text-blue-600", bg: "bg-blue-50", href: "/dashboard/staff" },
+    // Staff directory is admin-only, so the card would be a dead link for anyone else.
+    ...(user?.role === "admin"
+      ? [{ title: "Total Staff", value: stats.totalStaff, icon: Users, color: "text-blue-600", bg: "bg-blue-50", href: "/dashboard/staff" }]
+      : []),
     { title: "Present Today", value: stats.presentToday, icon: UserCheck, color: "text-purple-600", bg: "bg-purple-50", href: "/dashboard/attendance" },
     { title: "Clients", value: stats.totalClients, icon: Users, color: "text-emerald-600", bg: "bg-emerald-50", href: "/dashboard/clients" },
     { title: "Pending Leaves", value: stats.pendingLeaves, icon: CalendarDays, color: "text-orange-600", bg: "bg-orange-50", href: "/dashboard/leaves" },
@@ -225,7 +228,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <StatGrid>
+      <StatGrid mobileCols={4}>
         {statCards.map((stat) => (
           <StatCard key={stat.title} {...stat} loading={loading} />
         ))}

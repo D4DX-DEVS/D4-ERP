@@ -23,9 +23,13 @@ export function ListingHeader({
   );
 }
 
-export function ListingStatGrid({ children }: { children: React.ReactNode }) {
+export function ListingStatGrid({ children, cols }: { children: React.ReactNode; cols?: 3 }) {
   // ponytail: 2-up on phones instead of a tall single-column stack.
   // Odd count → last card spans the full row so it doesn't sit orphaned beside a gap.
+  // cols=3 opts into 3-up on phones instead — only use it when the card count is exactly 3.
+  if (cols === 3) {
+    return <div className="grid grid-cols-3 gap-2 sm:gap-3">{children}</div>;
+  }
   return (
     <div className="grid grid-cols-2 gap-2 [&>*:last-child:nth-child(odd)]:col-span-2 sm:gap-3 md:grid-cols-2 xl:grid-cols-4 xl:[&>*:last-child:nth-child(odd)]:col-span-1">
       {children}
@@ -59,7 +63,7 @@ export function ListingStatCard({
         </div>
         <div className="min-w-0">
           <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400 sm:text-[11px] sm:tracking-[0.16em]">{label}</p>
-          <p className="mt-0.5 text-2xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.7rem]">{value}</p>
+          <p className="mt-0.5 truncate text-lg font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.7rem]">{value}</p>
           {meta ? <p className="mt-0.5 text-[11px] text-slate-500 sm:text-xs">{meta}</p> : null}
         </div>
       </CardContent>

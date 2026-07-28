@@ -91,7 +91,7 @@ export default function ReportsPage() {
       {/* Financial Overview */}
       <div>
         <h2 className="text-lg font-semibold mb-3">Financial Overview</h2>
-        <StatGrid cols={4}>
+        <StatGrid cols={4} mobileCols={4}>
           <StatCard
             title="Total Income"
             value={formatCurrency(stats.totalIncome)}
@@ -126,7 +126,7 @@ export default function ReportsPage() {
       {/* Staff & HR */}
       <div>
         <h2 className="text-lg font-semibold mb-3">Staff & HR</h2>
-        <StatGrid cols={4}>
+        <StatGrid cols={4} mobileCols={4}>
           <StatCard
             title="Total Staff"
             value={stats.totalStaff}

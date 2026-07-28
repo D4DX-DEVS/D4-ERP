@@ -17,6 +17,7 @@ import {
   evaluateWorkSummary,
 } from "@/lib/settings";
 import { useRoleGuard } from "@/hooks/use-role-guard";
+import { deptScopeFor, inDeptScope } from "@/lib/dept-scope";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -70,10 +71,8 @@ export default function AttendanceCorrectionsPage() {
       const map: Record<string, Staff & { id: string }> = {};
       for (const s of staffList) map[s.id] = s as Staff & { id: string };
 
-      let visible = list as Correction[];
-      if (isDeptHead && user?.departmentId) {
-        visible = visible.filter((c) => map[c.staffId]?.departmentId === user.departmentId);
-      }
+      const scope = deptScopeFor(user?.role, user?.departmentId);
+      const visible = (list as Correction[]).filter((c) => inDeptScope(scope, map[c.staffId]?.departmentId));
       visible.sort((a, b) => (b.date?.seconds ?? 0) - (a.date?.seconds ?? 0));
 
       setStaffMap(map);
@@ -223,7 +222,7 @@ export default function AttendanceCorrectionsPage() {
         description={isDeptHead ? "Review correction requests from your department." : "Review attendance correction requests."}
       />
 
-      <ListingStatGrid>
+      <ListingStatGrid cols={3}>
         <ListingStatCard icon={<Inbox className="h-5 w-5" />} label="Pending" value={pendingCount} toneClassName="bg-amber-50 text-amber-700" meta="Awaiting review" />
         <ListingStatCard icon={<ClipboardEdit className="h-5 w-5" />} label="Showing" value={corrections.length} toneClassName="bg-sky-50 text-sky-700" meta={`${filter} requests`} />
         <ListingStatCard icon={<Clock3 className="h-5 w-5" />} label="Scope" value={isDeptHead ? "Department" : "All staff"} toneClassName="bg-indigo-50 text-indigo-700" meta="Visibility" />
@@ -267,7 +266,20 @@ export default function AttendanceCorrectionsPage() {
                   <TableCell>
                     <Badge variant="bg-slate-100 text-slate-700">{c.requestedStatus ?? "—"}</Badge>
                   </TableCell>
-                  <TableCell className="max-w-[240px] truncate" title={c.reason}>{c.reason}</TableCell>
+                  {/* ponytail: native <details> — full reason on click, no state, no modal */}
+                  <TableCell className="max-w-[280px] align-top">
+                    {(c.reason ?? "").length > 60 ? (
+                      <details className="group">
+                        <summary className="cursor-pointer list-none">
+                          <span className="group-open:hidden">{c.reason.slice(0, 60)}… </span>
+                          <span className="text-indigo-600 group-open:hidden">more</span>
+                          <span className="hidden whitespace-pre-wrap break-words group-open:inline">{c.reason}</span>
+                        </summary>
+                      </details>
+                    ) : (
+                      <span className="whitespace-pre-wrap break-words">{c.reason}</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     {c.status === "pending" ? (
                       <div className="flex justify-end gap-2">

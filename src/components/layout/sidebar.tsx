@@ -5,8 +5,9 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
-import { hasFeature } from "@/lib/permissions";
-import { navigationModules, type NavModule, type NavItem } from "@/lib/navigation";
+import { navigationModules, PRIMARY_MOBILE_HREFS, type NavModule, type NavItem } from "@/lib/navigation";
+import { useVisibleNavModules } from "@/hooks/use-visible-nav-modules";
+import { useMobileNavStore } from "@/store/mobile-nav-store";
 import { useNavConfigStore } from "@/store/nav-config-store";
 import { ChevronDown, Menu, Sparkles, X } from "lucide-react";
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -33,8 +34,9 @@ function saveExpandedState(state: Record<string, boolean>) {
 export function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuthStore();
-  const { config, fetchConfig } = useNavConfigStore();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const { fetchConfig } = useNavConfigStore();
+  const { open: mobileOpen, setOpen: setMobileOpen } = useMobileNavStore();
+  const { isVisible, visibleModules } = useVisibleNavModules();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   // Load persisted expanded state and config once on mount
@@ -103,64 +105,18 @@ export function Sidebar() {
       .sort((a, b) => b.length - a.length)[0];
   }, [allHrefs, pathname]);
 
-  // Role-based visibility with config overrides
-  const isVisible = useCallback(
-    (roles: string[], feature?: string, href?: string) => {
-      if (!user?.role) return false;
-
-      // Admin always has full access — except the staff self-service portal
-      // (admins have no attendance/leave self-service; they manage those pages).
-      if (user.role === "admin") {
-        if (href) return !href.startsWith("/staff-portal");
-        return !roles.every((r) => r === "staff");
-      }
-
-      // Baseline role/feature check
-      const baselineVisible = roles.includes(user.role) || (feature && hasFeature(user, feature as Parameters<typeof hasFeature>[1]));
-      if (!baselineVisible) return false;
-
-      // Apply config-based filters if config is loaded
-      if (config && href) {
-        // Check staff override first (allow/deny)
-        if (config.staffOverrides?.[user.staffId]) {
-          const override = config.staffOverrides[user.staffId];
-          if (override.deny?.includes(href)) return false;
-          if (override.allow?.includes(href)) return true;
-        }
-
-        // Check role menu list
-        const roleMenuItems = config.roleMenus?.[user.role];
-        if (roleMenuItems) {
-          return roleMenuItems.includes(href);
-        }
-      }
-
-      return baselineVisible;
-    },
-    [user, config]
-  );
-
-  const visibleModules = useMemo(() => {
-    return navigationModules.filter((mod) => {
-      if (mod.href && isVisible(mod.roles, mod.feature, mod.href)) return true;
-      if (!mod.href && isVisible(mod.roles, mod.feature)) return true;
-      // Module with no matching role/feature still shows if any child item is visible
-      // (e.g. staff granted "studio-booking" under the merged Bookings module).
-      const children = [
-        ...(mod.items ?? []),
-        ...(mod.subGroups?.flatMap((sg) => sg.items) ?? []),
-      ];
-      return children.some((item) => isVisible(item.roles, item.feature, item.href));
-    });
-  }, [isVisible]);
-
   return (
     <>
       {/* Mobile toggle */}
       <button
         type="button"
-        onClick={() => setMobileOpen((open) => !open)}
-        className="fixed left-4 top-4 z-50 inline-flex h-12 w-12 items-center justify-center rounded-full border border-indigo-200/70 bg-white/85 text-indigo-900 shadow-[0_12px_30px_rgba(55,48,163,0.2)] backdrop-blur-xl lg:hidden"
+        onClick={() => setMobileOpen(!mobileOpen)}
+        className={cn(
+          "fixed left-4 top-4 z-50 inline-flex h-12 w-12 items-center justify-center text-indigo-900 lg:hidden",
+          // Closed: bare icon over the page background. Open: it now sits on top of the
+          // drawer's own logo/header art, so it needs a backdrop to stay legible.
+          mobileOpen && "rounded-full bg-white/90 shadow-[0_8px_20px_rgba(15,23,42,0.18)] backdrop-blur-sm"
+        )}
         aria-label="Toggle navigation"
       >
         {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -275,12 +231,15 @@ function ModuleItem({
   // Direct link module (e.g. Dashboard)
   if (!hasChildren && mod.href) {
     const isActive = mod.href === activeHref;
+    // Already pinned to the mobile bottom bar — don't list it again in the drawer below lg.
+    const pinnedToBottomBar = PRIMARY_MOBILE_HREFS.includes(mod.href);
     return (
       <Link
         href={mod.href}
         onClick={onNavigate}
         className={cn(
-          "group flex items-center gap-2 rounded-[14px] px-2.5 py-2 text-[13px] font-medium transition-all",
+          "group items-center gap-2 rounded-[14px] px-2.5 py-2 text-[13px] font-medium transition-all",
+          pinnedToBottomBar ? "hidden lg:flex" : "flex",
           isActive
             ? "bg-gradient-to-r from-[#1f3a7a] via-[#3730a3] to-[#4c1d95] text-white shadow-[0_10px_22px_rgba(55,48,163,0.32)]"
             : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-900"
@@ -414,12 +373,15 @@ function NavLink({
   isActive: boolean;
   onNavigate: () => void;
 }) {
+  // Already pinned to the mobile bottom bar — don't list it again in the drawer below lg.
+  const pinnedToBottomBar = PRIMARY_MOBILE_HREFS.includes(item.href);
   return (
     <Link
       href={item.href}
       onClick={onNavigate}
       className={cn(
-        "flex items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[12.5px] font-medium transition-all",
+        "items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[12.5px] font-medium transition-all",
+        pinnedToBottomBar ? "hidden lg:flex" : "flex",
         isActive
           ? "bg-gradient-to-r from-[#1f3a7a] via-[#3730a3] to-[#4c1d95] text-white shadow-sm"
           : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-900"
