@@ -33,6 +33,9 @@ import { PageLoader } from "@/components/ui/loading";
 import { ListingHeader, ListingPanel } from "@/components/ui/listing";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
+
+const LOG_PAGE_SIZE = 10;
 
 // â”€â”€ View + status configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -305,6 +308,25 @@ export default function AttendanceRegisterPage() {
     return events.sort((a, b) => b.sec - a.sec);
   }, [visibleRecords]);
 
+  // ponytail: month's records are already in memory (stats + grid need them all),
+  // so page the log stream by slicing. Swap for cursor queries if a month ever
+  // grows past a few thousand punches.
+  // Page is stored with the filter signature it belongs to, so changing month /
+  // search / status resets to page 1 without a setState-in-effect round trip.
+  const logFilterSig = `${month}|${query}|${statusFilter}`;
+  const [logPageState, setLogPageState] = useState({ sig: logFilterSig, page: 0 });
+  const logTotalPages = Math.ceil(logEvents.length / LOG_PAGE_SIZE);
+  // Clamp: an edit that drops punches can shrink the list under the current page.
+  const logPage = Math.min(
+    logPageState.sig === logFilterSig ? logPageState.page : 0,
+    Math.max(0, logTotalPages - 1)
+  );
+  const setLogPage = (page: number) => setLogPageState({ sig: logFilterSig, page });
+  const pagedLogEvents = useMemo(
+    () => logEvents.slice(logPage * LOG_PAGE_SIZE, (logPage + 1) * LOG_PAGE_SIZE),
+    [logEvents, logPage]
+  );
+
   // â”€â”€ Daily register rows (one per record, newest first) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const dailyRows = useMemo(() => {
     return [...visibleRecords].sort((a, b) => (secOf(b.date) ?? 0) - (secOf(a.date) ?? 0));
@@ -416,7 +438,7 @@ export default function AttendanceRegisterPage() {
         }
       />
 
-      <StatGrid cols={4}>
+      <StatGrid cols={4} mobileCols={4}>
         <StatCard
           title="Total Staff"
           value={stats.staff}
@@ -472,21 +494,21 @@ export default function AttendanceRegisterPage() {
           })}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-0 flex-1 sm:flex-none sm:min-w-[200px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
-              placeholder="Search staffâ€¦"
+              placeholder="Search staff…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-auto min-w-[200px] pl-9"
+              className="w-full pl-9 sm:w-auto"
             />
           </div>
           {view !== "grid" ? (
             <Select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as "all" | ActiveAttendanceStatus)}
-              className="w-auto min-w-[170px]"
+              className="w-auto shrink-0 sm:min-w-[170px]"
               options={[
                 { value: "all", label: "All statuses" },
                 ...Object.entries(STATUS_CONFIG).map(([key, cfg]) => ({ value: key, label: cfg.label })),
@@ -511,8 +533,8 @@ export default function AttendanceRegisterPage() {
                 <TableHead>Staff</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Flag</TableHead>
-                <TableHead>Location</TableHead>
+                <TableHead className="hidden sm:table-cell">Flag</TableHead>
+                <TableHead className="hidden sm:table-cell">Location</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -523,7 +545,7 @@ export default function AttendanceRegisterPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                logEvents.map((e) => {
+                pagedLogEvents.map((e) => {
                   const cfg = attendanceStatusMeta(e.status);
                   return (
                     <TableRow key={e.key}>
@@ -548,17 +570,17 @@ export default function AttendanceRegisterPage() {
                       <TableCell>
                         <Badge variant={cfg?.badge}>{cfg?.label ?? e.status}</Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         {e.isLate ? (
                           <Badge variant="bg-amber-100 text-amber-700">Late</Badge>
                         ) : e.isEarly ? (
                           <Badge variant="bg-yellow-100 text-yellow-700">Early</Badge>
                         ) : (
-                          <span className="text-xs text-slate-400">â€”</span>
+                          <span className="text-xs text-slate-400">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-slate-500">
-                        {e.location ? `${e.location.lat.toFixed(4)}, ${e.location.lng.toFixed(4)}` : "â€”"}
+                      <TableCell className="hidden text-xs text-slate-500 sm:table-cell">
+                        {e.location ? `${e.location.lat.toFixed(4)}, ${e.location.lng.toFixed(4)}` : "—"}
                       </TableCell>
                     </TableRow>
                   );
@@ -566,6 +588,16 @@ export default function AttendanceRegisterPage() {
               )}
             </TableBody>
           </Table>
+          <Pagination
+            page={logPage}
+            totalPages={logTotalPages}
+            totalCount={logEvents.length}
+            pageSize={LOG_PAGE_SIZE}
+            hasPrev={logPage > 0}
+            hasNext={logPage < logTotalPages - 1}
+            onPrev={() => setLogPage(Math.max(0, logPage - 1))}
+            onNext={() => setLogPage(Math.min(logTotalPages - 1, logPage + 1))}
+          />
         </ListingPanel>
       ) : null}
 
@@ -583,10 +615,10 @@ export default function AttendanceRegisterPage() {
                 <TableHead>Staff</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Check In</TableHead>
-                <TableHead>Check Out</TableHead>
+                <TableHead className="hidden sm:table-cell">Check Out</TableHead>
                 <TableHead>Hours</TableHead>
-                <TableHead>Overtime</TableHead>
-                <TableHead>Flags</TableHead>
+                <TableHead className="hidden sm:table-cell">Overtime</TableHead>
+                <TableHead className="hidden sm:table-cell">Flags</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -628,16 +660,16 @@ export default function AttendanceRegisterPage() {
                         <Badge variant={cfg?.badge}>{cfg?.label ?? r.status}</Badge>
                       </TableCell>
                       <TableCell>{timeStr(r.checkIn)}</TableCell>
-                      <TableCell>{timeStr(r.checkOut)}</TableCell>
-                      <TableCell>{r.workingHours ? `${r.workingHours.toFixed(1)}h` : "â€”"}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">{timeStr(r.checkOut)}</TableCell>
+                      <TableCell>{r.workingHours ? `${r.workingHours.toFixed(1)}h` : "—"}</TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         {r.overtimeHours ? (
                           <Badge variant="bg-orange-100 text-orange-700">+{r.overtimeHours.toFixed(1)}h</Badge>
                         ) : (
-                          <span className="text-xs text-slate-400">â€”</span>
+                          <span className="text-xs text-slate-400">—</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="hidden sm:table-cell">
                         <div className="flex flex-wrap gap-1.5">
                           {r.isLate ? <Badge variant="bg-amber-100 text-amber-700">Late</Badge> : null}
                           {r.isEarlyDeparture ? <Badge variant="bg-yellow-100 text-yellow-700">Early</Badge> : null}

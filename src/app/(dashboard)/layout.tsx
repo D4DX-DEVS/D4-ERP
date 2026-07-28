@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { Sidebar } from "@/components/layout/sidebar";
+import { BottomNav } from "@/components/layout/bottom-nav";
 import { Header } from "@/components/layout/header";
 import { CommandSearch } from "@/components/layout/command-search";
 import { hasFeature } from "@/lib/permissions";
@@ -16,7 +17,7 @@ const ROUTE_ROLES: Record<string, StaffRole[]> = {
   "/dashboard": ["admin", "department-head", "accounts"],
   "/dashboard/companies": ["admin"],
   "/dashboard/departments": ["admin"],
-  "/dashboard/staff": ["admin", "department-head"],
+  "/dashboard/staff": ["admin"],
   "/dashboard/clients": ["admin", "department-head", "accounts"],
   "/dashboard/leaves": ["admin", "department-head"],
   "/dashboard/attendance": ["admin", "department-head"],
@@ -154,10 +155,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="mesh-bg min-h-screen">
       <Sidebar />
+      <BottomNav />
       <CommandSearch />
       <div className="relative z-10 min-h-screen lg:pl-[calc(var(--sidebar-width)+1.75rem)]">
         <Header />
-        <main className="page-frame px-4 pb-16 pt-4 sm:px-5 lg:px-6 lg:pt-5">
+        <main className="page-frame px-4 pb-24 pt-4 sm:px-5 lg:px-6 lg:pb-16 lg:pt-5">
           <div>{children}</div>
         </main>
       </div>

@@ -18,6 +18,7 @@ import { getStatusColor, formatCurrency, formatDate, getInitials } from "@/lib/u
 import { FEATURES, roleHasFeature } from "@/lib/permissions";
 import { getContractStatus, getDaysRemaining, computeContractEndDate, CONTRACT_DURATIONS, type ContractStatus } from "@/lib/contract-utils";
 import { useAuthStore } from "@/store/auth-store";
+import { useRoleGuard } from "@/hooks/use-role-guard";
 import { LetterGenerator } from "@/components/staff/letter-generator";
 import { EmployeeDocuments } from "@/components/staff/employee-documents";
 import {
@@ -57,6 +58,8 @@ export default function StaffProfilePage() {
   const [statusHistory, setStatusHistory] = useState<(StatusHistory & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const { user: currentUser } = useAuthStore();
+  // Staff records are admin-only — department heads manage work, not personnel files.
+  const { authorized, isLoading: authLoading } = useRoleGuard(["admin"]);
   const [grantedFeatures, setGrantedFeatures] = useState<string[]>([]);
   const [savingFeatures, setSavingFeatures] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
@@ -271,6 +274,7 @@ export default function StaffProfilePage() {
     }
   };
 
+  if (authLoading || !authorized) return <PageLoader />;
   if (loading) return <PageLoader />;
   if (!staff) return null;
 

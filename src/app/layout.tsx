@@ -22,6 +22,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // Required for env(safe-area-inset-*) to be non-zero in standalone PWA mode —
+  // without it the bottom nav sits under the home indicator / gesture bar.
+  viewportFit: "cover",
 };
 
 export const metadata: Metadata = {

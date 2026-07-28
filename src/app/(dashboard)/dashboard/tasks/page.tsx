@@ -26,6 +26,7 @@ import { formatDate, cn } from "@/lib/utils";
 import { Plus, Loader2, Pencil, Trash2, CheckSquare, Square, X, CalendarClock, ListTodo, Loader, CheckCircle2, LayoutGrid, Rows3, Search, Hourglass } from "lucide-react";
 import { isUpdatePendingTask, notifyPendingTaskUpdates, updatePendingDays, pendingBadgeClasses, pendingBadgeLabel } from "@/lib/task-alerts";
 import { useToast } from "@/components/ui/toast";
+import { deptScopeFor, inDeptScope } from "@/lib/dept-scope";
 
 type TaskDoc = Task & { id: string };
 
@@ -261,8 +262,17 @@ export default function TasksPage() {
   const isOverdue = (t: TaskDoc) =>
     t.status !== "done" && !!t.dueDate && new Date(t.dueDate.seconds * 1000).toISOString().split("T")[0] < todayKey;
 
+  // Department heads see only their own department's board — the cross-department
+  // view is the admin panel. Falls back to the assignee's department for older
+  // tasks saved without departmentId.
+  // ponytail: linear find per task; task counts are small, index it if the board slows down.
+  const deptScope = deptScopeFor(user?.role, user?.departmentId);
+  const taskDept = (t: TaskDoc) => t.departmentId ?? staffList.find((s) => s.id === t.assigneeId)?.departmentId;
+  const visibleStaff = staffList.filter((s) => inDeptScope(deptScope, s.departmentId));
+
   const q = query.trim().toLowerCase();
   const filteredTasks = tasks.filter((t) => {
+    if (!inDeptScope(deptScope, taskDept(t))) return false;
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
     if (assigneeFilter !== "all" && t.assigneeId !== assigneeFilter) return false;
@@ -296,7 +306,7 @@ export default function TasksPage() {
         }
       />
 
-      <StatGrid cols={4}>
+      <StatGrid cols={4} mobileCols={5}>
         <StatCard
           title="Total Tasks"
           value={stats.total}
@@ -361,60 +371,64 @@ export default function TasksPage() {
       </div>
 
       {/* Filters â€” apply to both Board and Table views */}
-      {/* ponytail: 2-up grid on phones â€” flex-wrap with min-widths left ragged orphan rows */}
-      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
-        <div className="relative col-span-2 sm:col-span-1">
+      <div className="space-y-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2 sm:space-y-0">
+        <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
-            placeholder="Search tasksâ€¦"
+            placeholder="Search tasks…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-full min-w-0 pl-9 sm:w-auto sm:min-w-[200px]"
           />
         </div>
-        <Select
-          value={assigneeFilter}
-          onChange={(e) => setAssigneeFilter(e.target.value)}
-          className="w-full min-w-0 sm:w-auto sm:min-w-[170px]"
-          options={[
-            { value: "all", label: "All staff" },
-            ...staffList.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` })),
-          ]}
-        />
-        <Select
-          value={departmentFilter}
-          onChange={(e) => setDepartmentFilter(e.target.value)}
-          className="w-full min-w-0 sm:w-auto sm:min-w-[170px]"
-          options={[{ value: "all", label: "All departments" }, ...departments.map((d) => ({ value: d.id, label: d.name }))]}
-        />
-        <Select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as "all" | Task["status"])}
-          className="w-full min-w-0 sm:w-auto sm:min-w-[150px]"
-          options={[{ value: "all", label: "All statuses" }, ...statusColumns.map((c) => ({ value: c.key, label: c.label }))]}
-        />
-        <Select
-          value={priorityFilter}
-          onChange={(e) => setPriorityFilter(e.target.value as "all" | Task["priority"])}
-          className="w-full min-w-0 sm:w-auto sm:min-w-[150px]"
-          options={[
-            { value: "all", label: "All priorities" },
-            { value: "low", label: "Low" },
-            { value: "medium", label: "Medium" },
-            { value: "high", label: "High" },
-            { value: "urgent", label: "Urgent" },
-          ]}
-        />
-        <button
-          type="button"
-          onClick={() => setOverdueOnly((v) => !v)}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-medium transition-colors",
-            overdueOnly ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-600 hover:border-red-200"
+        {/* ponytail: 3-up grid on phones — 5 controls fit in 2 rows instead of the previous 3 */}
+        <div className="grid grid-cols-3 gap-2 sm:contents">
+          <Select
+            value={assigneeFilter}
+            onChange={(e) => setAssigneeFilter(e.target.value)}
+            className="w-full min-w-0 sm:w-auto sm:min-w-[170px]"
+            options={[
+              { value: "all", label: "All staff" },
+              ...visibleStaff.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` })),
+            ]}
+          />
+          {deptScope === null && (
+            <Select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="w-full min-w-0 sm:w-auto sm:min-w-[170px]"
+              options={[{ value: "all", label: "All departments" }, ...departments.map((d) => ({ value: d.id, label: d.name }))]}
+            />
           )}
-        >
-          <CalendarClock className="h-3.5 w-3.5" /> Overdue only
-        </button>
+          <Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as "all" | Task["status"])}
+            className="w-full min-w-0 sm:w-auto sm:min-w-[150px]"
+            options={[{ value: "all", label: "All statuses" }, ...statusColumns.map((c) => ({ value: c.key, label: c.label }))]}
+          />
+          <Select
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value as "all" | Task["priority"])}
+            className="w-full min-w-0 sm:w-auto sm:min-w-[150px]"
+            options={[
+              { value: "all", label: "All priorities" },
+              { value: "low", label: "Low" },
+              { value: "medium", label: "Medium" },
+              { value: "high", label: "High" },
+              { value: "urgent", label: "Urgent" },
+            ]}
+          />
+          <button
+            type="button"
+            onClick={() => setOverdueOnly((v) => !v)}
+            className={cn(
+              "inline-flex items-center justify-center gap-1 rounded-full border px-2 py-2 text-xs font-medium transition-colors sm:gap-1.5 sm:px-3 sm:text-sm",
+              overdueOnly ? "border-red-300 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-600 hover:border-red-200"
+            )}
+          >
+            <CalendarClock className="h-3.5 w-3.5 shrink-0" /> <span className="truncate">Overdue only</span>
+          </button>
+        </div>
       </div>
 
       {view === "board" ? (
@@ -684,7 +698,7 @@ export default function TasksPage() {
             <div className="space-y-2">
               <Label>Assignee *</Label>
               <Select value={form.assigneeId} onChange={(e) => setForm({ ...form, assigneeId: e.target.value })}
-                options={staffList.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` }))}
+                options={visibleStaff.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` }))}
                 placeholder="Select" required />
             </div>
             <div className="space-y-2">

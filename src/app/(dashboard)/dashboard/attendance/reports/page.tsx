@@ -267,15 +267,15 @@ export default function AttendanceReportsPage() {
         description="Summaries by employee, day, or department with export."
       />
 
-      <div className="space-y-3 rounded-[20px] border border-slate-100 bg-white/70 p-4">
-        <div className="flex flex-wrap items-end gap-3">
+      <div className="space-y-3 rounded-[20px] border border-slate-100 bg-white/70 p-3 sm:p-4">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3">
           <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Month</label>
-            <DatePicker mode="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-[180px]" />
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 sm:text-[11px] sm:tracking-[0.14em]">Month</label>
+            <DatePicker mode="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-full sm:w-[180px]" />
           </div>
           <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Report</label>
-            <div className="w-[230px]">
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 sm:text-[11px] sm:tracking-[0.14em]">Report</label>
+            <div className="w-full sm:w-[230px]">
               <SelectRoot value={reportType} onValueChange={(v) => setReportType(v as ReportType)}>
                 <SelectTrigger>
                   <SelectValue>{reportTypeLabel}</SelectValue>
@@ -292,8 +292,8 @@ export default function AttendanceReportsPage() {
           </div>
           {!isDeptHead ? (
             <div>
-              <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Department</label>
-              <div className="w-[200px]">
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 sm:text-[11px] sm:tracking-[0.14em]">Department</label>
+              <div className="w-full sm:w-[200px]">
                 <SelectRoot value={departmentFilter} onValueChange={setDepartmentFilter}>
                   <SelectTrigger>
                     <SelectValue>{departmentLabel}</SelectValue>
@@ -311,8 +311,8 @@ export default function AttendanceReportsPage() {
             </div>
           ) : null}
           <div>
-            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Status</label>
-            <div className="w-[180px]">
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 sm:text-[11px] sm:tracking-[0.14em]">Status</label>
+            <div className="w-full sm:w-[180px]">
               <SelectRoot value={statusFilter} onValueChange={(v) => setStatusFilter(v as "all" | AttendanceStatus)}>
                 <SelectTrigger>
                   <SelectValue>{statusLabel}</SelectValue>
@@ -327,16 +327,16 @@ export default function AttendanceReportsPage() {
               </SelectRoot>
             </div>
           </div>
-          <div className="ml-auto flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => exportToCSV(activeRows, fileBase)} disabled={!activeRows.length}>
+          <div className="col-span-2 flex gap-2 sm:ml-auto sm:col-span-1">
+            <Button variant="outline" size="sm" onClick={() => exportToCSV(activeRows, fileBase)} disabled={!activeRows.length} className="flex-1 sm:flex-none">
               <Download className="h-4 w-4" />
               CSV
             </Button>
-            <Button variant="outline" size="sm" onClick={() => exportToExcel(activeRows, fileBase)} disabled={!activeRows.length}>
+            <Button variant="outline" size="sm" onClick={() => exportToExcel(activeRows, fileBase)} disabled={!activeRows.length} className="flex-1 sm:flex-none">
               <FileSpreadsheet className="h-4 w-4" />
               Excel
             </Button>
-            <Button variant="outline" size="sm" onClick={() => exportToPDF(activeRows, reportLabel, fileBase)} disabled={!activeRows.length}>
+            <Button variant="outline" size="sm" onClick={() => exportToPDF(activeRows, reportLabel, fileBase)} disabled={!activeRows.length} className="flex-1 sm:flex-none">
               <FileText className="h-4 w-4" />
               PDF
             </Button>
@@ -353,7 +353,8 @@ export default function AttendanceReportsPage() {
               className="pl-9"
             />
           </div>
-          <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+          {/* ponytail: duplicates the Month field above — only worth the space once there's room, on sm:+ */}
+          <span className="hidden items-center gap-1.5 text-xs text-slate-500 sm:inline-flex">
             <CalendarDays className="h-3.5 w-3.5" />
             {new Date(year, monthNum - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
           </span>
@@ -423,8 +424,17 @@ export default function AttendanceReportsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  {columns.map((c) => (
-                    <TableHead key={c} className={c === "Employee" || c === "Date" || c === "Department" || c === "Staff" || c === "Code" ? "" : "text-center"}>
+                  {/* ponytail: report tables have data-driven column counts (5-8+); beyond the
+                      4th column, hide on phones instead of forcing horizontal scroll — the
+                      identifying columns + first stat still tell the story at a glance */}
+                  {columns.map((c, idx) => (
+                    <TableHead
+                      key={c}
+                      className={
+                        (c === "Employee" || c === "Date" || c === "Department" || c === "Staff" || c === "Code" ? "" : "text-center") +
+                        (idx >= 4 ? " hidden sm:table-cell" : "")
+                      }
+                    >
                       {c}
                     </TableHead>
                   ))}
@@ -440,10 +450,13 @@ export default function AttendanceReportsPage() {
                 ) : (
                   activeRows.map((row, idx) => (
                     <TableRow key={idx}>
-                      {columns.map((c) => (
+                      {columns.map((c, cidx) => (
                         <TableCell
                           key={c}
-                          className={c === "Employee" || c === "Date" || c === "Department" || c === "Staff" || c === "Code" ? "font-medium text-slate-950" : "text-center"}
+                          className={
+                            (c === "Employee" || c === "Date" || c === "Department" || c === "Staff" || c === "Code" ? "font-medium text-slate-950" : "text-center") +
+                            (cidx >= 4 ? " hidden sm:table-cell" : "")
+                          }
                         >
                           {String((row as Record<string, string | number>)[c] ?? "")}
                         </TableCell>

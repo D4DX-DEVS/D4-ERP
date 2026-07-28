@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { CommentsSection } from "@/components/ui/comments-section";
 import { getStatusColor, formatDate } from "@/lib/utils";
-import { CalendarDays, Check, X, Search, FilterX, CheckCheck, XCircle, Clock, CheckCircle2, XCircleIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { CalendarDays, Check, X, Search, Filter, FilterX, CheckCheck, XCircle, Clock, CheckCircle2, XCircleIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
@@ -42,6 +42,7 @@ export default function LeavesPage() {
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -377,7 +378,7 @@ export default function LeavesPage() {
       </div>
 
       {/* Stats Cards (act as status filters) */}
-      <StatGrid cols={4}>
+      <StatGrid cols={4} mobileCols={4}>
         <StatCard
           title="Pending"
           value={stats.pending}
@@ -419,8 +420,8 @@ export default function LeavesPage() {
       {/* Search + Filters */}
       <Card>
         <CardContent className="p-4 space-y-4">
-          {/* Row 1: Search + Clear */}
-          <div className="flex items-center gap-3">
+          {/* Row 1: Search + filter toggle + Clear */}
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
@@ -430,85 +431,103 @@ export default function LeavesPage() {
                 className="pl-9 h-10"
               />
             </div>
+            <Button
+              variant={filtersOpen ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFiltersOpen((o) => !o)}
+              className="relative shrink-0"
+            >
+              <Filter className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">Filters</span>
+              {hasActiveFilters && (
+                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-indigo-600 sm:static sm:ml-1 sm:h-1.5 sm:w-1.5" />
+              )}
+              {filtersOpen ? <ChevronUp className="hidden h-4 w-4 sm:ml-1 sm:inline" /> : <ChevronDown className="hidden h-4 w-4 sm:ml-1 sm:inline" />}
+            </Button>
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-slate-500 hover:text-slate-700">
-                <FilterX className="h-4 w-4 mr-1" />
-                Clear Filters
+              <Button variant="ghost" size="sm" onClick={clearAllFilters} className="shrink-0 text-slate-500 hover:text-slate-700">
+                <FilterX className="h-4 w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Clear Filters</span>
               </Button>
             )}
           </div>
 
-          {/* Row 2: Filter dropdowns */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <Select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              options={[
-                { value: "", label: "All Types" },
-                ...Object.entries(REQUEST_TYPE_LABELS).map(([value, label]) => ({ value, label })),
-              ]}
-            />
-            <Select
-              value={filterStaff}
-              onChange={(e) => setFilterStaff(e.target.value)}
-              options={staffOptions}
-            />
-            <Select
-              value={filterDepartment}
-              onChange={(e) => setFilterDepartment(e.target.value)}
-              options={departmentOptions}
-            />
-            <Select
-              value={filterLeaveType}
-              onChange={(e) => setFilterLeaveType(e.target.value)}
-              options={[
-                { value: "", label: "All Leave Types" },
-                { value: "CL", label: "Casual Leave" },
-                { value: "SL", label: "Sick Leave" },
-                { value: "EL", label: "Earned Leave" },
-                { value: "CO", label: "Comp. Off" },
-                { value: "LOP", label: "Loss of Pay" },
-              ]}
-            />
-            <Select
-              value={filterDuration}
-              onChange={(e) => setFilterDuration(e.target.value)}
-              options={[
-                { value: "", label: "All Durations" },
-                { value: "half-day", label: "Half Day" },
-                { value: "full-day", label: "Full Day" },
-              ]}
-            />
-            <Select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              options={[
-                { value: "", label: "All Statuses" },
-                { value: "pending", label: "Pending" },
-                { value: "approved", label: "Approved" },
-                { value: "rejected", label: "Rejected" },
-                { value: "cancelled", label: "Cancelled" },
-              ]}
-            />
-          </div>
+          {filtersOpen && (
+            <>
+              {/* Row 2: Filter dropdowns — 3-up on phones so 6 filters fit in 2 rows, not 3 */}
+              <div className="grid grid-cols-3 gap-2 lg:grid-cols-6 sm:gap-3">
+                <Select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  options={[
+                    { value: "", label: "All Types" },
+                    ...Object.entries(REQUEST_TYPE_LABELS).map(([value, label]) => ({ value, label })),
+                  ]}
+                />
+                <Select
+                  value={filterStaff}
+                  onChange={(e) => setFilterStaff(e.target.value)}
+                  options={staffOptions}
+                />
+                <Select
+                  value={filterDepartment}
+                  onChange={(e) => setFilterDepartment(e.target.value)}
+                  options={departmentOptions}
+                />
+                <Select
+                  value={filterLeaveType}
+                  onChange={(e) => setFilterLeaveType(e.target.value)}
+                  options={[
+                    { value: "", label: "All Leave Types" },
+                    { value: "CL", label: "Casual Leave" },
+                    { value: "SL", label: "Sick Leave" },
+                    { value: "EL", label: "Earned Leave" },
+                    { value: "CO", label: "Comp. Off" },
+                    { value: "LOP", label: "Loss of Pay" },
+                  ]}
+                />
+                <Select
+                  value={filterDuration}
+                  onChange={(e) => setFilterDuration(e.target.value)}
+                  options={[
+                    { value: "", label: "All Durations" },
+                    { value: "half-day", label: "Half Day" },
+                    { value: "full-day", label: "Full Day" },
+                  ]}
+                />
+                <Select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  options={[
+                    { value: "", label: "All Statuses" },
+                    { value: "pending", label: "Pending" },
+                    { value: "approved", label: "Approved" },
+                    { value: "rejected", label: "Rejected" },
+                    { value: "cancelled", label: "Cancelled" },
+                  ]}
+                />
+              </div>
 
-          {/* Row 3: Date range */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">Date Range:</span>
-            <DatePicker
-              value={filterDateFrom}
-              onChange={(e) => setFilterDateFrom(e.target.value)}
-              placeholder="From date"
-              className="w-[160px] h-10"
-            />
-            <span className="text-slate-400">→</span>
-            <DatePicker
-              value={filterDateTo}
-              onChange={(e) => setFilterDateTo(e.target.value)}
-              placeholder="To date"
-              className="w-[160px] h-10"
-            />
-          </div>
+              {/* Row 3: Date range */}
+              <div className="space-y-1.5">
+                <span className="block text-xs font-medium text-slate-500 uppercase tracking-wider">Date Range</span>
+                <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:gap-3">
+                  <DatePicker
+                    value={filterDateFrom}
+                    onChange={(e) => setFilterDateFrom(e.target.value)}
+                    placeholder="From date"
+                    className="h-10 w-full sm:w-[160px]"
+                  />
+                  <DatePicker
+                    value={filterDateTo}
+                    onChange={(e) => setFilterDateTo(e.target.value)}
+                    placeholder="To date"
+                    className="h-10 w-full sm:w-[160px]"
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
