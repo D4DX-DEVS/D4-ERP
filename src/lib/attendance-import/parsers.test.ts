@@ -89,8 +89,8 @@ describe("parseAttendancePdf (ESSL basic work duration)", () => {
 
       const emp2 = result.employees[1];
       expect(emp2.empCode).toBe("1001");
-      // Day 5 (index 4): status WO -> public-holiday, no check-in/out (the gap).
-      expect(emp2.records[4]).toMatchObject({ date: "2026-07-05", status: "public-holiday", rawStatus: "WO" });
+      // Day 5 (index 4): status WO -> week-off, no check-in/out (the gap).
+      expect(emp2.records[4]).toMatchObject({ date: "2026-07-05", status: "week-off", rawStatus: "WO" });
       expect(emp2.records[4].checkIn).toBeUndefined();
       expect(emp2.records[4].checkOut).toBeUndefined();
       // Day 2 (index 1): raw "A" but has a punch — any punch that day means present.

@@ -3,7 +3,7 @@
 // old records; normalizeAttendanceStatus folds them into the active set.
 import type { AttendanceStatus } from "@/types";
 
-export type ActiveAttendanceStatus = "present" | "absent" | "half-day" | "on-duty" | "public-holiday";
+export type ActiveAttendanceStatus = "present" | "absent" | "half-day" | "on-duty" | "public-holiday" | "week-off";
 
 export interface StatusMeta {
   code: string;
@@ -18,9 +18,10 @@ export const ATTENDANCE_STATUS_CONFIG: Record<ActiveAttendanceStatus, StatusMeta
   "half-day": { code: "H", label: "Half Day", cell: "bg-amber-100 text-amber-700", badge: "bg-amber-100 text-amber-700" },
   "on-duty": { code: "OD", label: "On Duty", cell: "bg-violet-100 text-violet-700", badge: "bg-violet-100 text-violet-700" },
   "public-holiday": { code: "PH", label: "Public Holiday", cell: "bg-purple-100 text-purple-700", badge: "bg-purple-100 text-purple-700" },
+  "week-off": { code: "WO", label: "Weekly Off", cell: "bg-slate-100 text-slate-400", badge: "bg-slate-100 text-slate-400" },
 };
 
-export const WEEKLY_OFF_META: StatusMeta = { code: "WO", label: "Weekly Off", cell: "bg-slate-100 text-slate-400", badge: "bg-slate-100 text-slate-400" };
+export const WEEKLY_OFF_META: StatusMeta = ATTENDANCE_STATUS_CONFIG["week-off"];
 
 export const ATTENDANCE_STATUS_OPTIONS: { value: ActiveAttendanceStatus; label: string }[] = (
   Object.entries(ATTENDANCE_STATUS_CONFIG) as [ActiveAttendanceStatus, StatusMeta][]

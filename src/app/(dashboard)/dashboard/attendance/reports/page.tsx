@@ -31,6 +31,7 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "half-day", label: "Half Day" },
   { value: "on-duty", label: "On Duty" },
   { value: "public-holiday", label: "Public Holiday" },
+  { value: "week-off", label: "Weekly Off" },
   { value: "absent", label: "Absent" },
 ];
 
@@ -223,6 +224,7 @@ export default function AttendanceReportsPage() {
       "half-day": "H",
       "on-duty": "OD",
       "public-holiday": "PH",
+      "week-off": "WO",
     };
     return scopedStaff.map((s) => {
       const row: Record<string, string | number> = {

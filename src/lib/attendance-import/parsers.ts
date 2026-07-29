@@ -123,8 +123,8 @@ const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 const STATUS_MAP: Record<string, AttendanceStatus> = {
   P: "present",
   A: "absent",
-  WO: "public-holiday",
-  WOP: "public-holiday",
+  WO: "week-off",
+  WOP: "week-off",
 };
 
 const DATE_RANGE_RE = /([A-Za-z]{3})\w*\s+(\d{1,2})\s+(\d{4})\s+To\s+([A-Za-z]{3})\w*\s+(\d{1,2})\s+(\d{4})/i;

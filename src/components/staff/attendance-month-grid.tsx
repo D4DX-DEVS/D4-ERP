@@ -180,7 +180,7 @@ export function AttendanceMonthGrid({ staffId }: { staffId: string }) {
             </div>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500">
-              {[...Object.values(ATTENDANCE_STATUS_CONFIG), WEEKLY_OFF_META].map((c) => (
+              {Object.values(ATTENDANCE_STATUS_CONFIG).map((c) => (
                 <span key={c.code} className="inline-flex items-center gap-1">
                   <span className={"flex h-4 min-w-4 items-center justify-center rounded px-0.5 text-[9px] font-semibold " + c.cell}>{c.code}</span>
                   {counts[c.code] ? <span className="font-semibold text-slate-700">{counts[c.code]}</span> : "0"}
