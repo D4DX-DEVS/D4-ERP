@@ -238,7 +238,16 @@ export function scopeFilter(
   if (user.role === "admin" || user.role === "accounts") return null;
   if (user.role === "department-head") {
     const field = DEPT_SCOPED_BY_FIELD[collectionName];
-    if (field && departmentId) return { [field]: departmentId };
+    if (field && departmentId) {
+      // Tasks: heads also see tasks they created/assigned, so legacy docs saved
+      // without departmentId don't vanish from the creator's own board.
+      if (collectionName === "tasks") {
+        return {
+          $or: [{ [field]: departmentId }, { assignedBy: user.uid }, { createdBy: user.uid }],
+        };
+      }
+      return { [field]: departmentId };
+    }
     if (DEPT_SCOPED_BY_STAFF.has(collectionName) && deptStaffIds) {
       return { staffId: { $in: deptStaffIds } };
     }
