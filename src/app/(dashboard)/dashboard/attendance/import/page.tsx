@@ -59,6 +59,7 @@ const STATUS_BADGE: Record<string, string> = {
   wfh: "bg-purple-100 text-purple-700",
   "on-duty": "bg-indigo-100 text-indigo-700",
   "public-holiday": "bg-slate-200 text-slate-600",
+  "week-off": "bg-slate-100 text-slate-500",
 };
 
 const STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
@@ -70,6 +71,7 @@ const STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
   { value: "wfh", label: "WFH" },
   { value: "on-duty", label: "On Duty" },
   { value: "public-holiday", label: "Holiday" },
+  { value: "week-off", label: "Weekly Off" },
 ];
 
 function parseExcelDate(val: unknown): string {

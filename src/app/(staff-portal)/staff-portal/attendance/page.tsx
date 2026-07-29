@@ -25,7 +25,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { ChevronDown, ChevronLeft, ChevronRight, ClipboardEdit, Send } from "lucide-react";
 
-const CORRECTION_STATUS_OPTIONS = ATTENDANCE_STATUS_OPTIONS.filter((o) => o.value !== "public-holiday");
+const CORRECTION_STATUS_OPTIONS = ATTENDANCE_STATUS_OPTIONS.filter(
+  (o) => o.value !== "public-holiday" && o.value !== "week-off"
+);
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -249,7 +251,7 @@ export default function StaffAttendancePage() {
 
   const legend = (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-slate-500">
-      {[...Object.values(ATTENDANCE_STATUS_CONFIG), WEEKLY_OFF_META].map((c) => (
+      {Object.values(ATTENDANCE_STATUS_CONFIG).map((c) => (
         <span key={c.code} className="inline-flex items-center gap-1">
           <span className={"flex h-5 min-w-5 items-center justify-center rounded px-1 text-[10px] font-semibold " + c.cell}>
             {c.code}
