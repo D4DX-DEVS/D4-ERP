@@ -159,6 +159,9 @@ export default function TasksPage() {
         priority: form.priority,
         assigneeId: form.assigneeId,
         assigneeName: assignee ? `${assignee.firstName} ${assignee.lastName}` : "",
+        // Dept-head reads are server-scoped by departmentId — a task saved without
+        // it would vanish from the creator's own board. Edit path backfills legacy tasks.
+        departmentId: assignee?.departmentId ?? user?.departmentId ?? "",
         dueDate: form.dueDate ? Timestamp.fromDate(new Date(form.dueDate)) : Timestamp.now(),
         subtasks,
         tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],

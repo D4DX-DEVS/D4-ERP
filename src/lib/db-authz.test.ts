@@ -378,4 +378,10 @@ describe("scopeFilter (server-side dept/own-record isolation)", () => {
   it("does not scope staff on tasks (public team board)", () => {
     expect(scopeFilter(staff, "tasks", null, null)).toBeNull();
   });
+
+  it("dept heads see own-dept tasks plus tasks they created/assigned", () => {
+    expect(scopeFilter(deptHead, "tasks", "d1", null)).toEqual({
+      $or: [{ departmentId: "d1" }, { assignedBy: "u1" }, { createdBy: "u1" }],
+    });
+  });
 });
