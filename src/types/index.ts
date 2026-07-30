@@ -709,7 +709,12 @@ export type AttendanceStatus =
   | "wfh"
   | "on-duty"
   | "public-holiday"
-  | "week-off";
+  | "week-off"
+  | "full-leave"
+  | "casual-leave"
+  | "earned-leave"
+  | "medical-leave"
+  | "overtime";
 
 export interface Attendance extends BaseDocument {
   staffId: string;

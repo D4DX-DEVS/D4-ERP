@@ -786,12 +786,6 @@ export default function AttendanceRegisterPage() {
             {c.label}
           </span>
         ))}
-        <span className="inline-flex items-center gap-1.5">
-          <span className={"flex h-5 w-5 items-center justify-center rounded text-[10px] font-semibold " + OFF_CELL}>
-            WO
-          </span>
-          Weekly Off
-        </span>
       </div>
 
       {editTarget && (
