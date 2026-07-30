@@ -9,7 +9,6 @@ import { getAdminStaffIds, getDeptHeadStaffId } from "@/lib/requests";
 import { createBulkNotifications } from "@/lib/notifications";
 import {
   ATTENDANCE_STATUS_CONFIG,
-  ATTENDANCE_STATUS_OPTIONS,
   WEEKLY_OFF_META,
   attendanceStatusMeta,
   type ActiveAttendanceStatus,
@@ -25,9 +24,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { ChevronDown, ChevronLeft, ChevronRight, ClipboardEdit, Send } from "lucide-react";
 
-const CORRECTION_STATUS_OPTIONS = ATTENDANCE_STATUS_OPTIONS.filter(
-  (o) => o.value !== "public-holiday" && o.value !== "week-off"
-);
+const CORRECTION_STATUS_VALUES: ActiveAttendanceStatus[] = [
+  "on-duty",
+  "full-leave",
+  "casual-leave",
+  "earned-leave",
+  "medical-leave",
+  "overtime",
+];
+const CORRECTION_STATUS_OPTIONS = CORRECTION_STATUS_VALUES.map((value) => ({
+  value,
+  label: ATTENDANCE_STATUS_CONFIG[value].label,
+}));
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -72,7 +80,7 @@ export default function StaffAttendancePage() {
     date: new Date().toISOString().split("T")[0],
     requestedCheckIn: "",
     requestedCheckOut: "",
-    requestedStatus: "present" as ActiveAttendanceStatus,
+    requestedStatus: "on-duty" as ActiveAttendanceStatus,
     reason: "",
   });
   const [submittingCorrection, setSubmittingCorrection] = useState(false);
@@ -220,7 +228,7 @@ export default function StaffAttendancePage() {
         date: new Date().toISOString().split("T")[0],
         requestedCheckIn: "",
         requestedCheckOut: "",
-        requestedStatus: "present",
+        requestedStatus: "on-duty",
         reason: "",
       });
     } catch (error) {

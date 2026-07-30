@@ -48,7 +48,7 @@ export default function QuotationsPage() {
       nextConstraints.push(where("status", "==", filterStatus));
     }
     if (search.trim()) {
-      nextConstraints.push(searchConstraint(["invoiceNumber"], search.trim()));
+      nextConstraints.push(searchConstraint(["invoiceNumber", "clientName"], search.trim()));
     }
     return nextConstraints;
   }, [filterStatus, search]);
@@ -206,6 +206,7 @@ export default function QuotationsPage() {
       const payload = {
         companyId: form.companyId,
         clientId: form.clientId,
+        clientName: clients.find((c) => c.id === form.clientId)?.companyName || "",
         items: form.items,
         subtotal,
         discount: form.discount,
@@ -534,7 +535,7 @@ export default function QuotationsPage() {
                       <Button variant="ghost" size="icon" title="Edit" onClick={() => handleEdit(q)}>
                         <Pencil className="h-4 w-4 text-blue-500" />
                       </Button>
-                      {q.status === "draft" && (
+                      {!q.convertedToInvoiceId && q.status !== "converted" && q.status !== "rejected" && q.status !== "expired" && (
                         <Button variant="ghost" size="icon" title="Convert to Invoice" onClick={() => handleConvertToInvoice(q)}>
                           <Receipt className="h-4 w-4 text-green-600" />
                         </Button>

@@ -1,9 +1,21 @@
-// Attendance status display config — the active set is P/A/H/OD/PH (+ derived
-// WO for weekly offs). Legacy stored statuses (late/wfh/leave) still exist in
-// old records; normalizeAttendanceStatus folds them into the active set.
+// Attendance status display config — the active set is P/A/H/OD/PH/WO plus the
+// correction-only leave codes FL/CL/EL/ML/OT. Legacy stored statuses
+// (late/wfh/leave) still exist in old records; normalizeAttendanceStatus folds
+// them into the active set.
 import type { AttendanceStatus } from "@/types";
 
-export type ActiveAttendanceStatus = "present" | "absent" | "half-day" | "on-duty" | "public-holiday" | "week-off";
+export type ActiveAttendanceStatus =
+  | "present"
+  | "absent"
+  | "half-day"
+  | "on-duty"
+  | "public-holiday"
+  | "week-off"
+  | "full-leave"
+  | "casual-leave"
+  | "earned-leave"
+  | "medical-leave"
+  | "overtime";
 
 export interface StatusMeta {
   code: string;
@@ -19,6 +31,11 @@ export const ATTENDANCE_STATUS_CONFIG: Record<ActiveAttendanceStatus, StatusMeta
   "on-duty": { code: "OD", label: "On Duty", cell: "bg-violet-100 text-violet-700", badge: "bg-violet-100 text-violet-700" },
   "public-holiday": { code: "PH", label: "Public Holiday", cell: "bg-purple-100 text-purple-700", badge: "bg-purple-100 text-purple-700" },
   "week-off": { code: "WO", label: "Weekly Off", cell: "bg-slate-100 text-slate-400", badge: "bg-slate-100 text-slate-400" },
+  "full-leave": { code: "FL", label: "Full Leave", cell: "bg-orange-100 text-orange-700", badge: "bg-orange-100 text-orange-700" },
+  "casual-leave": { code: "CL", label: "Casual Leave", cell: "bg-cyan-100 text-cyan-700", badge: "bg-cyan-100 text-cyan-700" },
+  "earned-leave": { code: "EL", label: "Earned Leave", cell: "bg-teal-100 text-teal-700", badge: "bg-teal-100 text-teal-700" },
+  "medical-leave": { code: "ML", label: "Medical Leave", cell: "bg-pink-100 text-pink-700", badge: "bg-pink-100 text-pink-700" },
+  overtime: { code: "OT", label: "Overtime", cell: "bg-indigo-100 text-indigo-700", badge: "bg-indigo-100 text-indigo-700" },
 };
 
 export const WEEKLY_OFF_META: StatusMeta = ATTENDANCE_STATUS_CONFIG["week-off"];
