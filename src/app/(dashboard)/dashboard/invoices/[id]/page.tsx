@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Invoice, Company, Client, InvoicePayment } from "@/types";
-import { getDocument, getDocuments, updateDocument, createDocument, where, Timestamp } from "@/lib/firestore";
+import { getDocument, getDocuments, updateDocument, createDocument, deleteDocument, where, Timestamp } from "@/lib/firestore";
 import { AppSettings, getAppSettings } from "@/lib/settings";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,10 @@ import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } fro
 import { DatePicker } from "@/components/ui/date-picker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { formatCurrency, formatDate, numberToWords } from "@/lib/utils";
-import { ArrowLeft, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, Printer, Receipt, Send, Share2, Trash2 } from "lucide-react";
+import { ArrowLeft, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, Printer, Receipt, Send, Share2, Trash2, Undo2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
@@ -28,6 +29,7 @@ import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 export default function InvoiceDetailPage() {
   const base = useWorkspaceBase();
   const params = useParams();
+  const router = useRouter();
   const { user } = useAuthStore();
   const { toast } = useToast();
   const invoiceId = params.id as string;
@@ -58,6 +60,7 @@ export default function InvoiceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [confirmReverse, setConfirmReverse] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exportAction, setExportAction] = useState<null | "download" | "print" | "share" | "whatsapp">(null);
   const [payForm, setPayForm] = useState({
@@ -103,6 +106,10 @@ export default function InvoiceDetailPage() {
       try {
         const inv = await getDocument<Invoice>("invoices", invoiceId);
         if (!inv || !isMounted) return;
+        if (inv.type !== "invoice") {
+          router.replace(`${base}/quotations/${invoiceId}`);
+          return;
+        }
 
         const [comp, cl, pays, settings, allComps, allCls] = await Promise.all([
           inv.companyId ? getDocument<Company>("companies", inv.companyId) : null,
@@ -228,6 +235,20 @@ export default function InvoiceDetailPage() {
       fetchData();
     } catch {
       toast("error", "Failed to update invoice status");
+    }
+  };
+
+  const executeReverse = async () => {
+    setConfirmReverse(false);
+    if (!invoice || !invoice.convertedFrom) return;
+    try {
+      await deleteDocument("invoices", invoiceId);
+      await updateDocument("invoices", invoice.convertedFrom, { status: "accepted", convertedToInvoiceId: null });
+      toast("success", "Invoice reversed back to quotation");
+      router.push(`${base}/quotations/${invoice.convertedFrom}`);
+    } catch (error) {
+      console.error("Error:", error);
+      toast("error", "Failed to reverse invoice to quotation");
     }
   };
 
@@ -655,6 +676,11 @@ export default function InvoiceDetailPage() {
           <Button variant="outline" onClick={() => setPaymentOpen(true)}>
             <DollarSign className="h-4 w-4 mr-2" /> Record Payment
           </Button>
+          {invoice.type === "invoice" && invoice.convertedFrom && (invoice.paidAmount ?? 0) === 0 && (
+            <Button variant="outline" onClick={() => setConfirmReverse(true)}>
+              <Undo2 className="h-4 w-4 mr-2 text-orange-600" /> Reverse to Quotation
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setShareOpen(true)}>
             <Share2 className="h-4 w-4 mr-2" /> Share
           </Button>
@@ -1019,6 +1045,17 @@ export default function InvoiceDetailPage() {
           </div>
         </div>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmReverse}
+        title="Reverse to Quotation"
+        message="This will delete this invoice and restore the original quotation to Accepted status. This action cannot be undone."
+        confirmLabel="Reverse"
+        cancelLabel="Cancel"
+        variant="warning"
+        onConfirm={executeReverse}
+        onCancel={() => setConfirmReverse(false)}
+      />
     </div>
   );
 }
