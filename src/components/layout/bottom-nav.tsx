@@ -21,7 +21,12 @@ export function BottomNav() {
   const { open: drawerOpen, setOpen: setDrawerOpen } = useMobileNavStore();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/80 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
+    <nav
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/80 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden",
+        drawerOpen && "hidden"
+      )}
+    >
       <div className="grid grid-cols-5">
         {primaryTabs.map((tab) => {
           const isActive = tab.href === "/dashboard" ? pathname === tab.href : pathname?.startsWith(tab.href);

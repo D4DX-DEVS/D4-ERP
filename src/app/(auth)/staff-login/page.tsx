@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, CheckCircle2, Loader2, ShieldCheck, User } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function StaffLoginPage() {
   const [mobile, setMobile] = useState("");
@@ -53,11 +54,11 @@ export default function StaffLoginPage() {
   };
 
   return (
-    <div className="mesh-bg relative min-h-screen overflow-hidden px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+    <div className="mesh-bg relative h-screen overflow-hidden px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
       <div className="ambient-orb absolute left-[6%] top-[12%] h-44 w-44 rounded-full bg-emerald-300/20 blur-3xl" />
       <div className="ambient-orb absolute bottom-[14%] right-[10%] h-52 w-52 rounded-full bg-cyan-300/20 blur-3xl" />
 
-      <div className="page-frame grid min-h-[calc(100vh-2.5rem)] items-center gap-6 lg:grid-cols-[0.96fr_1.04fr] lg:gap-8">
+      <div className="page-frame grid h-full items-center gap-6 lg:grid-cols-[0.96fr_1.04fr] lg:gap-8">
         <Card className="order-2 w-full max-w-xl justify-self-center rounded-[36px] lg:order-1">
           <CardHeader className="pb-3 text-center sm:text-left">
             <div className="mb-5 flex items-center justify-center sm:justify-start">
@@ -145,6 +146,18 @@ export default function StaffLoginPage() {
           </div>
         </section>
       </div>
+
+      <footer className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center">
+        <a
+          href="https://www.d4dx.co"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pointer-events-auto flex items-center gap-2 text-sm font-medium tracking-[0.18em] text-slate-500/80 transition-colors hover:text-emerald-700"
+        >
+          POWERED BY
+          <Image src="/dx-logo.png" alt="D4DX" width={80} height={32} className="h-7 w-auto object-contain" />
+        </a>
+      </footer>
     </div>
   );
 }

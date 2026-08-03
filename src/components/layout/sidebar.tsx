@@ -4,7 +4,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/store/auth-store";
 import { navigationModules, PRIMARY_MOBILE_HREFS, type NavModule, type NavItem } from "@/lib/navigation";
 import { useVisibleNavModules } from "@/hooks/use-visible-nav-modules";
 import { useMobileNavStore } from "@/store/mobile-nav-store";
@@ -33,7 +32,6 @@ function saveExpandedState(state: Record<string, boolean>) {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user } = useAuthStore();
   const { fetchConfig } = useNavConfigStore();
   const { open: mobileOpen, setOpen: setMobileOpen } = useMobileNavStore();
   const { isVisible, visibleModules } = useVisibleNavModules();
@@ -151,15 +149,8 @@ export function Sidebar() {
                   className="object-contain"
                 />
               </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-500/70">D4Media ERP</p>
-                <p className="text-sm font-semibold tracking-[-0.03em] text-indigo-950">Admin Console</p>
-              </div>
+              <p className="text-base font-bold uppercase tracking-[0.2em] text-indigo-500/80">D4Media ERP</p>
             </Link>
-
-            <div className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-700 lg:inline-flex">
-              Live
-            </div>
           </div>
 
           <div className="mt-3 rounded-[18px] bg-gradient-to-br from-[#1f3a7a] via-[#3730a3] to-[#4c1d95] px-3 py-2.5 text-white shadow-[0_12px_26px_rgba(55,48,163,0.34)]">
@@ -191,14 +182,17 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* Footer / user info */}
-        <div className="border-t border-indigo-100 px-2.5 py-2.5">
-          <div className="rounded-[16px] bg-gradient-to-r from-indigo-50/80 to-violet-50/80 px-3 py-2">
-            <p className="text-[13px] font-semibold text-indigo-950">
-              {user?.firstName} {user?.lastName}
-            </p>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-indigo-500/70">{user?.role?.replace("-", " ")}</p>
-          </div>
+        {/* Footer */}
+        <div className="border-t border-indigo-100 px-2.5 py-3">
+          <a
+            href="https://www.d4dx.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 rounded-[12px] px-2 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 transition-colors hover:bg-indigo-50 hover:text-indigo-700"
+          >
+            Powered by
+            <Image src="/dx-logo.png" alt="D4DX" width={64} height={26} className="h-6 w-auto object-contain" />
+          </a>
         </div>
       </aside>
     </>
