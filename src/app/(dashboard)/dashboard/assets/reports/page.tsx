@@ -122,7 +122,7 @@ export default function AssetReportsPage() {
 
   const hasFilters = fromDate || toDate || assetName || statusFilter || searchTerm;
 
-  // â”€â”€ Export helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Export helpers ─────────────────────────────────────────────────────
   function getExportRows() {
     if (reportType === "movement") {
       return (data as MovementRow[]).map(m => ({
@@ -160,7 +160,7 @@ export default function AssetReportsPage() {
     setExporting(false);
   }
 
-  // â”€â”€ Damage report edit/resolve â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Damage report edit/resolve ────────────────────────────────────────
   function openEditDamage(report: DamageRow) {
     setEditForm({ type: report.type, reason: report.reason, notes: report.notes || "", isResolved: report.isResolved });
     setEditingReport(report);
@@ -325,8 +325,8 @@ export default function AssetReportsPage() {
                     <TableCell><p className="font-medium">{m.assetName}</p><p className="text-xs text-gray-400">{m.assetCategory}</p></TableCell>
                     <TableCell><p>{m.eventName}</p><p className="text-xs text-gray-400">{m.eventLocation}</p></TableCell>
                     <TableCell>{m.allocatedPersonName}</TableCell>
-                    <TableCell>{m.outDate ? formatDate(new Date(m.outDate)) : "â€”"}</TableCell>
-                    <TableCell>{m.inDate ? formatDate(new Date(m.inDate)) : "â€”"}</TableCell>
+                    <TableCell>{m.outDate ? formatDate(new Date(m.outDate)) : "—"}</TableCell>
+                    <TableCell>{m.inDate ? formatDate(new Date(m.inDate)) : "—"}</TableCell>
                     <TableCell><Badge variant={m.status === "OUT" ? "bg-orange-100 text-orange-800" : "bg-green-100 text-green-800"}>{m.status}</Badge></TableCell>
                     <TableCell><Badge>{m.condition}</Badge></TableCell>
                   </TableRow>
@@ -363,7 +363,7 @@ export default function AssetReportsPage() {
                         {d.isResolved ? "Resolved" : "Open"}
                       </Badge>
                     </TableCell>
-                    <TableCell>{d.createdAt ? formatDate(new Date(d.createdAt)) : "â€”"}</TableCell>
+                    <TableCell>{d.createdAt ? formatDate(new Date(d.createdAt)) : "—"}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEditDamage(d)}>
@@ -399,7 +399,7 @@ export default function AssetReportsPage() {
                     <TableCell><Badge>{a.action}</Badge></TableCell>
                     <TableCell>{a.module}</TableCell>
                     <TableCell className="max-w-[300px] truncate text-gray-500">{a.details}</TableCell>
-                    <TableCell>{a.createdAt ? formatDate(new Date(a.createdAt)) : "â€”"}</TableCell>
+                    <TableCell>{a.createdAt ? formatDate(new Date(a.createdAt)) : "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

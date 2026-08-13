@@ -97,6 +97,11 @@ export default function NewRequestPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    // DatePicker is a custom button — no native `required` enforcement, so validate here
+    if (!form.startDate || Number.isNaN(new Date(form.startDate).getTime())) {
+      toast("error", "Please select a start date");
+      return;
+    }
     if (exceedsCoBalance) {
       toast("error", `Not enough comp-off balance (available: ${coBalance?.available ?? 0} day(s)).`);
       return;

@@ -171,7 +171,7 @@ export default function EventCalendarPage() {
                         key={b.id}
                         onClick={() => router.push(`${base}/studio/bookings`)}
                         className="w-full text-left rounded-md px-1 py-0.5 text-[10px] truncate hover:bg-white flex items-center gap-1 text-orange-700"
-                        title={`${b.startTime}â€“${b.endTime} ${b.studioName ? `${b.studioName} â€” ` : ""}${b.purpose}`}
+                        title={`${b.startTime}–${b.endTime} ${b.studioName ? `${b.studioName} — ` : ""}${b.purpose}`}
                       >
                         <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0 bg-orange-500" />
                         {b.startTime} {b.studioName || b.purpose}

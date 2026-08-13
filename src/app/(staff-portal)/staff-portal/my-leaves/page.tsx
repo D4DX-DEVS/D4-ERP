@@ -89,8 +89,9 @@ export default function MyRequestsPage() {
             {requests.map((req) => {
               const isExpanded = expandedId === req.id;
               const isLegacy = isLegacyRequest(req);
-              const start = req.startDate ? formatDate(new Date(req.startDate.seconds * 1000)) : "—";
-              const end = req.endDate && req.endDate.seconds !== req.startDate?.seconds
+              // Legacy rows may have seconds: null (submitted without a date) — show "—", never epoch 1970
+              const start = req.startDate?.seconds ? formatDate(new Date(req.startDate.seconds * 1000)) : "—";
+              const end = req.endDate?.seconds && req.endDate.seconds !== req.startDate?.seconds
                 ? formatDate(new Date(req.endDate.seconds * 1000))
                 : null;
 

@@ -5,6 +5,7 @@ import { getAuthUser } from "@/lib/auth";
 import { hasFeature } from "@/lib/permissions";
 import type { ParsedEmployee } from "@/lib/attendance-import/parsers";
 import type { AttendanceStatus } from "@/types";
+import { normalizeSettings, isNonWorkingDay, type AppSettings } from "@/lib/settings";
 
 interface ParsedRecord {
   date: string;
@@ -56,6 +57,16 @@ export async function POST(req: NextRequest) {
   const Staff = getModel("staff");
   const Attendance = getModel("attendance");
   const Batch = getModel("attendance_imports");
+
+  // ESSL PDFs mark punch-less off days "A" — normalize to week-off using configured weekly schedule/holidays
+  let settings: AppSettings;
+  try {
+    const Settings = getModel("settings");
+    const raw = (await Settings.findOne({}).lean()) as Partial<AppSettings> | null;
+    settings = normalizeSettings(raw);
+  } catch {
+    settings = normalizeSettings(null);
+  }
 
   const staffDocs = (await Staff.find({}, { biometricId: 1, employeeCode: 1 }).lean()) as unknown as {
     _id: unknown;
@@ -113,6 +124,9 @@ export async function POST(req: NextRequest) {
     for (const rec of emp.records) {
       try {
         const date = dateOnly(rec.date);
+        if (rec.status === "absent" && !rec.checkIn && !rec.checkOut && isNonWorkingDay(settings, date)) {
+          rec.status = "week-off";
+        }
         const checkIn = dateAt(rec.date, rec.checkIn);
         let checkOut = dateAt(rec.date, rec.checkOut);
         if (checkIn && checkOut && checkOut < checkIn) {

@@ -110,7 +110,7 @@ export default function PerformancePage() {
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm font-medium text-slate-700">{s.staffName}</span>
-                    <span className="text-xs text-slate-500">{s.totalHours}h â€¢ {s.totalLogs} logs</span>
+                    <span className="text-xs text-slate-500">{s.totalHours}h • {s.totalLogs} logs</span>
                   </div>
                   <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
                     <div

@@ -160,7 +160,7 @@ export default function WorkLogsAdminPage() {
           <DialogTitle>Request Revision</DialogTitle>
         </DialogHeader>
         {reviewLog && (
-          <p className="text-sm text-slate-500 -mt-2 mb-4">{reviewLog.staffName} â€” {reviewLog.date}</p>
+          <p className="text-sm text-slate-500 -mt-2 mb-4">{reviewLog.staffName} — {reviewLog.date}</p>
         )}
         <div className="space-y-2">
           <Label>Remarks *</Label>

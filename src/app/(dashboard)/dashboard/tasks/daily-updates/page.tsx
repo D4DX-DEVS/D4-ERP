@@ -80,7 +80,7 @@ export default function DailyUpdatesPage() {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h4 className="font-semibold text-slate-900">{log.staffName}</h4>
-                  <p className="text-xs text-slate-500">{log.date} â€¢ {log.totalHours}h total</p>
+                  <p className="text-xs text-slate-500">{log.date} • {log.totalHours}h total</p>
                 </div>
                 <Badge variant={STATUS_COLORS[log.status]} className="capitalize">
                   {log.status.replace(/-/g, " ")}
@@ -91,7 +91,7 @@ export default function DailyUpdatesPage() {
                   <div key={idx} className="flex items-start gap-3 text-sm border-l-2 border-indigo-100 pl-3 py-1">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-800">{entry.project || "â€”"}</span>
+                        <span className="font-medium text-slate-800">{entry.project || "—"}</span>
                         <span className="text-[10px] rounded-full bg-indigo-50 text-indigo-700 px-2 py-0.5 capitalize">{entry.activityType}</span>
                         <span className="text-xs text-slate-500">{entry.hours}h</span>
                       </div>

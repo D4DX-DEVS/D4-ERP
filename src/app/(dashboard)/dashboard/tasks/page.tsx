@@ -168,7 +168,7 @@ export default function TasksPage() {
         completionPercentage,
       };
       if (editingId) {
-        // Status moves go through the workflow helper (history + guards) â€” not the edit form.
+        // Status moves go through the workflow helper (history + guards) — not the edit form.
         const editPayload: Record<string, unknown> = { ...payload };
         delete editPayload.status;
         await updateDocument("tasks", editingId, editPayload);
@@ -301,7 +301,7 @@ export default function TasksPage() {
     <div className="space-y-6">
       <ListingHeader
         title="Task Board"
-        description="Coordinate deliverables across your team â€” drag cards between columns to update status."
+        description="Coordinate deliverables across your team — drag cards between columns to update status."
         action={
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> New Task
@@ -373,7 +373,7 @@ export default function TasksPage() {
         })}
       </div>
 
-      {/* Filters â€” apply to both Board and Table views */}
+      {/* Filters — apply to both Board and Table views */}
       <div className="space-y-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2 sm:space-y-0">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -638,7 +638,7 @@ export default function TasksPage() {
                           {formatDate(new Date(task.dueDate.seconds * 1000))}
                         </span>
                       ) : (
-                        <span className="text-sm text-slate-400">â€”</span>
+                        <span className="text-sm text-slate-400">—</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -653,7 +653,7 @@ export default function TasksPage() {
                           <span className="text-xs text-slate-500">{subDone}/{subTotal}</span>
                         </span>
                       ) : (
-                        <span className="text-sm text-slate-400">â€”</span>
+                        <span className="text-sm text-slate-400">—</span>
                       )}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -715,7 +715,7 @@ export default function TasksPage() {
               <Label>Status</Label>
               {editingId ? (
                 <p className="flex h-10 items-center rounded-xl border border-slate-200/70 bg-slate-50/60 px-3 text-sm text-slate-500">
-                  {statusColumns.find((c) => c.key === form.status)?.label} â€” change from the board
+                  {statusColumns.find((c) => c.key === form.status)?.label} — change from the board
                 </p>
               ) : (
                 <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as Task["status"] })}
@@ -834,7 +834,7 @@ export default function TasksPage() {
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Tell {returnTarget?.assigneeName || "the assignee"} what needs fixing on â€œ{returnTarget?.title}â€. This is posted as a comment.
+            Tell {returnTarget?.assigneeName || "the assignee"} what needs fixing on “{returnTarget?.title}”. This is posted as a comment.
           </p>
           <Textarea
             value={returnRemark}

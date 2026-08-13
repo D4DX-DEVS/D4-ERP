@@ -32,7 +32,7 @@ export default function LoginPage() {
         body: JSON.stringify({
           email,
           password,
-          // Installed PWA â†’ long-lived session (no daily re-login).
+          // Installed PWA → long-lived session (no daily re-login).
           pwa: window.matchMedia("(display-mode: standalone)").matches,
         }),
       });

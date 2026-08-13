@@ -27,6 +27,7 @@ import { CommentsSection } from "@/components/ui/comments-section";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { sanitizeHtml } from "@/components/ui/rich-text-editor";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -314,7 +315,7 @@ export default function EventDetailPage() {
               )}
             </div>
             {event.description && (
-              <p className="mt-4 text-sm text-slate-500">{event.description}</p>
+              <div className="rich-text-content mt-4 text-sm text-slate-500" dangerouslySetInnerHTML={{ __html: sanitizeHtml(event.description.includes("<") ? event.description : event.description.replace(/\n/g, "<br>")) }} />
             )}
             {event.tags && event.tags.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-1.5">
@@ -419,7 +420,7 @@ export default function EventDetailPage() {
             <Card>
               <CardContent className="p-6">
               <h3 className="text-sm font-semibold text-slate-950 mb-2">Internal Notes</h3>
-              <p className="text-sm text-slate-500 whitespace-pre-wrap">{event.notes}</p>
+              <div className="rich-text-content text-sm text-slate-500" dangerouslySetInnerHTML={{ __html: sanitizeHtml(event.notes.includes("<") ? event.notes : event.notes.replace(/\n/g, "<br>")) }} />
               </CardContent>
             </Card>
           )}

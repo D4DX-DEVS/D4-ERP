@@ -128,9 +128,13 @@ export default function AttendanceCorrectionsPage() {
       const base = new Date((c.date?.seconds ?? 0) * 1000);
       base.setHours(0, 0, 0, 0);
 
+      // Range query, not exact equality — stored dates aren't always exactly midnight (clock-ins, old imports)
+      const nextDay = new Date(base);
+      nextDay.setDate(nextDay.getDate() + 1);
       const existing = await getDocuments<{ id: string; status: AttendanceStatus }>("attendance", [
         where("staffId", "==", c.staffId),
-        where("date", "==", Timestamp.fromDate(base)),
+        where("date", ">=", Timestamp.fromDate(base)),
+        where("date", "<", Timestamp.fromDate(nextDay)),
       ]);
 
       const checkInTs = tsFromDateTime(base, c.requestedCheckIn);
@@ -164,6 +168,10 @@ export default function AttendanceCorrectionsPage() {
       let attendanceId = existing[0]?.id;
       if (attendanceId) {
         await updateDocument("attendance", attendanceId, data);
+        // Soft-delete duplicate rows for the same day so the register can't show a stale status
+        for (const dup of existing.slice(1)) {
+          await updateDocument("attendance", dup.id, { isDeleted: true });
+        }
       } else {
         attendanceId = await createDocument("attendance", data);
       }

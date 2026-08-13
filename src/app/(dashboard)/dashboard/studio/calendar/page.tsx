@@ -130,7 +130,7 @@ export default function StudioCalendarPage() {
                         key={b.id}
                         className="w-full text-left rounded-lg px-1.5 py-0.5 text-[10px] truncate hover:bg-indigo-50 flex items-center gap-1 cursor-pointer"
                         onClick={() => router.push(`${base}/studio/bookings`)}
-                        title={`${b.startTime}â€“${b.endTime} ${b.purpose}`}
+                        title={`${b.startTime}–${b.endTime} ${b.purpose}`}
                       >
                         <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_DOT_COLORS[b.status] || "bg-gray-400"}`} />
                         <span className="truncate text-slate-600">{b.startTime} {b.studioName}</span>

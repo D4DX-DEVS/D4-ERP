@@ -34,13 +34,59 @@ interface RichTextEditorProps {
   className?: string;
 }
 
+// Tags/styles Tiptap can emit with the extensions configured below — everything else is stripped
+const ALLOWED_TAGS = new Set([
+  "B", "STRONG", "I", "EM", "U", "S", "STRIKE", "P", "DIV", "SPAN", "BR",
+  "UL", "OL", "LI", "BLOCKQUOTE", "CODE", "PRE",
+]);
+const ALLOWED_STYLES = new Set(["font-size", "text-align"]);
+
+/**
+ * Allowlist sanitizer for stored rich text before rendering via
+ * dangerouslySetInnerHTML. Strips scripts, event handlers, URLs — keeps only
+ * formatting tags plus font-size/text-align styles.
+ */
+export function sanitizeHtml(html: string): string {
+  if (typeof window === "undefined" || !html) return "";
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const walk = (el: Element) => {
+    for (const child of Array.from(el.children)) {
+      walk(child);
+      if (!ALLOWED_TAGS.has(child.tagName)) {
+        child.replaceWith(...Array.from(child.childNodes));
+        continue;
+      }
+      for (const attr of Array.from(child.attributes)) {
+        if (attr.name === "style") {
+          const kept = attr.value
+            .split(";")
+            .map((s) => s.trim())
+            .filter((s) => ALLOWED_STYLES.has(s.split(":")[0]?.trim().toLowerCase()));
+          if (kept.length) child.setAttribute("style", kept.join("; "));
+          else child.removeAttribute("style");
+        } else {
+          child.removeAttribute(attr.name);
+        }
+      }
+    }
+  };
+  walk(doc.body);
+  return doc.body.innerHTML;
+}
+
 /** Convert legacy plain-text (with \n) to Tiptap-ready HTML */
 function toEditorHtml(value: string): string {
   if (!value || value === "<p></p>") return "";
   // Already HTML — return as-is
   if (value.includes("<")) return value;
-  // Plain text — convert newlines to paragraphs
-  return value.split("\n").map((l) => `<p>${l || "<br>"}</p>`).join("");
+  // Plain text — escape entities, then convert newlines to paragraphs
+  return value
+    .split("\n")
+    .map((l) => {
+      const escaped = l.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return `<p>${escaped || "<br>"}</p>`;
+    })
+    .join("");
 }
 
 function ToolbarButton({
