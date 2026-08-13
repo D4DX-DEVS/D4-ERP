@@ -77,6 +77,13 @@ export interface CreateRequestInput {
 
 /** Create a request (both steps pending) and notify dept head + admins. */
 export async function createStaffRequest(input: CreateRequestInput, user: AuthUser): Promise<string> {
+  // Guard against Invalid Date → NaN seconds → "01 Jan 1970" records
+  if (!Number.isFinite(input.startDate?.seconds) || input.startDate.seconds <= 0) {
+    throw new Error("Please select a valid start date");
+  }
+  if (!Number.isFinite(input.endDate?.seconds) || input.endDate.seconds <= 0) {
+    throw new Error("Please select a valid end date");
+  }
   const doc: Omit<StaffRequest, "id"> = {
     staffId: user.staffId,
     staffName: `${user.firstName} ${user.lastName}`,

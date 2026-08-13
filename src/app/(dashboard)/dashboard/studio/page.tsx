@@ -124,8 +124,8 @@ export default function StudioDashboardPage() {
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{b.purpose || b.studioName}</p>
                   <p className="text-xs text-slate-500">
-                    {b.startTime} â€“ {b.endTime} â€¢ {b.studioName}
-                    {b.clientName && ` â€¢ ${b.clientName}`}
+                    {b.startTime} – {b.endTime} • {b.studioName}
+                    {b.clientName && ` • ${b.clientName}`}
                   </p>
                 </div>
                 <Badge variant={getStatusColor(b.status)} className="capitalize">

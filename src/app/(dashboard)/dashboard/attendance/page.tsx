@@ -37,7 +37,7 @@ import { Pagination } from "@/components/ui/pagination";
 
 const LOG_PAGE_SIZE = 10;
 
-// â”€â”€ View + status configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── View + status configuration ──────────────────────────────────────────────
 
 type ViewMode = "logs" | "daily" | "grid";
 
@@ -54,7 +54,7 @@ const HOLIDAY_CELL = "bg-rose-100 text-rose-500";
 
 const PRESENT_STATUSES: AttendanceStatus[] = ["present", "late", "half-day", "wfh", "on-duty"];
 
-// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 type Rec = Attendance & { id: string };
 
@@ -65,7 +65,7 @@ const secOf = (ts: unknown): number | undefined =>
 
 const timeStr = (ts: unknown): string => {
   const s = secOf(ts);
-  return s ? new Date(s * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "â€”";
+  return s ? new Date(s * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
 };
 
 // Local-date key (YYYY-MM-DD). Never toISOString here: that shifts IST
@@ -92,7 +92,7 @@ export default function AttendanceRegisterPage() {
   const [weeklyOff, setWeeklyOff] = useState<string[]>(["Sunday"]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
-  // record === null â†’ creating a new entry for that staff/day (grid cell with no log)
+  // record === null → creating a new entry for that staff/day (grid cell with no log)
   const [editTarget, setEditTarget] = useState<{ record: Rec | null; staffId: string; staffName: string; date: Date } | null>(null);
   const [editStatus, setEditStatus] = useState<AttendanceStatus>("present");
   const [editCheckIn, setEditCheckIn] = useState("");
@@ -257,7 +257,7 @@ export default function AttendanceRegisterPage() {
     });
   }, [records, filteredStaffIds, statusFilter]);
 
-  // â”€â”€ Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Stats ───────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     const presentDays = records.filter((r) => PRESENT_STATUSES.includes(r.status)).length;
     const leaveDays = records.filter((r) => r.status === "leave").length;
@@ -265,7 +265,7 @@ export default function AttendanceRegisterPage() {
     return { staff: staffList.length, presentDays, leaveDays, lateMarks };
   }, [records, staffList.length]);
 
-  // â”€â”€ Log stream events (every check-in / check-out) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Log stream events (every check-in / check-out) ───────────────────────────
   const logEvents = useMemo(() => {
     const events: {
       key: string;
@@ -327,17 +327,21 @@ export default function AttendanceRegisterPage() {
     [logEvents, logPage]
   );
 
-  // â”€â”€ Daily register rows (one per record, newest first) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Daily register rows (one per record, newest first) ───────────────────────
   const dailyRows = useMemo(() => {
     return [...visibleRecords].sort((a, b) => (secOf(b.date) ?? 0) - (secOf(a.date) ?? 0));
   }, [visibleRecords]);
 
-  // â”€â”€ Monthly grid lookup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Monthly grid lookup ──────────────────────────────────────────────────────
   const gridLookup = useMemo(() => {
     const map = new Map<string, Rec>();
     for (const r of records) {
       const s = secOf(r.date);
-      if (s) map.set(`${r.staffId}_${dateKeyFromSec(s)}`, r);
+      if (!s) continue;
+      const k = `${r.staffId}_${dateKeyFromSec(s)}`;
+      const prev = map.get(k);
+      // Duplicate rows for one day: a non-absent record (correction/leave) beats a stale "absent"
+      if (!prev || (prev.status === "absent" && r.status !== "absent")) map.set(k, r);
     }
     return map;
   }, [records]);
@@ -363,7 +367,16 @@ export default function AttendanceRegisterPage() {
 
   function cellFor(staff: Staff & { id: string }, meta: (typeof dayMeta)[number]) {
     const rec = gridLookup.get(`${staff.id}_${meta.key}`);
-    if (rec) return attendanceStatusMeta(rec.status);
+    if (rec) {
+      // Imported ESSL PDFs mark punch-less off days "absent" — holiday/weekly-off wins over an absent record
+      if ((rec.status === "absent" || rec.status === "week-off") && meta.holidayName) {
+        return { code: "H", label: meta.holidayName, cell: HOLIDAY_CELL, badge: HOLIDAY_CELL };
+      }
+      if (rec.status === "absent" && meta.isOff) {
+        return { code: "WO", label: "Weekly Off", cell: OFF_CELL, badge: OFF_CELL };
+      }
+      return attendanceStatusMeta(rec.status);
+    }
     const joinSec = secOf(staff.dateOfJoining);
     if (joinSec && meta.key < dateKeyFromSec(joinSec)) return null; // before joining
     if (meta.isFuture) return null;
@@ -372,7 +385,7 @@ export default function AttendanceRegisterPage() {
     return STATUS_CONFIG.absent;
   }
 
-  // â”€â”€ Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Export ────────────────────────────────────────────────────────────────────
   function handleExport() {
     const monthText = monthStart.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
     if (view === "logs") {
@@ -518,7 +531,7 @@ export default function AttendanceRegisterPage() {
         </div>
       </div>
 
-      {/* â”€â”€ Log stream â”€â”€ */}
+      {/* ── Log stream ── */}
       {view === "logs" ? (
         <ListingPanel
           title={`Log Stream (${logEvents.length})`}
@@ -601,7 +614,7 @@ export default function AttendanceRegisterPage() {
         </ListingPanel>
       ) : null}
 
-      {/* â”€â”€ Daily register â”€â”€ */}
+      {/* ── Daily register ── */}
       {view === "daily" ? (
         <ListingPanel
           title={`Daily Register (${dailyRows.length})`}
@@ -695,10 +708,10 @@ export default function AttendanceRegisterPage() {
         </ListingPanel>
       ) : null}
 
-      {/* â”€â”€ Monthly grid â”€â”€ */}
+      {/* ── Monthly grid ── */}
       {view === "grid" ? (
         <ListingPanel
-          title={`Monthly Grid â€” ${monthLabel}`}
+          title={`Monthly Grid — ${monthLabel}`}
           description="Staff down the side, days across the top. Each cell is the logged status."
           contentClassName="p-0"
         >
@@ -745,7 +758,7 @@ export default function AttendanceRegisterPage() {
                             {c ? (
                               <button
                                 type="button"
-                                title={`${m.day} â€” ${c.label} (tap to edit)`}
+                                title={`${m.day} — ${c.label} (tap to edit)`}
                                 onClick={() =>
                                   beginEdit(
                                     gridLookup.get(`${s.id}_${m.key}`) ?? null,
@@ -761,7 +774,7 @@ export default function AttendanceRegisterPage() {
                                 {c.code}
                               </button>
                             ) : (
-                              <span className="text-slate-200">Â·</span>
+                              <span className="text-slate-200">·</span>
                             )}
                           </td>
                         );
@@ -795,7 +808,7 @@ export default function AttendanceRegisterPage() {
               {editTarget.record ? "Edit Attendance" : "Add Attendance"}
             </h3>
             <p className="mb-4 mt-0.5 text-sm text-slate-500">
-              {editTarget.staffName} â€”{" "}
+              {editTarget.staffName} —{" "}
               {editTarget.date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
             </p>
             <div className="space-y-4">

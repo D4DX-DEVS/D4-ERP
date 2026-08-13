@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -9,7 +10,7 @@ interface BeforeInstallPromptEvent extends Event {
 
 const DISMISSED_KEY = "pwa-install-dismissed";
 
-/** Custom install banner â€” Chrome only fires beforeinstallprompt after its own engagement heuristics, so we capture and show it ourselves instead of waiting on the native mini-infobar. */
+/** Custom install banner - Chrome only fires beforeinstallprompt after its own engagement heuristics, so we capture and show it ourselves instead of waiting on the native mini-infobar. */
 export function PwaInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
@@ -52,7 +53,7 @@ export function PwaInstallBanner() {
         Install
       </button>
       <button onClick={dismiss} aria-label="Dismiss" className="shrink-0 text-slate-400 transition-colors hover:text-slate-700">
-        âœ•
+        <X className="h-4 w-4" />
       </button>
     </div>
   );

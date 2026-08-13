@@ -87,15 +87,18 @@ export function CommentsSection({ entityType, entityId, className }: CommentsSec
 
   return (
     <div className={className}>
-      <h4 className="text-sm font-medium mb-3">Comments</h4>
+      <div className="flex items-baseline gap-2 mb-1.5">
+        <h4 className="text-sm font-medium">Comments</h4>
+        {!loading && comments.length === 0 && (
+          <span className="text-xs text-muted-foreground">— no comments yet</span>
+        )}
+      </div>
 
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading...
         </div>
-      ) : comments.length === 0 ? (
-        <p className="text-sm text-muted-foreground mb-3">No comments yet.</p>
-      ) : (
+      ) : comments.length === 0 ? null : (
         <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
           {comments.map((c) => (
             <div key={c.id} className="rounded-lg border p-3">

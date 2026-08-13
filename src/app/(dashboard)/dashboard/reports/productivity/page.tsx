@@ -62,7 +62,7 @@ export default function ProductivityPage() {
   const staff = Array.from(staffMap.values()).sort((a, b) => b.totalHours - a.totalHours);
   const totalHours = staff.reduce((s, r) => s + r.totalHours, 0);
   const avgOverall = staff.length > 0 ? Math.round((totalHours / staff.length) * 10) / 10 : 0;
-  const topPerformer = staff[0]?.staffName || "â€”";
+  const topPerformer = staff[0]?.staffName || "—";
 
   return (
     <div className="space-y-6">

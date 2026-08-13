@@ -124,8 +124,8 @@ export default function EventsDashboardPage() {
                 <div className="flex-1">
                   <h4 className="text-sm font-semibold text-slate-900">{event.title}</h4>
                   <p className="text-xs text-slate-500">
-                    {event.eventType} â€¢ {event.startDate}
-                    {event.venue && ` â€¢ ${event.venue}`}
+                    {event.eventType} • {event.startDate}
+                    {event.venue && ` • ${event.venue}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

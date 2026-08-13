@@ -19,7 +19,6 @@ import { ListingHeader } from "@/components/ui/listing";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -31,6 +30,8 @@ import { EmptyState } from "@/components/ui/loading";
 import { formatCurrency } from "@/lib/utils";
 import { PartyPopper, Loader2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { QuickAddClient } from "@/components/clients/quick-add-client";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { pushStatusChange } from "@/lib/status-history";
 import { createNotification } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
@@ -123,6 +124,18 @@ export default function EventsListPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [customTypes, setCustomTypes] = useState<{ id: string; name: string }[]>([]);
+  const [showAddType, setShowAddType] = useState(false);
+  const [newTypeName, setNewTypeName] = useState("");
+  const [addingType, setAddingType] = useState(false);
+
+  const allEventTypes = [
+    ...EVENT_TYPES,
+    ...customTypes
+      .filter((t) => !EVENT_TYPES.some((d) => d.value === t.name.toLowerCase()))
+      .map((t) => ({ value: t.name, label: t.name })),
+  ];
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -138,7 +151,32 @@ export default function EventsListPage() {
   useEffect(() => {
     void fetchEvents();
     void getDocuments<Client>("clients", [where("isActive", "==", true)]).then(setClients);
+    void getDocuments<{ id: string; name: string }>("eventTypes", [orderBy("name", "asc")])
+      .then(setCustomTypes)
+      .catch(() => setCustomTypes([]));
   }, [fetchEvents]);
+
+  const handleAddType = async () => {
+    const name = newTypeName.trim();
+    if (!name || !user) return;
+    if (allEventTypes.some((t) => t.value.toLowerCase() === name.toLowerCase())) {
+      toast("error", "Type already exists");
+      return;
+    }
+    setAddingType(true);
+    try {
+      const id = await createDocument("eventTypes", { name, companyId: user.companyId, createdAt: Timestamp.now() });
+      setCustomTypes((prev) => [...prev, { id: id as string, name }]);
+      setForm((p) => ({ ...p, eventType: name }));
+      setNewTypeName("");
+      setShowAddType(false);
+      toast("success", "Event type added");
+    } catch {
+      toast("error", "Failed to add type");
+    } finally {
+      setAddingType(false);
+    }
+  };
 
   const filteredEvents = events.filter((e) => {
     if (statusFilter !== "all" && e.status !== statusFilter) return false;
@@ -280,6 +318,10 @@ export default function EventsListPage() {
   };
 
   const handleClientSelect = (clientId: string) => {
+    if (clientId === "__add_client__") {
+      setQuickAddOpen(true);
+      return;
+    }
     const client = clients.find((c) => c.id === clientId);
     setForm((prev) => ({
       ...prev,
@@ -328,7 +370,7 @@ export default function EventsListPage() {
           className="w-[160px]"
           options={[
             { value: "all", label: "All Types" },
-            ...EVENT_TYPES.map((t) => ({ value: t.value, label: t.label })),
+            ...allEventTypes.map((t) => ({ value: t.value, label: t.label })),
           ]}
         />
       </div>
@@ -413,9 +455,35 @@ export default function EventsListPage() {
             <Label>Event Type</Label>
             <Select
               value={form.eventType}
-              onChange={(e) => setForm((p) => ({ ...p, eventType: e.target.value as EventManagementType }))}
-              options={EVENT_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+              onChange={(e) => {
+                if (e.target.value === "__add_type__") {
+                  setShowAddType(true);
+                  return;
+                }
+                setForm((p) => ({ ...p, eventType: e.target.value as EventManagementType }));
+              }}
+              options={[
+                ...allEventTypes.map((t) => ({ value: t.value, label: t.label })),
+                { value: "__add_type__", label: "+ Add new type" },
+              ]}
             />
+            {showAddType && (
+              <div className="flex gap-2 mt-2">
+                <Input
+                  autoFocus
+                  value={newTypeName}
+                  onChange={(e) => setNewTypeName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddType())}
+                  placeholder="New type name"
+                />
+                <Button type="button" size="sm" onClick={handleAddType} disabled={addingType || !newTypeName.trim()}>
+                  {addingType ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => { setShowAddType(false); setNewTypeName(""); }}>
+                  Cancel
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -427,6 +495,7 @@ export default function EventsListPage() {
               options={[
                 { value: "", label: "No client" },
                 ...clients.map((c) => ({ value: c.id!, label: c.companyName })),
+                { value: "__add_client__", label: "+ Add new client" },
               ]}
             />
           </div>
@@ -503,20 +572,18 @@ export default function EventsListPage() {
 
           <div className="md:col-span-2 space-y-2">
             <Label>Description</Label>
-            <Textarea
+            <RichTextEditor
               value={form.description}
-              onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-              rows={3}
+              onChange={(html) => setForm((p) => ({ ...p, description: html }))}
               placeholder="Event description..."
             />
           </div>
 
           <div className="md:col-span-2 space-y-2">
             <Label>Notes</Label>
-            <Textarea
+            <RichTextEditor
               value={form.notes}
-              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-              rows={2}
+              onChange={(html) => setForm((p) => ({ ...p, notes: html }))}
               placeholder="Internal notes..."
             />
           </div>
@@ -532,6 +599,16 @@ export default function EventsListPage() {
           </Button>
         </div>
       </Dialog>
+
+      {/* Quick add client (opens from Client dropdown "+ Add new client") */}
+      <QuickAddClient
+        open={quickAddOpen}
+        onClose={() => setQuickAddOpen(false)}
+        onCreated={(client) => {
+          setClients((prev) => [...prev, client]);
+          setForm((prev) => ({ ...prev, clientId: client.id, clientName: client.companyName }));
+        }}
+      />
 
       {/* Delete Confirmation */}
       <ConfirmDialog

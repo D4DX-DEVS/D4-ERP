@@ -577,8 +577,8 @@ export default function LeavesPage() {
               const isLegacy = isLegacyRequest(req);
               const staffDept = staffMap[req.staffId]?.departmentId;
               const deptName = departments.find((d) => d.id === staffDept)?.name || "—";
-              const start = req.startDate ? formatDate(new Date(req.startDate.seconds * 1000)) : "—";
-              const end = req.endDate && req.endDate.seconds !== req.startDate?.seconds
+              const start = req.startDate?.seconds ? formatDate(new Date(req.startDate.seconds * 1000)) : "—";
+              const end = req.endDate?.seconds && req.endDate.seconds !== req.startDate?.seconds
                 ? formatDate(new Date(req.endDate.seconds * 1000))
                 : null;
               const canActDeptHead = user?.role === "department-head" && user?.departmentId === req.departmentId && !isLegacy && req.deptHead?.status === "pending";
@@ -591,47 +591,41 @@ export default function LeavesPage() {
                     onClick={() => setExpandedId(isExpanded ? null : req.id)}
                     className="w-full text-left"
                   >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          {req.status === "pending" && (
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.has(req.id)}
-                              onChange={(e) => {
-                                e.stopPropagation();
-                                toggleSelect(req.id);
-                              }}
-                              className="h-4 w-4 rounded border-slate-300 accent-blue-600"
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <p className="font-medium text-slate-900">{req.staffName || getStaffName(req.staffId)}</p>
-                              <Badge variant="outline" className="text-xs">{deptName}</Badge>
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap text-sm">
-                              <Badge>{REQUEST_TYPE_LABELS[req.type]}</Badge>
-                              {req.leaveType && <Badge variant="bg-slate-100 text-slate-700">{req.leaveType}</Badge>}
-                              {req.isHalfDay && <Badge variant="bg-amber-100 text-amber-700">Half Day {req.session === "first-half" ? "(AM)" : "(PM)"}</Badge>}
-                            </div>
-                            <p className="text-xs text-slate-600 mt-1">{end ? `${start} – ${end}` : start}</p>
-                          </div>
+                    <CardContent className="px-4 py-2.5">
+                      {/* Single compact row — step chips only shown once a step is decided, so
+                          "pending / pending / PENDING" collapses to one PENDING badge */}
+                      <div className="flex items-center gap-3">
+                        {req.status === "pending" && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(req.id)}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleSelect(req.id);
+                            }}
+                            className="h-4 w-4 rounded border-slate-300 accent-blue-600 shrink-0"
+                          />
+                        )}
+                        <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+                          <p className="font-medium text-slate-900 truncate">{req.staffName || getStaffName(req.staffId)}</p>
+                          <Badge variant="outline" className="text-xs">{deptName}</Badge>
+                          <Badge>{REQUEST_TYPE_LABELS[req.type]}</Badge>
+                          {req.leaveType && <Badge variant="bg-slate-100 text-slate-700">{req.leaveType}</Badge>}
+                          {req.isHalfDay && <Badge variant="bg-amber-100 text-amber-700">½ {req.session === "first-half" ? "AM" : "PM"}</Badge>}
+                          <span className="text-xs text-slate-600">{end ? `${start} – ${end}` : start}</span>
                         </div>
-                        <div className="flex items-center gap-3 flex-shrink-0">
-                          <div className="text-right">
-                            {!isLegacy && (
-                              <div className="flex gap-1 text-xs mb-1">
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${req.deptHead?.status === "approved" ? "bg-green-100 text-green-700" : req.deptHead?.status === "rejected" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
-                                  {req.deptHead?.status || "—"}
-                                </span>
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${req.admin?.status === "approved" ? "bg-green-100 text-green-700" : req.admin?.status === "rejected" ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-700"}`}>
-                                  {req.admin?.status || "—"}
-                                </span>
-                              </div>
-                            )}
-                            <Badge variant={getStatusColor(req.status)}>{req.status}</Badge>
-                          </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {!isLegacy && req.deptHead?.status && req.deptHead.status !== "pending" && (
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${req.deptHead.status === "approved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                              DH {req.deptHead.status}
+                            </span>
+                          )}
+                          {!isLegacy && req.admin?.status && req.admin.status !== "pending" && req.admin.status !== req.status && (
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${req.admin.status === "approved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                              Admin {req.admin.status}
+                            </span>
+                          )}
+                          <Badge variant={getStatusColor(req.status)}>{req.status}</Badge>
                           {isExpanded ? (
                             <ChevronUp className="h-4 w-4 text-slate-400" />
                           ) : (
@@ -643,62 +637,46 @@ export default function LeavesPage() {
                   </button>
 
                   {isExpanded && (
-                    <div className="border-t border-slate-200 bg-slate-50 p-4 space-y-4">
-                      {/* Approval Timeline (non-legacy) */}
+                    <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 space-y-2.5">
+                      {/* Approval steps — one inline line, details only where decided */}
                       {!isLegacy && (
-                        <div className="space-y-3">
-                          <h4 className="text-xs font-medium text-slate-700 uppercase">Approval Timeline</h4>
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-3 text-xs">
-                              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2" style={{
-                                borderColor: req.deptHead?.status === "approved" ? "#10b981" : req.deptHead?.status === "rejected" ? "#ef4444" : "#d1d5db"
-                              }}>
-                                {req.deptHead?.status === "approved" && <span className="w-2 h-2 bg-green-500 rounded-full" />}
-                                {req.deptHead?.status === "rejected" && <span className="w-2 h-2 bg-red-500 rounded-full" />}
-                              </div>
-                              <div className="flex-1">
-                                <p className="font-medium text-slate-700">Department Head</p>
-                                {req.deptHead?.status === "pending" && (
-                                  <p className="text-slate-500">{req.adminOverride ? `Covered by admin approval (${req.admin?.byName || "admin"})` : "Pending"}</p>
-                                )}
-                                {req.deptHead?.status === "approved" && (
-                                  <p className="text-emerald-600">Approved by {req.deptHead.byName} on {req.deptHead.at ? formatDate(new Date(req.deptHead.at.seconds * 1000)) : "—"}</p>
-                                )}
-                                {req.deptHead?.status === "rejected" && (
-                                  <div>
-                                    <p className="text-red-600">Rejected by {req.deptHead.byName} on {req.deptHead.at ? formatDate(new Date(req.deptHead.at.seconds * 1000)) : "—"}</p>
-                                    {req.deptHead.remarks && <p className="text-red-600 text-xs mt-0.5">Remarks: {req.deptHead.remarks}</p>}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3 text-xs">
-                              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white border-2" style={{
-                                borderColor: req.admin?.status === "approved" ? "#10b981" : req.admin?.status === "rejected" ? "#ef4444" : "#d1d5db"
-                              }}>
-                                {req.admin?.status === "approved" && <span className="w-2 h-2 bg-green-500 rounded-full" />}
-                                {req.admin?.status === "rejected" && <span className="w-2 h-2 bg-red-500 rounded-full" />}
-                              </div>
-                              <div className="flex-1">
-                                <p className="font-medium text-slate-700">Admin {req.adminOverride && <span className="text-xs text-amber-600">(override)</span>}</p>
-                                {req.admin?.status === "pending" && <p className="text-slate-500">Pending</p>}
-                                {req.admin?.status === "approved" && (
-                                  <p className="text-emerald-600">Approved by {req.admin.byName} on {req.admin.at ? formatDate(new Date(req.admin.at.seconds * 1000)) : "—"}</p>
-                                )}
-                                {req.admin?.status === "rejected" && (
-                                  <div>
-                                    <p className="text-red-600">Rejected by {req.admin.byName} on {req.admin.at ? formatDate(new Date(req.admin.at.seconds * 1000)) : "—"}</p>
-                                    {req.admin.remarks && <p className="text-red-600 text-xs mt-0.5">Remarks: {req.admin.remarks}</p>}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs">
+                          <span className="font-medium text-slate-700 uppercase">Approval</span>
+                          <span className="flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full ${req.deptHead?.status === "approved" ? "bg-green-500" : req.deptHead?.status === "rejected" ? "bg-red-500" : "bg-slate-300"}`} />
+                            <span className="font-medium text-slate-700">Dept Head:</span>
+                            {req.deptHead?.status === "pending" && (
+                              <span className="text-slate-500">{req.adminOverride ? `covered by admin (${req.admin?.byName || "admin"})` : "pending"}</span>
+                            )}
+                            {req.deptHead?.status === "approved" && (
+                              <span className="text-emerald-600">approved · {req.deptHead.byName} · {req.deptHead.at ? formatDate(new Date(req.deptHead.at.seconds * 1000)) : "—"}</span>
+                            )}
+                            {req.deptHead?.status === "rejected" && (
+                              <span className="text-red-600">rejected · {req.deptHead.byName} · {req.deptHead.at ? formatDate(new Date(req.deptHead.at.seconds * 1000)) : "—"}</span>
+                            )}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className={`w-2 h-2 rounded-full ${req.admin?.status === "approved" ? "bg-green-500" : req.admin?.status === "rejected" ? "bg-red-500" : "bg-slate-300"}`} />
+                            <span className="font-medium text-slate-700">Admin{req.adminOverride ? " (override)" : ""}:</span>
+                            {req.admin?.status === "pending" && <span className="text-slate-500">pending</span>}
+                            {req.admin?.status === "approved" && (
+                              <span className="text-emerald-600">approved · {req.admin.byName} · {req.admin.at ? formatDate(new Date(req.admin.at.seconds * 1000)) : "—"}</span>
+                            )}
+                            {req.admin?.status === "rejected" && (
+                              <span className="text-red-600">rejected · {req.admin.byName} · {req.admin.at ? formatDate(new Date(req.admin.at.seconds * 1000)) : "—"}</span>
+                            )}
+                          </span>
+                          {req.deptHead?.status === "rejected" && req.deptHead.remarks && (
+                            <span className="w-full text-red-600">DH remarks: {req.deptHead.remarks}</span>
+                          )}
+                          {req.admin?.status === "rejected" && req.admin.remarks && (
+                            <span className="w-full text-red-600">Admin remarks: {req.admin.remarks}</span>
+                          )}
                         </div>
                       )}
 
                       {/* Details */}
-                      <div className="space-y-2 text-xs text-slate-600 border-t border-slate-200 pt-4">
+                      <div className="space-y-1 text-xs text-slate-600 border-t border-slate-200 pt-2">
                         <p><span className="font-medium text-slate-700">Reason:</span> {req.reason}</p>
                         {req.attachments && req.attachments.length > 0 && (
                           <div>
@@ -716,97 +694,91 @@ export default function LeavesPage() {
 
                       {/* Action Buttons */}
                       {(canActDeptHead || canActAdmin || canActLegacy) && (
-                        <div className="border-t border-slate-200 pt-4 space-y-3">
+                        <div className="border-t border-slate-200 pt-2 space-y-1.5">
                           {canActDeptHead && (
-                            <div className="space-y-2">
-                              <p className="text-xs font-medium text-slate-700">Department Head Action</p>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() => {
-                                    setRemarksRequestId(req.id);
-                                    setRemarksStep("deptHead");
-                                    setRemarksDecision("approved");
-                                    setRemarksText("");
-                                  }}
-                                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={() => {
-                                    setRemarksRequestId(req.id);
-                                    setRemarksStep("deptHead");
-                                    setRemarksDecision("rejected");
-                                    setRemarksText("");
-                                  }}
-                                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                                >
-                                  Reject
-                                </Button>
-                              </div>
+                            <div className="flex items-center gap-3">
+                              <p className="text-xs font-medium text-slate-700">Dept Head Action</p>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setRemarksRequestId(req.id);
+                                  setRemarksStep("deptHead");
+                                  setRemarksDecision("approved");
+                                  setRemarksText("");
+                                }}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4"
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setRemarksRequestId(req.id);
+                                  setRemarksStep("deptHead");
+                                  setRemarksDecision("rejected");
+                                  setRemarksText("");
+                                }}
+                                className="bg-red-600 hover:bg-red-700 text-white px-4"
+                              >
+                                Reject
+                              </Button>
                             </div>
                           )}
 
                           {canActAdmin && (
-                            <div className="space-y-2">
+                            <div className="flex items-center gap-3">
                               <p className="text-xs font-medium text-slate-700">Admin Action</p>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() => {
-                                    setRemarksRequestId(req.id);
-                                    setRemarksStep("admin");
-                                    setRemarksDecision("approved");
-                                    setRemarksText("");
-                                  }}
-                                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={() => {
-                                    setRemarksRequestId(req.id);
-                                    setRemarksStep("admin");
-                                    setRemarksDecision("rejected");
-                                    setRemarksText("");
-                                  }}
-                                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                                >
-                                  Reject
-                                </Button>
-                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setRemarksRequestId(req.id);
+                                  setRemarksStep("admin");
+                                  setRemarksDecision("approved");
+                                  setRemarksText("");
+                                }}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4"
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  setRemarksRequestId(req.id);
+                                  setRemarksStep("admin");
+                                  setRemarksDecision("rejected");
+                                  setRemarksText("");
+                                }}
+                                className="bg-red-600 hover:bg-red-700 text-white px-4"
+                              >
+                                Reject
+                              </Button>
                             </div>
                           )}
 
                           {canActLegacy && (
-                            <div className="space-y-2">
+                            <div className="flex items-center gap-3">
                               <p className="text-xs font-medium text-slate-700">Admin Action (Legacy)</p>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleAction(req.id, "admin", "approved")}
-                                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleAction(req.id, "admin", "rejected")}
-                                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                                >
-                                  Reject
-                                </Button>
-                              </div>
+                              <Button
+                                size="sm"
+                                onClick={() => handleAction(req.id, "admin", "approved")}
+                                className="bg-green-600 hover:bg-green-700 text-white px-4"
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                onClick={() => handleAction(req.id, "admin", "rejected")}
+                                className="bg-red-600 hover:bg-red-700 text-white px-4"
+                              >
+                                Reject
+                              </Button>
                             </div>
                           )}
                         </div>
                       )}
 
                       {/* Comments */}
-                      <div className="border-t border-slate-200 pt-4">
+                      <div className="border-t border-slate-200 pt-2">
                         <CommentsSection entityType="staff_request" entityId={req.id} />
                       </div>
                     </div>

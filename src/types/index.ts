@@ -982,7 +982,8 @@ export type EventManagementType =
   | "corporate"
   | "concert"
   | "exhibition"
-  | "other";
+  | "other"
+  | (string & {}); // custom types added at runtime via Event Type "+ Add"
 
 export interface EventStaffAssignment {
   staffId: string;

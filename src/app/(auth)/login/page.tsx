@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowRight, Building2, CheckCircle2, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -31,7 +32,7 @@ export default function LoginPage() {
         body: JSON.stringify({
           email,
           password,
-          // Installed PWA â†’ long-lived session (no daily re-login).
+          // Installed PWA → long-lived session (no daily re-login).
           pwa: window.matchMedia("(display-mode: standalone)").matches,
         }),
       });
@@ -118,7 +119,7 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
-                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -158,6 +159,18 @@ export default function LoginPage() {
           </CardContent>
         </Card>
       </div>
+
+      <footer className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center">
+        <a
+          href="https://www.d4dx.co"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pointer-events-auto flex items-center gap-2 text-sm font-medium tracking-[0.18em] text-slate-500/80 transition-colors hover:text-indigo-700"
+        >
+          POWERED BY
+          <Image src="/dx-logo.png" alt="D4DX" width={80} height={32} className="h-7 w-auto object-contain" />
+        </a>
+      </footer>
     </div>
   );
 }
