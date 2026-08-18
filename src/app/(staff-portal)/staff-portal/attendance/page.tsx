@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { createDocument, getDocuments, orderBy, where, Timestamp } from "@/lib/firestore";
-import { Attendance } from "@/types";
+import { Attendance, AttendanceCorrection } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
 import { getAdminStaffIds, getDeptHeadStaffId } from "@/lib/requests";
 import { createBulkNotifications } from "@/lib/notifications";
@@ -84,6 +84,24 @@ export default function StaffAttendancePage() {
     reason: "",
   });
   const [submittingCorrection, setSubmittingCorrection] = useState(false);
+  const [corrections, setCorrections] = useState<(AttendanceCorrection & { id: string })[]>([]);
+
+  // Correction request history — staff can see where each request stands.
+  useEffect(() => {
+    if (!user?.staffId) return;
+    let active = true;
+    getDocuments<AttendanceCorrection>("attendance_corrections", [
+      where("staffId", "==", user.staffId),
+      orderBy("createdAt", "desc"),
+    ])
+      .then((list) => {
+        if (active) setCorrections(list);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [user?.staffId]);
 
   // Fetch the whole year once — covers both views, no refetch on month change.
   useEffect(() => {
@@ -138,11 +156,16 @@ export default function StaffAttendancePage() {
         const key = localDateKey(date);
         const rec = recordByDay.get(key);
         const holidayName = holidayMap.get(key) ?? null;
+        const isOff = weeklyOff.includes(date.toLocaleDateString("en-IN", { weekday: "long" }));
         let meta: StatusMeta | null = null;
-        if (rec) meta = attendanceStatusMeta(rec.status);
-        else if (key > todayKey) meta = null;
+        if (rec) {
+          // Imported ESSL PDFs mark punch-less off days "absent" — holiday/weekly-off wins (mirrors admin grid)
+          if ((rec.status === "absent" || rec.status === "week-off") && holidayName) meta = ATTENDANCE_STATUS_CONFIG["public-holiday"];
+          else if (rec.status === "absent" && isOff) meta = WEEKLY_OFF_META;
+          else meta = attendanceStatusMeta(rec.status);
+        } else if (key > todayKey) meta = null;
         else if (holidayName) meta = ATTENDANCE_STATUS_CONFIG["public-holiday"];
-        else if (weeklyOff.includes(date.toLocaleDateString("en-IN", { weekday: "long" }))) meta = WEEKLY_OFF_META;
+        else if (isOff) meta = WEEKLY_OFF_META;
         else meta = ATTENDANCE_STATUS_CONFIG.absent;
         cells.push({ day: d, key, weekday: date.toLocaleDateString("en-IN", { weekday: "short" }).slice(0, 2).toUpperCase(), meta, holidayName });
       }
@@ -195,7 +218,7 @@ export default function StaffAttendancePage() {
     try {
       const date = new Date(correctionForm.date);
       date.setHours(0, 0, 0, 0);
-      await createDocument("attendance_corrections", {
+      const correctionDoc = {
         staffId: user.staffId,
         staffName: `${user.firstName} ${user.lastName}`,
         date: Timestamp.fromDate(date),
@@ -203,8 +226,10 @@ export default function StaffAttendancePage() {
         requestedCheckOut: correctionForm.requestedCheckOut || undefined,
         requestedStatus: correctionForm.requestedStatus,
         reason: correctionForm.reason.trim(),
-        status: "pending",
-      });
+        status: "pending" as const,
+      };
+      const newId = await createDocument("attendance_corrections", correctionDoc);
+      setCorrections((prev) => [{ ...correctionDoc, id: newId } as AttendanceCorrection & { id: string }, ...prev]);
       // Notify dept head + admins — review happens on the corrections page
       try {
         const [headId, adminIds] = await Promise.all([
@@ -534,6 +559,51 @@ export default function StaffAttendancePage() {
           </CardContent>
         </details>
       </Card>
+
+      {/* Correction history — where each request stands */}
+      {corrections.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">My Correction Requests</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {corrections.map((c) => {
+              const sec = secOf(c.date);
+              const dateLabel = sec
+                ? new Date(sec * 1000).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                : "—";
+              const statusChip =
+                c.status === "approved"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : c.status === "rejected"
+                    ? "bg-rose-100 text-rose-700"
+                    : "bg-amber-100 text-amber-700";
+              return (
+                <div key={c.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium text-slate-900">
+                      {dateLabel}
+                      {c.requestedStatus ? ` — ${attendanceStatusMeta(c.requestedStatus).label}` : ""}
+                      {c.requestedCheckIn || c.requestedCheckOut
+                        ? ` (${c.requestedCheckIn || "—"} → ${c.requestedCheckOut || "—"})`
+                        : ""}
+                    </p>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold capitalize ${statusChip}`}>{c.status}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">{c.reason}</p>
+                  {c.status !== "pending" && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      {c.status === "approved" ? "Approved" : "Rejected"}
+                      {c.reviewedByName ? ` by ${c.reviewedByName}` : ""}
+                      {c.reviewRemarks ? ` — ${c.reviewRemarks}` : ""}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

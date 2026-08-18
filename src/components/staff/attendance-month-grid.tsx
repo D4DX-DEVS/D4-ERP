@@ -86,11 +86,17 @@ export function AttendanceMonthGrid({ staffId }: { staffId: string }) {
       const date = new Date(year, month, d);
       const key = localDateKey(date);
       const rec = recordByDay.get(key);
+      const isHoliday = holidayMap.has(key);
+      const isOff = weeklyOff.includes(date.toLocaleDateString("en-IN", { weekday: "long" }));
       let meta: StatusMeta | null = null;
-      if (rec) meta = attendanceStatusMeta(rec.status);
-      else if (key > todayKey) meta = null;
-      else if (holidayMap.has(key)) meta = ATTENDANCE_STATUS_CONFIG["public-holiday"];
-      else if (weeklyOff.includes(date.toLocaleDateString("en-IN", { weekday: "long" }))) meta = WEEKLY_OFF_META;
+      if (rec) {
+        // Imported ESSL PDFs mark punch-less off days "absent" — holiday/weekly-off wins (mirrors admin grid)
+        if ((rec.status === "absent" || rec.status === "week-off") && isHoliday) meta = ATTENDANCE_STATUS_CONFIG["public-holiday"];
+        else if (rec.status === "absent" && isOff) meta = WEEKLY_OFF_META;
+        else meta = attendanceStatusMeta(rec.status);
+      } else if (key > todayKey) meta = null;
+      else if (isHoliday) meta = ATTENDANCE_STATUS_CONFIG["public-holiday"];
+      else if (isOff) meta = WEEKLY_OFF_META;
       else meta = ATTENDANCE_STATUS_CONFIG.absent;
       list.push({ day: d, key, weekday: date.toLocaleDateString("en-IN", { weekday: "short" }).slice(0, 2).toUpperCase(), meta });
     }

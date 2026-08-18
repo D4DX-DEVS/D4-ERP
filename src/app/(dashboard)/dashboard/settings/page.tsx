@@ -625,7 +625,7 @@ export default function SettingsPage() {
               <Input type="number" min={0} value={settings.leavePolicy.casualLeave} onChange={(e) => setSettings({ ...settings, leavePolicy: { ...settings.leavePolicy, casualLeave: Number(e.target.value) } })} placeholder="e.g. 12" />
             </div>
             <div>
-              <Label>Sick Leave (days/year)</Label>
+              <Label>Medical Leave (ML) (days/year)</Label>
               <Input type="number" min={0} value={settings.leavePolicy.sickLeave} onChange={(e) => setSettings({ ...settings, leavePolicy: { ...settings.leavePolicy, sickLeave: Number(e.target.value) } })} placeholder="e.g. 7" />
             </div>
             <div>

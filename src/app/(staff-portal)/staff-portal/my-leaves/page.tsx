@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocuments, where, orderBy } from "@/lib/firestore";
-import { cancelRequest, REQUEST_TYPE_LABELS, isLegacyRequest } from "@/lib/requests";
+import { cancelRequest, LEAVE_TYPE_CODES, REQUEST_TYPE_LABELS, isLegacyRequest } from "@/lib/requests";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDate, getStatusColor } from "@/lib/utils";
@@ -106,7 +106,7 @@ export default function MyRequestsPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 mb-2 flex-wrap">
                             <Badge>{REQUEST_TYPE_LABELS[req.type]}</Badge>
-                            {req.leaveType && <Badge variant="bg-slate-100 text-slate-700">{req.leaveType}</Badge>}
+                            {req.leaveType && <Badge variant="bg-slate-100 text-slate-700">{LEAVE_TYPE_CODES[req.leaveType] ?? req.leaveType}</Badge>}
                             {req.isHalfDay && (
                               <Badge variant="bg-amber-100 text-amber-700">
                                 Half Day {req.session === "first-half" ? "(AM)" : "(PM)"}

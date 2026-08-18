@@ -29,6 +29,27 @@ export const REQUEST_TYPE_LABELS: Record<StaffRequestType, string> = {
   other: "Other",
 };
 
+// Stored leave-type codes are legacy (SL/CO) — labels use the org's vocabulary
+// (ML = Medical Leave, FL = Flexible Leave earned from overtime, e.g. Sunday work).
+export const LEAVE_TYPE_LABELS: Record<string, string> = {
+  CL: "Casual Leave (CL)",
+  SL: "Medical Leave (ML)",
+  EL: "Earned Leave (EL)",
+  CO: "Flexible Leave (FL)",
+  HD: "Half Day",
+  LOP: "Loss of Pay (LOP)",
+};
+
+/** Display code for a stored leave-type value (SL shows as ML, CO as FL). */
+export const LEAVE_TYPE_CODES: Record<string, string> = {
+  CL: "CL",
+  SL: "ML",
+  EL: "EL",
+  CO: "FL",
+  HD: "HD",
+  LOP: "LOP",
+};
+
 const COLLECTION = "leaveRequests";
 const PENDING_STEP: ApprovalStep = { status: "pending" };
 
@@ -247,6 +268,74 @@ export async function getCompOffBalance(staffId: string): Promise<CompOffBalance
     }
   }
   return { earned, used, available: Math.max(0, earned - used) };
+}
+
+/** Whole days covered by a leave request (0.5 for half-day). */
+export function requestLeaveDays(r: Pick<StaffRequest, "isHalfDay" | "startDate" | "endDate">): number {
+  return r.isHalfDay
+    ? 0.5
+    : Math.max(1, Math.round(((r.endDate?.seconds ?? 0) - (r.startDate?.seconds ?? 0)) / 86400) + 1);
+}
+
+export interface StaffLeaveBalances {
+  year: number;
+  cl: { used: number; total: number };
+  /** Stored as leaveType "SL"; shown as Medical Leave (ML). */
+  ml: { used: number; total: number };
+  el: { used: number; total: number };
+  /** Flexible Leave — earned from approved overtime, spent by CO-type leaves. */
+  fl: CompOffBalance;
+  hd: number;
+  lop: number;
+}
+
+/** Pure balance rollup from one staff member's approved requests for a year. */
+export function computeLeaveBalances(
+  approved: StaffRequest[],
+  policy: { casualLeave: number; sickLeave: number; earnedLeave: number },
+  year: number
+): StaffLeaveBalances {
+  const bal: StaffLeaveBalances = {
+    year,
+    cl: { used: 0, total: policy.casualLeave },
+    ml: { used: 0, total: policy.sickLeave },
+    el: { used: 0, total: policy.earnedLeave },
+    fl: { earned: 0, used: 0, available: 0 },
+    hd: 0,
+    lop: 0,
+  };
+  for (const r of approved) {
+    if (new Date((r.startDate?.seconds ?? 0) * 1000).getFullYear() !== year) continue;
+    if (r.type === "overtime") {
+      bal.fl.earned += overtimeCompOffDays(r);
+      continue;
+    }
+    if (r.type !== "leave" && r.type !== "long-leave") continue;
+    const days = requestLeaveDays(r);
+    switch (r.leaveType) {
+      case "CL": bal.cl.used += days; break;
+      case "SL": bal.ml.used += days; break;
+      case "EL": bal.el.used += days; break;
+      case "CO": bal.fl.used += days; break;
+      case "HD": bal.hd += days; break;
+      case "LOP": bal.lop += days; break;
+    }
+  }
+  bal.fl.available = Math.max(0, bal.fl.earned - bal.fl.used);
+  return bal;
+}
+
+/** Current-year balances for one staff member, derived on the fly. */
+export async function getStaffLeaveBalances(staffId: string): Promise<StaffLeaveBalances> {
+  const { getAppSettings } = await import("@/lib/settings");
+  const [settings, approved] = await Promise.all([
+    getAppSettings(),
+    getDocuments<StaffRequest>(COLLECTION, [
+      where("staffId", "==", staffId),
+      where("status", "==", "approved"),
+    ]),
+  ]);
+  return computeLeaveBalances(approved, settings.leavePolicy, new Date().getFullYear());
 }
 
 /** Staff cancels their own still-pending request. */
