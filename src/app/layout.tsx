@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/ui/toast";
 import { PwaRegister } from "@/components/pwa-register";
 import { PwaInstallBanner } from "@/components/pwa-install-banner";
+import { OneSignalPush } from "@/components/onesignal-push";
 import "./globals.css";
 
 const appIcon = "/favicon.svg";
@@ -51,6 +52,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <PwaRegister />
         <PwaInstallBanner />
+        <OneSignalPush />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
