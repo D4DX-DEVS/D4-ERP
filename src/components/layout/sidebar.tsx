@@ -8,7 +8,7 @@ import { navigationModules, PRIMARY_MOBILE_HREFS, type NavModule, type NavItem }
 import { useVisibleNavModules } from "@/hooks/use-visible-nav-modules";
 import { useMobileNavStore } from "@/store/mobile-nav-store";
 import { useNavConfigStore } from "@/store/nav-config-store";
-import { ChevronDown, Menu, Sparkles, X } from "lucide-react";
+import { ChevronDown, Sparkles, X } from "lucide-react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 
 const STORAGE_KEY = "d4-sidebar-expanded";
@@ -105,21 +105,8 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Mobile toggle */}
-      <button
-        type="button"
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className={cn(
-          "fixed left-4 top-4 z-50 inline-flex h-12 w-12 items-center justify-center text-indigo-900 lg:hidden",
-          // Closed: bare icon over the page background. Open: it now sits on top of the
-          // drawer's own logo/header art, so it needs a backdrop to stay legible.
-          mobileOpen && "rounded-full bg-white/90 shadow-[0_8px_20px_rgba(15,23,42,0.18)] backdrop-blur-sm"
-        )}
-        aria-label="Toggle navigation"
-      >
-        {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </button>
-
+      {/* No floating mobile trigger: the bottom bar's "More" tab opens this same
+          drawer. A position:fixed button rode over every page while scrolling. */}
       {/* Mobile backdrop */}
       <div
         className={cn(
@@ -151,6 +138,14 @@ export function Sidebar() {
               </div>
               <p className="text-base font-bold uppercase tracking-[0.2em] text-indigo-500/80">D4Media ERP</p>
             </Link>
+            <button
+              type="button"
+              onClick={closeSidebar}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 lg:hidden"
+              aria-label="Close navigation"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
           <div className="mt-3 rounded-[18px] bg-gradient-to-br from-[#1f3a7a] via-[#3730a3] to-[#4c1d95] px-3 py-2.5 text-white shadow-[0_12px_26px_rgba(55,48,163,0.34)]">

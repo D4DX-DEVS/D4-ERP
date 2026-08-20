@@ -31,16 +31,16 @@ export function StatCard({ title, value, icon: Icon, color, bg, href, onClick, a
         (active ? " ring-2 ring-slate-900/70" : "")
       }
     >
-      <CardContent className={compact ? "p-3" : "p-2 sm:p-6"}>
+      <CardContent className={compact ? "p-3" : "p-2 sm:p-4"}>
         {/* ponytail: title gets the full card width on its own row; value + icon sit
             inline together below it, at every breakpoint */}
-        <p className={compact ? "truncate text-[11px] font-medium leading-tight text-gray-500" : "text-[10px] font-medium leading-tight text-gray-500 sm:truncate sm:text-sm"}>{title}</p>
-        <div className={compact ? "mt-1 flex items-center justify-between gap-1.5" : "mt-0.5 flex items-center justify-between gap-1.5 sm:mt-2 sm:gap-2"}>
-          <p className={compact ? "text-lg font-bold tracking-[-0.02em] text-gray-900" : "text-base font-bold tracking-[-0.02em] text-gray-900 sm:text-2xl"}>
+        <p className={compact ? "truncate text-[11px] font-medium leading-tight text-gray-500" : "text-[10px] font-medium leading-tight text-gray-500 sm:truncate sm:text-xs"}>{title}</p>
+        <div className={compact ? "mt-1 flex items-center justify-between gap-1.5" : "mt-0.5 flex items-center justify-between gap-1.5 sm:mt-1.5 sm:gap-2"}>
+          <p className={compact ? "text-lg font-bold tracking-[-0.02em] text-gray-900" : "text-base font-bold tracking-[-0.02em] text-gray-900 sm:text-lg"}>
             {loading ? "—" : value}
           </p>
-          <div className={`flex shrink-0 items-center justify-center rounded-lg ${compact ? "h-7 w-7" : "h-6 w-6 sm:h-12 sm:w-12 sm:rounded-xl"} ${bg}`}>
-            <Icon className={`${compact ? "h-3.5 w-3.5" : "h-3 w-3 sm:h-6 sm:w-6"} ${color}`} />
+          <div className={`flex shrink-0 items-center justify-center rounded-lg ${compact ? "h-7 w-7" : "h-6 w-6 sm:h-9 sm:w-9 sm:rounded-xl"} ${bg}`}>
+            <Icon className={`${compact ? "h-3.5 w-3.5" : "h-3 w-3 sm:h-4 sm:w-4"} ${color}`} />
           </div>
         </div>
       </CardContent>
@@ -69,14 +69,20 @@ export function StatGrid({
   children,
   cols = 4,
   mobileCols,
+  autoFit,
 }: {
   children: React.ReactNode;
   cols?: 2 | 3 | 4 | 5;
   /** Force this many columns on phones too — only use when the card count divides evenly into it (or equals it, for 5). */
   mobileCols?: 3 | 4 | 5;
+  /** Desktop: fit as many cards per row as the width allows instead of a fixed
+   *  column count. For groups whose size varies by role, where any fixed count
+   *  leaves an orphan row. */
+  autoFit?: boolean;
 }) {
-  const lgColsClass =
-    cols === 2 ? "lg:grid-cols-2" : cols === 3 ? "lg:grid-cols-3" : cols === 5 ? "lg:grid-cols-5" : "lg:grid-cols-4";
+  const lgColsClass = autoFit
+    ? "lg:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]"
+    : cols === 2 ? "lg:grid-cols-2" : cols === 3 ? "lg:grid-cols-3" : cols === 5 ? "lg:grid-cols-5" : "lg:grid-cols-4";
   // A 3-card group stays 3-up on phones; 2- and 4-card groups go 2-up, and an odd
   // last card spans the row rather than sitting orphaned beside a gap.
   const baseCols =

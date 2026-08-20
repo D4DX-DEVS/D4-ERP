@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFeatureGuard } from "@/hooks/use-role-guard";
-import { getDocuments, orderBy, limit } from "@/lib/firestore";
+import { getDocuments, where, search, clearCache, Timestamp, QueryConstraint } from "@/lib/firestore";
+import { usePagination } from "@/hooks/use-pagination";
+import { Pagination } from "@/components/ui/pagination";
 import { Staff, AttendanceImportBatch, AttendanceStatus } from "@/types";
 import type { ParsedEmployee } from "@/lib/attendance-import/parsers";
 import { ListingHeader, ListingPanel } from "@/components/ui/listing";
@@ -15,7 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { PageLoader, EmptyState } from "@/components/ui/loading";
-import { Upload, FileText, Loader2, RotateCcw, CheckCircle, AlertTriangle } from "lucide-react";
+import { Upload, FileText, Loader2, RotateCcw, CheckCircle, AlertTriangle, Search as SearchIcon } from "lucide-react";
 import * as XLSX from "xlsx";
 
 type StaffRec = Staff & { id: string };
@@ -249,8 +251,13 @@ export default function AttendanceImportPage() {
   const { toast } = useToast();
 
   const [staffList, setStaffList] = useState<StaffRec[]>([]);
-  const [batches, setBatches] = useState<BatchRec[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
+
+  // History filters — server-side, so page counts stay honest.
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | BatchRec["status"]>("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const [file, setFile] = useState<File | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -263,28 +270,51 @@ export default function AttendanceImportPage() {
   const [rollingBack, setRollingBack] = useState(false);
   const [editedRecords, setEditedRecords] = useState<Record<string, Record<string, ParsedRecord>>>({});
 
-  async function loadHistory() {
-    setHistoryLoading(true);
+  async function loadStaff() {
     try {
-      const [staff, batchList] = await Promise.all([
-        getDocuments<Staff>("staff"),
-        getDocuments<AttendanceImportBatch>("attendance_imports", [orderBy("createdAt", "desc"), limit(20)]),
-      ]);
+      const staff = await getDocuments<Staff>("staff");
       setStaffList(staff as StaffRec[]);
-      setBatches(batchList as BatchRec[]);
     } catch (error) {
       console.error("Error:", error);
-      toast("error", "Failed to load import history");
-    } finally {
-      setHistoryLoading(false);
+      toast("error", "Failed to load staff");
     }
   }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (authorized) loadHistory();
+    if (authorized) loadStaff();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authorized]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const historyConstraints = useMemo(() => {
+    const cs: QueryConstraint[] = [];
+    if (statusFilter !== "all") cs.push(where("status", "==", statusFilter));
+    if (fromDate) cs.push(where("createdAt", ">=", Timestamp.fromDate(new Date(`${fromDate}T00:00:00`))));
+    if (toDate) cs.push(where("createdAt", "<=", Timestamp.fromDate(new Date(`${toDate}T23:59:59.999`))));
+    if (debouncedQuery) cs.push(search(["fileName", "uploadedByName"], debouncedQuery));
+    return cs;
+  }, [statusFilter, fromDate, toDate, debouncedQuery]);
+
+  const history = usePagination<AttendanceImportBatch>("attendance_imports", {
+    pageSize: 10,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints: historyConstraints,
+  });
+
+  // Imports/rollbacks are written by API routes, so the client read cache never
+  // sees the write — drop it by hand before refetching.
+  function refreshHistory() {
+    clearCache("attendance_imports");
+    history.refresh();
+  }
+
+  const filtersActive = !!(debouncedQuery || fromDate || toDate || statusFilter !== "all");
 
   const staffMap = Object.fromEntries(staffList.map((s) => [s.id, s]));
   const staffOptions = staffList
@@ -377,7 +407,7 @@ export default function AttendanceImportPage() {
       setParsed(null);
       setFile(null);
       setEditedRecords({});
-      await loadHistory();
+      refreshHistory();
     } catch (error) {
       toast("error", error instanceof Error ? error.message : "Failed to import attendance");
     } finally {
@@ -398,7 +428,7 @@ export default function AttendanceImportPage() {
       if (!res.ok) throw new Error(data?.error || "Failed to roll back import");
       toast("success", `Rolled back ${data.deletedCount} attendance records`);
       setRollbackTarget(null);
-      await loadHistory();
+      refreshHistory();
     } catch (error) {
       toast("error", error instanceof Error ? error.message : "Failed to roll back import");
     } finally {
@@ -586,13 +616,59 @@ export default function AttendanceImportPage() {
       )}
 
       <ListingPanel title="Import history" contentClassName="p-0">
-        {historyLoading ? (
+        <div className="flex flex-col gap-2 border-b border-slate-100 p-4 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="relative sm:min-w-[220px]">
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              placeholder="Search file or uploader…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full min-w-0 pl-9"
+            />
+          </div>
+          <Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as "all" | BatchRec["status"])}
+            className="w-full min-w-0 sm:w-auto sm:min-w-[150px]"
+            options={[
+              { value: "all", label: "All statuses" },
+              { value: "completed", label: "Completed" },
+              { value: "rolled-back", label: "Rolled back" },
+            ]}
+          />
+          {/* ponytail: native date inputs — no picker component needed */}
+          <div className="grid grid-cols-2 gap-2 sm:contents">
+            <Input type="date" value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} className="w-full min-w-0 sm:w-auto" />
+            <Input type="date" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} className="w-full min-w-0 sm:w-auto" />
+          </div>
+          {filtersActive && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setQuery("");
+                setStatusFilter("all");
+                setFromDate("");
+                setToDate("");
+              }}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+
+        {history.loading ? (
           <div className="p-8">
             <PageLoader />
           </div>
-        ) : batches.length === 0 ? (
-          <EmptyState icon={<FileText className="h-8 w-8" />} title="No imports yet" description="Uploaded attendance reports will appear here." />
+        ) : history.data.length === 0 ? (
+          <EmptyState
+            icon={<FileText className="h-8 w-8" />}
+            title={filtersActive ? "No matching imports" : "No imports yet"}
+            description={filtersActive ? "Try a different search or date range." : "Uploaded attendance reports will appear here."}
+          />
         ) : (
+          <div className={history.refreshing ? "opacity-60 transition-opacity" : undefined}>
           <Table>
             <TableHeader>
               <TableRow>
@@ -608,7 +684,7 @@ export default function AttendanceImportPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {batches.map((b) => (
+              {history.data.map((b) => (
                 <TableRow key={b.id}>
                   <TableCell>{b.createdAt ? new Date(b.createdAt.seconds * 1000).toLocaleString("en-IN") : "-"}</TableCell>
                   <TableCell className="max-w-[180px] truncate" title={b.fileName}>
@@ -635,6 +711,17 @@ export default function AttendanceImportPage() {
               ))}
             </TableBody>
           </Table>
+          <Pagination
+            page={history.page}
+            totalPages={history.totalPages}
+            totalCount={history.totalCount}
+            pageSize={history.pageSize}
+            hasNext={history.hasNext}
+            hasPrev={history.hasPrev}
+            onNext={history.nextPage}
+            onPrev={history.prevPage}
+          />
+          </div>
         )}
       </ListingPanel>
 
