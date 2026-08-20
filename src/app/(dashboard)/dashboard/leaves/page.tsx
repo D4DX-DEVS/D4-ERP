@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { LeaveRequest, Staff, Department, AttendanceStatus, StaffRequest } from "@/types";
 import { countDocuments, createDocument, getDocuments, updateDocument, where, Timestamp } from "@/lib/firestore";
 import { getAppSettings, isNonWorkingDay } from "@/lib/settings";
-import { decideRequest, REQUEST_TYPE_LABELS, isLegacyRequest } from "@/lib/requests";
+import { decideRequest, REQUEST_TYPE_LABELS, LEAVE_TYPE_LABELS, LEAVE_TYPE_CODES, computeLeaveBalances, type StaffLeaveBalances, isLegacyRequest } from "@/lib/requests";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -56,6 +56,36 @@ export default function LeavesPage() {
 
   // Expanded details
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Per-staff leave balances — derived on the fly from approved requests (current year)
+  const [balances, setBalances] = useState<Record<string, StaffLeaveBalances> | null>(null);
+  const [zeroBalance, setZeroBalance] = useState<StaffLeaveBalances | null>(null);
+  const [balancesLoading, setBalancesLoading] = useState(false);
+
+  const loadBalances = async () => {
+    if (balances || balancesLoading) return;
+    setBalancesLoading(true);
+    try {
+      const [settings, approved] = await Promise.all([
+        getAppSettings(),
+        getDocuments<StaffRequest>("leaveRequests", [where("status", "==", "approved")]),
+      ]);
+      const year = new Date().getFullYear();
+      const byStaff = new Map<string, StaffRequest[]>();
+      for (const r of approved) {
+        if (!byStaff.has(r.staffId)) byStaff.set(r.staffId, []);
+        byStaff.get(r.staffId)!.push(r);
+      }
+      const map: Record<string, StaffLeaveBalances> = {};
+      for (const [sid, reqs] of byStaff) map[sid] = computeLeaveBalances(reqs, settings.leavePolicy, year);
+      setZeroBalance(computeLeaveBalances([], settings.leavePolicy, year));
+      setBalances(map);
+    } catch {
+      toast("error", "Failed to load leave balances");
+    } finally {
+      setBalancesLoading(false);
+    }
+  };
 
   // Build constraints based on filters
   const constraints = useMemo(() => {
@@ -266,12 +296,21 @@ export default function LeavesPage() {
   };
 
 
-  // Map a leave-type request onto attendance status. Overtime requests do not
-  // generate attendance days.
-  const leaveStatusFor = (type: string): AttendanceStatus | null => {
-    switch (type) {
+  // Map an approved request onto a stored attendance status. Legacy code wrote
+  // "leave", which normalizeAttendanceStatus folds to "absent" — staff then saw
+  // approved leave days as A. Map the actual leave type instead.
+  const leaveStatusFor = (req: LeaveRequest | StaffRequest): AttendanceStatus | null => {
+    switch (req.type) {
       case "leave":
-        return "leave";
+      case "long-leave":
+        switch (req.leaveType) {
+          case "CL": return "casual-leave";
+          case "SL": return "medical-leave"; // stored SL = Medical Leave (ML)
+          case "EL": return "earned-leave";
+          case "CO": return "full-leave"; // Flexible Leave (FL)
+          case "HD": return "half-day";
+          default: return "full-leave"; // LOP / legacy blank
+        }
       case "wfh":
         return "wfh";
       case "on-duty":
@@ -284,7 +323,7 @@ export default function LeavesPage() {
   // On approval, mark each working day in the range with the leave status.
   // On rejection of a request, remove any leave-sourced attendance it created.
   const syncLeaveToAttendance = async (leave: LeaveRequest | StaffRequest, status: "approved" | "rejected") => {
-    const baseStatus = leaveStatusFor(leave.type);
+    const baseStatus = leaveStatusFor(leave);
     if (!baseStatus || !leave.startDate || !leave.endDate) return;
 
     const settings = await getAppSettings();
@@ -317,7 +356,7 @@ export default function LeavesPage() {
           status: dayStatus,
           source: "leave",
           leaveId: leave.id,
-          notes: `${leave.type === "leave" ? "Leave" : leave.type === "wfh" ? "WFH" : "On duty"} approved`,
+          notes: `${leave.type === "wfh" ? "WFH" : leave.type === "on-duty" ? "On duty" : "Leave"} approved`,
           isDeleted: false,
         };
         if (existing[0]) {
@@ -417,6 +456,64 @@ export default function LeavesPage() {
         />
       </StatGrid>
 
+      {/* Leave Balances — collapsed by default, loads on first open */}
+      <Card>
+        <details
+          className="group"
+          onToggle={(e) => {
+            if ((e.target as HTMLDetailsElement).open) void loadBalances();
+          }}
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 [&::-webkit-details-marker]:hidden">
+            <span className="text-base font-semibold text-slate-900">Leave Balances ({new Date().getFullYear()})</span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+          </summary>
+          <CardContent className="pt-0">
+            {balancesLoading || !zeroBalance ? (
+              <p className="py-6 text-center text-sm text-gray-500">Loading…</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Staff</TableHead>
+                      <TableHead>CL (used/total)</TableHead>
+                      <TableHead>ML (used/total)</TableHead>
+                      <TableHead>EL (used/total)</TableHead>
+                      <TableHead>FL (available)</TableHead>
+                      <TableHead>Half Days</TableHead>
+                      <TableHead>LOP</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.values(staffMap)
+                      .filter((s) => s.isActive)
+                      .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
+                      .map((s) => {
+                        const b = balances?.[s.id!] ?? zeroBalance;
+                        return (
+                          <TableRow key={s.id}>
+                            <TableCell className="font-medium">{s.firstName} {s.lastName}</TableCell>
+                            <TableCell>{b.cl.used} / {b.cl.total}</TableCell>
+                            <TableCell>{b.ml.used} / {b.ml.total}</TableCell>
+                            <TableCell>{b.el.used} / {b.el.total}</TableCell>
+                            <TableCell>
+                              <b>{b.fl.available}</b>
+                              <span className="text-xs text-slate-500"> (earned {b.fl.earned}, used {b.fl.used})</span>
+                            </TableCell>
+                            <TableCell>{b.hd}</TableCell>
+                            <TableCell>{b.lop}</TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </details>
+      </Card>
+
       {/* Search + Filters */}
       <Card>
         <CardContent className="p-4 space-y-4">
@@ -479,11 +576,7 @@ export default function LeavesPage() {
                   onChange={(e) => setFilterLeaveType(e.target.value)}
                   options={[
                     { value: "", label: "All Leave Types" },
-                    { value: "CL", label: "Casual Leave" },
-                    { value: "SL", label: "Sick Leave" },
-                    { value: "EL", label: "Earned Leave" },
-                    { value: "CO", label: "Comp. Off" },
-                    { value: "LOP", label: "Loss of Pay" },
+                    ...Object.entries(LEAVE_TYPE_LABELS).map(([value, label]) => ({ value, label })),
                   ]}
                 />
                 <Select
@@ -610,7 +703,7 @@ export default function LeavesPage() {
                           <p className="font-medium text-slate-900 truncate">{req.staffName || getStaffName(req.staffId)}</p>
                           <Badge variant="outline" className="text-xs">{deptName}</Badge>
                           <Badge>{REQUEST_TYPE_LABELS[req.type]}</Badge>
-                          {req.leaveType && <Badge variant="bg-slate-100 text-slate-700">{req.leaveType}</Badge>}
+                          {req.leaveType && <Badge variant="bg-slate-100 text-slate-700">{LEAVE_TYPE_CODES[req.leaveType] ?? req.leaveType}</Badge>}
                           {req.isHalfDay && <Badge variant="bg-amber-100 text-amber-700">½ {req.session === "first-half" ? "AM" : "PM"}</Badge>}
                           <span className="text-xs text-slate-600">{end ? `${start} – ${end}` : start}</span>
                         </div>

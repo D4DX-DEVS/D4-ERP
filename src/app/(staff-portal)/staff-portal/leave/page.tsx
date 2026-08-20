@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocument, Timestamp } from "@/lib/firestore";
-import { createStaffRequest, getCompOffBalance, REQUEST_TYPE_LABELS, type CompOffBalance } from "@/lib/requests";
+import { createStaffRequest, getStaffLeaveBalances, LEAVE_TYPE_LABELS, REQUEST_TYPE_LABELS, type StaffLeaveBalances } from "@/lib/requests";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -41,12 +41,12 @@ export default function NewRequestPage() {
   const [submitted, setSubmitted] = useState(false);
   // Earned Leave is a permanent-staff benefit; contract staff and interns don't accrue it.
   const [isPermanent, setIsPermanent] = useState(false);
-  // Comp-off earned from approved overtime, spent by approved CO leaves.
-  const [coBalance, setCoBalance] = useState<CompOffBalance | null>(null);
+  // Current-year balances: CL/ML/EL quotas + FL earned from approved overtime.
+  const [balances, setBalances] = useState<StaffLeaveBalances | null>(null);
 
   useEffect(() => {
     if (!user?.staffId) return;
-    getCompOffBalance(user.staffId).then(setCoBalance).catch(() => {});
+    getStaffLeaveBalances(user.staffId).then(setBalances).catch(() => {});
   }, [user?.staffId]);
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export default function NewRequestPage() {
   })();
   const exceedsClCap = form.leaveType === "CL" && requestedDays > CL_MAX_WITHOUT_APPROVAL;
   const isCoLeave = (form.type === "leave" || form.type === "long-leave") && form.leaveType === "CO";
-  const exceedsCoBalance = isCoLeave && coBalance !== null && requestedDays > coBalance.available;
+  const exceedsCoBalance = isCoLeave && balances !== null && requestedDays > balances.fl.available;
 
   const handleAddAttachment = (url: string, meta?: { name: string; size: number }) => {
     if (!url) return;
@@ -103,7 +103,7 @@ export default function NewRequestPage() {
       return;
     }
     if (exceedsCoBalance) {
-      toast("error", `Not enough comp-off balance (available: ${coBalance?.available ?? 0} day(s)).`);
+      toast("error", `Not enough flexible leave balance (available: ${balances?.fl.available ?? 0} day(s)).`);
       return;
     }
 
@@ -179,22 +179,31 @@ export default function NewRequestPage() {
                     value={form.leaveType || ""}
                     onChange={(e) => setForm({ ...form, leaveType: e.target.value })}
                     options={[
-                      { value: "CL", label: "Casual Leave" },
-                      { value: "SL", label: "Sick Leave" },
-                      ...(isPermanent ? [{ value: "EL", label: "Earned Leave" }] : []),
-                      { value: "CO", label: "Compensatory Off" },
-                      { value: "HD", label: "Half Day" },
-                      { value: "LOP", label: "Loss of Pay" },
+                      { value: "CL", label: LEAVE_TYPE_LABELS.CL },
+                      { value: "SL", label: LEAVE_TYPE_LABELS.SL },
+                      ...(isPermanent ? [{ value: "EL", label: LEAVE_TYPE_LABELS.EL }] : []),
+                      { value: "CO", label: LEAVE_TYPE_LABELS.CO },
+                      { value: "HD", label: LEAVE_TYPE_LABELS.HD },
+                      { value: "LOP", label: LEAVE_TYPE_LABELS.LOP },
                     ]}
                   />
-                  {isCoLeave && coBalance !== null && (
+                  {isCoLeave && balances !== null && (
                     <p className={`text-xs ${exceedsCoBalance ? "text-rose-600" : "text-slate-600"}`}>
-                      Comp-off available: <b>{coBalance.available}</b> day(s) (earned {coBalance.earned} from approved overtime, used {coBalance.used}).
+                      Flexible leave available: <b>{balances.fl.available}</b> day(s) (earned {balances.fl.earned} from approved
+                      overtime — e.g. Sunday work, used {balances.fl.used}).
                       {exceedsCoBalance && " Not enough balance for this request."}
                     </p>
                   )}
+                  {balances !== null && (form.leaveType === "CL" || form.leaveType === "SL" || form.leaveType === "EL") && (() => {
+                    const b = form.leaveType === "CL" ? balances.cl : form.leaveType === "SL" ? balances.ml : balances.el;
+                    return (
+                      <p className="text-xs text-slate-600">
+                        Balance: <b>{Math.max(0, b.total - b.used)}</b> of {b.total} day(s) left this year (used {b.used}).
+                      </p>
+                    );
+                  })()}
                   {form.leaveType === "SL" && (
-                    <p className="text-xs text-rose-600">Attach a medical report — approved by your coordinator. Up to 15 days/year.</p>
+                    <p className="text-xs text-rose-600">Attach a medical report — approved by your coordinator.</p>
                   )}
                 </div>
 

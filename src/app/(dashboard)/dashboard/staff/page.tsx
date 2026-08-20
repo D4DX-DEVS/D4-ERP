@@ -356,7 +356,7 @@ export default function StaffPage() {
       refresh();
     } catch (error) {
       console.error("Error:", error);
-      toast("error", "Failed to delete staff member");
+      toast("error", error instanceof Error ? error.message : "Failed to delete staff member");
     }
   };
 

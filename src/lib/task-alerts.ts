@@ -4,6 +4,7 @@
 // idempotent per recipient per day via a metadata dateKey marker.
 
 import { createDocument, getDocuments, where } from "@/lib/firestore";
+import { sendPush } from "@/lib/notifications";
 import { getAdminStaffIds, getDeptHeadStaffId } from "@/lib/requests";
 import type { Task } from "@/types";
 
@@ -92,14 +93,17 @@ export async function notifyPendingTaskUpdates(
       where("metadata.dateKey", "==", dateKey),
     ]);
     if (existing.length > 0) continue;
+    const title = "Tasks with no update today";
+    const message = `${count} open task${count === 1 ? "" : "s"} had no update by 6 PM on ${now.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}.`;
     await createDocument("notifications", {
       recipientId,
       type: "system",
-      title: "Tasks with no update today",
-      message: `${count} open task${count === 1 ? "" : "s"} had no update by 6 PM on ${now.toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}.`,
+      title,
+      message,
       link: "/dashboard/tasks",
       isRead: false,
       metadata: { kind: "task-update-pending", dateKey },
     });
+    sendPush([recipientId], title, message, "/dashboard/tasks");
   }
 }

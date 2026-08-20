@@ -17,6 +17,18 @@ interface CreateNotificationParams {
 }
 
 /**
+ * Sends the same notification as a web push (OneSignal, addressed by staff id).
+ * Best-effort: the in-app record is the source of truth, push is a nudge.
+ */
+export function sendPush(recipientIds: string[], title: string, message: string, link?: string): void {
+  fetch("/api/push", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recipientIds, title, message, link }),
+  }).catch((error) => console.error("Failed to send push:", error));
+}
+
+/**
  * Creates an in-app notification for a specific user.
  * Never throws — failures are silently logged.
  */
@@ -36,6 +48,7 @@ export async function createNotification(params: CreateNotificationParams): Prom
         : null,
       createdAt: Timestamp.now(),
     });
+    sendPush([params.recipientId], params.title, params.message, params.link);
   } catch (error) {
     console.error("Failed to create notification:", error);
   }

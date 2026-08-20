@@ -63,6 +63,7 @@ export default function StaffProfilePage() {
   const [grantedFeatures, setGrantedFeatures] = useState<string[]>([]);
   const [savingFeatures, setSavingFeatures] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [assets, setAssets] = useState<(Asset & { id: string })[]>([]);
 
   // Modals
   const [incrementOpen, setIncrementOpen] = useState(false);
@@ -105,13 +106,15 @@ export default function StaffProfilePage() {
         Array.isArray(staffData.grantedFeatures) ? staffData.grantedFeatures : []
       );
 
-      const [dept, comp, salHist, statHist, conHist] = await Promise.all([
+      const [dept, comp, salHist, statHist, conHist, assetList] = await Promise.all([
         staffData.departmentId ? getDocument<Department>("departments", staffData.departmentId) : null,
         staffData.companyId ? getDocument<Company>("companies", staffData.companyId) : null,
         getSubDocuments<SalaryHistory>("staff", staffId, "salaryHistory", [orderBy("createdAt", "desc")]),
         getSubDocuments<StatusHistory>("staff", staffId, "statusHistory", [orderBy("createdAt", "desc")]),
         getSubDocuments<ContractHistory>("staff", staffId, "contractHistory", [orderBy("createdAt", "desc")]),
+        getDocuments<Asset>("assets", [where("currentAssigneeId", "==", staffId), orderBy("name", "asc")]),
       ]);
+      setAssets(assetList);
 
       setDepartment(dept);
       setCompany(comp);
@@ -704,11 +707,32 @@ export default function StaffProfilePage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-gray-500 mb-4">Current and historical asset assignments for this staff member.</p>
-            <div className="space-y-3">
+            {assets.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                <p className="text-sm">Assets assigned to this staff member will appear here.</p>
+                <p className="text-sm">No assets are assigned to this staff member.</p>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-3">
+                {assets.map((asset) => (
+                  <div
+                    key={asset.id}
+                    className="flex items-start justify-between gap-4 rounded-lg border border-gray-200 p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{asset.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {[asset.brand, asset.model, asset.category].filter(Boolean).join(" · ") || "—"}
+                      </p>
+                      {asset.serialNumber && (
+                        <p className="mt-0.5 font-mono text-[11px] text-gray-400">SN: {asset.serialNumber}</p>
+                      )}
+                      {asset.notes && <p className="mt-1 text-xs text-gray-500">{asset.notes}</p>}
+                    </div>
+                    <Badge variant={getStatusColor(asset.status)}>{asset.status}</Badge>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

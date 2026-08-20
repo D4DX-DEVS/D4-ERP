@@ -280,7 +280,7 @@ export default function StaffPortalHome() {
         <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-1 sm:gap-3">
           {[
             { label: "Casual Leave (CL)", icon: Umbrella, color: "text-orange-500", used: yearStats.clUsed, accrued: yearStats.clAccrued, note: "Accrues 1.25 days/month from your joining month" },
-            { label: "Sick Leave (SL)", icon: HeartPulse, color: "text-rose-500", used: yearStats.slUsed, accrued: yearStats.slAccrued, note: "15/year pool • needs medical report + coordinator approval" },
+            { label: "Medical Leave (ML)", icon: HeartPulse, color: "text-rose-500", used: yearStats.slUsed, accrued: yearStats.slAccrued, note: "needs medical report + coordinator approval" },
           ].map((row) => {
             const balance = Math.max(0, row.accrued - row.used);
             const pct = row.accrued > 0 ? Math.min(100, (row.used / row.accrued) * 100) : 0;

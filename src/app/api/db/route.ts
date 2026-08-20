@@ -432,7 +432,12 @@ export async function POST(req: NextRequest) {
             );
           }
         }
-        await Model.findByIdAndDelete(id);
+        const removed = await Model.findByIdAndDelete(id).lean();
+        // A no-op delete used to return success, so the row silently came back
+        // on refresh. Say so instead.
+        if (!removed) {
+          return NextResponse.json({ error: "Record not found — nothing was deleted." }, { status: 404 });
+        }
         writeAuditLog("delete", collectionName, id, `Deleted ${collectionName} record`, auditUser);
         return NextResponse.json({ success: true });
       }
