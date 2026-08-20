@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Task, Staff, Department } from "@/types";
-import { getDocuments, createDocument, updateDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
+import { getDocuments, getDocumentsPaginated, countDocuments, createDocument, updateDocument, deleteDocument, orderBy, where, search, Timestamp, QueryConstraint } from "@/lib/firestore";
 import { changeTaskStatus } from "@/lib/tasks";
 import { canTransitionTask, transitionNeedsRemark } from "@/lib/task-workflow";
 import { createNotification } from "@/lib/notifications";
@@ -19,12 +19,13 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { PageLoader } from "@/components/ui/loading";
+import { Pagination } from "@/components/ui/pagination";
 import { ListingHeader } from "@/components/ui/listing";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { CommentsSection } from "@/components/ui/comments-section";
 import { formatDate, cn } from "@/lib/utils";
 import { Plus, Loader2, Pencil, Trash2, CheckSquare, Square, X, CalendarClock, ListTodo, Loader, CheckCircle2, LayoutGrid, Rows3, Search, Hourglass } from "lucide-react";
-import { isUpdatePendingTask, notifyPendingTaskUpdates, updatePendingDays, pendingBadgeClasses, pendingBadgeLabel } from "@/lib/task-alerts";
+import { isUpdatePendingTask, notifyPendingTaskUpdates, updatePendingDays, pendingBadgeClasses, pendingBadgeLabel, EOD_CUTOFF_HOUR } from "@/lib/task-alerts";
 import { useToast } from "@/components/ui/toast";
 import { deptScopeFor, inDeptScope } from "@/lib/dept-scope";
 
@@ -66,13 +67,35 @@ function todayValue() {
   return new Date().toLocaleDateString("en-CA");
 }
 
+function startOfTodayTs() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return Timestamp.fromDate(d);
+}
+
+// ClickUp-style board pagination: each column is its own server-paginated query
+// with a "Show more" tail; the table view pages the same query server-side.
+// The API returns only the loaded pages — nothing is fetched-then-hidden.
+const BOARD_PAGE_SIZE = 8;
+const TABLE_PAGE_SIZE = 20;
+
+type ColState = { tasks: TaskDoc[]; total: number; page: number; loadingMore: boolean };
+const emptyCol: ColState = { tasks: [], total: 0, page: 0, loadingMore: false };
+
 export default function TasksPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
-  const [tasks, setTasks] = useState<TaskDoc[]>([]);
+  const [cols, setCols] = useState<Record<string, ColState>>({});
+  const [tableRows, setTableRows] = useState<TaskDoc[]>([]);
+  const [tableTotal, setTableTotal] = useState(0);
+  const [tablePage, setTablePage] = useState(0);
+  const [overdueCount, setOverdueCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
   const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
   const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [refLoaded, setRefLoaded] = useState(false);
+  const [boardLoaded, setBoardLoaded] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -81,6 +104,7 @@ export default function TasksPage() {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
   const [view, setView] = useState<ViewId>("board");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | Task["status"]>("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | Task["priority"]>("all");
   const [assigneeFilter, setAssigneeFilter] = useState<string>("all");
@@ -96,37 +120,195 @@ export default function TasksPage() {
   const [returnTarget, setReturnTarget] = useState<TaskDoc | null>(null);
   const [returnRemark, setReturnRemark] = useState("");
 
-  const fetchData = async () => {
+  const loading = !refLoaded || !boardLoaded;
+  const bump = () => setRefreshTick((t) => t + 1);
+
+  // ── Server-side filtering ───────────────────────────────────────────────────
+  // Dept-head visibility is enforced by /api/db read scoping; filters become
+  // query constraints so pagination counts stay honest.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const baseConstraints = useMemo(() => {
+    const cs: QueryConstraint[] = [];
+    if (priorityFilter !== "all") cs.push(where("priority", "==", priorityFilter));
+    if (assigneeFilter !== "all") cs.push(where("assigneeId", "==", assigneeFilter));
+    if (departmentFilter !== "all") cs.push(where("departmentId", "==", departmentFilter));
+    if (overdueOnly) cs.push(where("dueDate", "<", startOfTodayTs()));
+    if (pendingUpdateOnly) cs.push(where("updatedAt", "<", startOfTodayTs()));
+    if (debouncedQuery) cs.push(search(["title", "description", "assigneeName", "tags"], debouncedQuery));
+    return cs;
+  }, [priorityFilter, assigneeFilter, departmentFilter, overdueOnly, pendingUpdateOnly, debouncedQuery]);
+
+  // "No update" is defined from 6 PM onward — before that the filter matches nothing.
+  const pendingInactive = pendingUpdateOnly && new Date().getHours() < EOD_CUTOFF_HOUR;
+
+  const fetchColumn = useCallback(
+    async (statusKey: Task["status"], pageNum: number, append: boolean) => {
+      if (append) {
+        setCols((p) => ({ ...p, [statusKey]: { ...(p[statusKey] ?? emptyCol), loadingMore: true } }));
+      }
+      try {
+        const res = await getDocumentsPaginated<Task>(
+          "tasks",
+          [...baseConstraints, where("status", "==", statusKey), orderBy("createdAt", "desc")],
+          BOARD_PAGE_SIZE,
+          pageNum
+        );
+        setCols((prev) => {
+          const existing = append ? (prev[statusKey]?.tasks ?? []) : [];
+          const seen = new Set(existing.map((t) => t.id));
+          return {
+            ...prev,
+            [statusKey]: {
+              tasks: [...existing, ...res.data.filter((t) => !seen.has(t.id))],
+              total: res.total,
+              page: pageNum,
+              loadingMore: false,
+            },
+          };
+        });
+      } catch {
+        setCols((p) => ({ ...p, [statusKey]: { ...(p[statusKey] ?? emptyCol), loadingMore: false } }));
+        toast("error", "Failed to load tasks");
+      }
+    },
+    [baseConstraints, toast]
+  );
+
+  const fetchBoard = useCallback(async () => {
+    // Overdue / no-update are open-task filters — the Done column sits out.
+    const excludeDone = overdueOnly || pendingUpdateOnly;
+    await Promise.all(
+      statusColumns.map((col) => {
+        const skipped =
+          (statusFilter !== "all" && statusFilter !== col.key) ||
+          (col.key === "done" && excludeDone) ||
+          pendingInactive;
+        if (skipped) {
+          setCols((p) => ({ ...p, [col.key]: { ...emptyCol } }));
+          return Promise.resolve();
+        }
+        return fetchColumn(col.key, 0, false);
+      })
+    );
+    setBoardLoaded(true);
+  }, [fetchColumn, statusFilter, overdueOnly, pendingUpdateOnly, pendingInactive]);
+
+  const fetchCounts = useCallback(async () => {
     try {
-      const [taskList, staff, depts] = await Promise.all([
-        getDocuments<Task>("tasks", [orderBy("createdAt", "desc")]),
-        getDocuments<Staff>("staff", [where("isActive", "==", true)]),
-        getDocuments<Department>("departments", [where("isActive", "==", true)]),
+      const today = startOfTodayTs();
+      const overdueCs: QueryConstraint[] = [
+        ...baseConstraints,
+        where("dueDate", "<", today),
+        statusFilter !== "all" ? where("status", "==", statusFilter) : where("status", "!=", "done"),
+      ];
+      const afterCutoff = new Date().getHours() >= EOD_CUTOFF_HOUR;
+      const [overdue, pending] = await Promise.all([
+        statusFilter === "done" ? Promise.resolve(0) : countDocuments("tasks", overdueCs),
+        // Pending-update stat is intentionally unfiltered — it mirrors the 6 PM alert.
+        afterCutoff
+          ? countDocuments("tasks", [where("status", "!=", "done"), where("updatedAt", "<", today)])
+          : Promise.resolve(0),
       ]);
-      setTasks(taskList);
-      setStaffList(staff);
-      setDepartments(depts);
-    } catch (error) {
-      console.error("Error:", error);
-      toast("error", "Failed to load tasks");
-    } finally {
-      setLoading(false);
+      setOverdueCount(overdue);
+      setPendingCount(pending);
+    } catch {
+      // counts are decoration — never block the board on them
     }
-  };
+  }, [baseConstraints, statusFilter]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchData();
+    void fetchBoard();
+    void fetchCounts();
+  }, [fetchBoard, fetchCounts, refreshTick]);
+
+  useEffect(() => {
+    setTablePage(0);
+  }, [baseConstraints, statusFilter]);
+
+  useEffect(() => {
+    if (view !== "table") return;
+    if (pendingInactive || (overdueOnly && statusFilter === "done")) {
+      setTableRows([]);
+      setTableTotal(0);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const cs = [...baseConstraints];
+        if (statusFilter !== "all") cs.push(where("status", "==", statusFilter));
+        else if (overdueOnly || pendingUpdateOnly) cs.push(where("status", "!=", "done"));
+        cs.push(orderBy("createdAt", "desc"));
+        const res = await getDocumentsPaginated<Task>("tasks", cs, TABLE_PAGE_SIZE, tablePage);
+        if (!alive) return;
+        setTableRows(res.data);
+        setTableTotal(res.total);
+      } catch {
+        if (alive) toast("error", "Failed to load tasks");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [view, tablePage, baseConstraints, statusFilter, overdueOnly, pendingUpdateOnly, pendingInactive, refreshTick, toast]);
+
+  // Staff + departments load once.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const [staff, depts] = await Promise.all([
+          getDocuments<Staff>("staff", [where("isActive", "==", true)]),
+          getDocuments<Department>("departments", [where("isActive", "==", true)]),
+        ]);
+        if (!alive) return;
+        setStaffList(staff);
+        setDepartments(depts);
+      } catch {
+        if (alive) toast("error", "Failed to load tasks");
+      } finally {
+        if (alive) setRefLoaded(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // After 6 PM, alert dept heads + admins about tasks with no update today
   // (once per mount; the helper itself is idempotent per day).
   useEffect(() => {
-    if (loading || notifiedRef.current || tasks.length === 0) return;
+    if (loading || notifiedRef.current) return;
     notifiedRef.current = true;
-    notifyPendingTaskUpdates(tasks).catch(() => {});
-  }, [loading, tasks]);
+    if (new Date().getHours() < EOD_CUTOFF_HOUR) return;
+    getDocuments<Task>("tasks", [where("status", "!=", "done"), where("updatedAt", "<", startOfTodayTs())])
+      .then((pending) => notifyPendingTaskUpdates(pending))
+      .catch(() => {});
+  }, [loading]);
+
+  const findTask = (id: string): TaskDoc | undefined => {
+    for (const c of Object.values(cols)) {
+      const hit = c.tasks.find((t) => t.id === id);
+      if (hit) return hit;
+    }
+    return tableRows.find((t) => t.id === id);
+  };
+
+  const patchTaskEverywhere = (id: string, patch: Partial<TaskDoc>) => {
+    setCols((prev) => {
+      const next: Record<string, ColState> = {};
+      for (const [k, c] of Object.entries(prev)) {
+        next[k] = { ...c, tasks: c.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) };
+      }
+      return next;
+    });
+    setTableRows((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+  };
 
   const openCreate = () => {
     setEditingId(null);
@@ -204,7 +386,7 @@ export default function TasksPage() {
       setForm(emptyForm);
       setSubtasks([]);
       setCompletionPercentage(0);
-      void fetchData();
+      bump();
     } catch (error) {
       toast("error", editingId ? "Failed to update task" : "Failed to create task");
     } finally {
@@ -214,19 +396,28 @@ export default function TasksPage() {
 
   const applyStatusChange = async (task: TaskDoc, newStatus: Task["status"], remarks?: string) => {
     if (!user) return;
-    // Optimistic update for snappy drag-and-drop
-    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t)));
+    const prevStatus = task.status;
+    // Optimistic move for snappy drag-and-drop: out of the old column, onto the new one.
+    setCols((prev) => {
+      const next = { ...prev };
+      const src = next[prevStatus];
+      if (src) next[prevStatus] = { ...src, tasks: src.tasks.filter((t) => t.id !== task.id), total: Math.max(0, src.total - 1) };
+      const dst = next[newStatus];
+      if (dst) next[newStatus] = { ...dst, tasks: [{ ...task, status: newStatus }, ...dst.tasks], total: dst.total + 1 };
+      return next;
+    });
+    setTableRows((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: newStatus } : t)));
     try {
       const update = await changeTaskStatus(task, newStatus, user, remarks);
-      setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ...update } : t)));
+      patchTaskEverywhere(task.id, update as Partial<TaskDoc>);
     } catch (error) {
       toast("error", error instanceof Error ? error.message : "Failed to update task status");
-      void fetchData();
+      bump();
     }
   };
 
   const handleStatusChange = (taskId: string, newStatus: Task["status"]) => {
-    const task = tasks.find((t) => t.id === taskId);
+    const task = findTask(taskId);
     if (!task || task.status === newStatus || !user) return;
     if (!canTransitionTask(user.role, task.assigneeId === user.staffId, task.status, newStatus)) {
       toast("error", "That status change is not allowed for your role.");
@@ -246,7 +437,7 @@ export default function TasksPage() {
       await deleteDocument("tasks", deleteTarget.id);
       toast("success", "Task deleted");
       setDeleteTarget(null);
-      void fetchData();
+      bump();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to delete task");
@@ -268,40 +459,22 @@ export default function TasksPage() {
   if (loading) return <PageLoader />;
 
   const todayKey = new Date().toISOString().split("T")[0];
-  const isOverdue = (t: TaskDoc) =>
-    t.status !== "done" && !!t.dueDate && new Date(t.dueDate.seconds * 1000).toISOString().split("T")[0] < todayKey;
 
-  // Department heads see only their own department's board — the cross-department
-  // view is the admin panel. Falls back to the assignee's department for older
-  // tasks saved without departmentId.
-  // ponytail: linear find per task; task counts are small, index it if the board slows down.
+  // Department heads see only their own department's staff in pickers; task
+  // visibility itself is server-scoped by /api/db.
   const deptScope = deptScopeFor(user?.role, user?.departmentId);
-  const taskDept = (t: TaskDoc) => t.departmentId ?? staffList.find((s) => s.id === t.assigneeId)?.departmentId;
   const visibleStaff = staffList.filter((s) => inDeptScope(deptScope, s.departmentId));
 
-  const q = query.trim().toLowerCase();
-  const filteredTasks = tasks.filter((t) => {
-    if (!inDeptScope(deptScope, taskDept(t))) return false;
-    if (statusFilter !== "all" && t.status !== statusFilter) return false;
-    if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
-    if (assigneeFilter !== "all" && t.assigneeId !== assigneeFilter) return false;
-    if (departmentFilter !== "all" && t.departmentId !== departmentFilter) return false;
-    if (overdueOnly && !isOverdue(t)) return false;
-    if (pendingUpdateOnly && !isUpdatePendingTask(t)) return false;
-    if (q) {
-      const haystack = `${t.title} ${t.description ?? ""} ${t.assigneeName ?? ""} ${(t.tags ?? []).join(" ")}`.toLowerCase();
-      if (!haystack.includes(q)) return false;
-    }
-    return true;
-  });
-
+  const colTotal = (key: string) => cols[key]?.total ?? 0;
   const stats = {
-    total: filteredTasks.length,
-    inProgress: filteredTasks.filter((t) => t.status === "in-progress").length,
-    overdue: filteredTasks.filter(isOverdue).length,
-    done: filteredTasks.filter((t) => t.status === "done").length,
-    pendingUpdate: tasks.filter((t) => isUpdatePendingTask(t)).length,
+    total: statusColumns.reduce((sum, c) => sum + colTotal(c.key), 0),
+    inProgress: colTotal("in-progress"),
+    overdue: overdueCount,
+    done: colTotal("done"),
+    pendingUpdate: pendingCount,
   };
+
+  const tableTotalPages = Math.ceil(tableTotal / TABLE_PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -315,8 +488,9 @@ export default function TasksPage() {
         }
       />
 
-      <StatGrid cols={4} mobileCols={5}>
+      <StatGrid cols={5} mobileCols={5}>
         <StatCard
+          compact
           title="Total Tasks"
           value={stats.total}
           icon={ListTodo}
@@ -324,6 +498,7 @@ export default function TasksPage() {
           bg="bg-slate-100"
         />
         <StatCard
+          compact
           title="In Progress"
           value={stats.inProgress}
           icon={Loader}
@@ -331,6 +506,7 @@ export default function TasksPage() {
           bg="bg-sky-50"
         />
         <StatCard
+          compact
           title="Overdue"
           value={stats.overdue}
           icon={CalendarClock}
@@ -338,6 +514,7 @@ export default function TasksPage() {
           bg="bg-red-50"
         />
         <StatCard
+          compact
           title="No Update Today"
           value={stats.pendingUpdate}
           icon={Hourglass}
@@ -347,6 +524,7 @@ export default function TasksPage() {
           active={pendingUpdateOnly}
         />
         <StatCard
+          compact
           title="Completed"
           value={stats.done}
           icon={CheckCircle2}
@@ -379,7 +557,7 @@ export default function TasksPage() {
         })}
       </div>
 
-      {/* Filters — apply to both Board and Table views */}
+      {/* Filters — applied server-side, shared by Board and Table views */}
       <div className="space-y-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2 sm:space-y-0">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -444,7 +622,9 @@ export default function TasksPage() {
       /* Kanban Board */
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {statusColumns.map((col) => {
-          const colTasks = filteredTasks.filter((t) => t.status === col.key);
+          const colState = cols[col.key] ?? emptyCol;
+          const colTasks = colState.tasks;
+          const remaining = colState.total - colTasks.length;
           const isOver = dragOverCol === col.key;
           return (
             <div
@@ -458,7 +638,8 @@ export default function TasksPage() {
                 setDragOverCol(null);
               }}
               className={cn(
-                "flex min-h-[420px] flex-col rounded-[24px] border border-white/70 bg-gradient-to-b p-4 shadow-[0_14px_36px_rgba(15,23,42,0.05)] backdrop-blur-md transition-all",
+                // Fixed to the viewport — the column scrolls inside itself, the page never grows with the task count.
+                "flex h-[calc(100dvh-180px)] min-h-[420px] flex-col rounded-[24px] border border-white/70 bg-gradient-to-b p-4 shadow-[0_14px_36px_rgba(15,23,42,0.05)] backdrop-blur-md transition-all",
                 col.accent,
                 isOver ? `scale-[1.01] ring-2 ${col.ring}` : "ring-1 ring-transparent"
               )}
@@ -469,11 +650,11 @@ export default function TasksPage() {
                   <h3 className="text-sm font-semibold tracking-[-0.01em] text-slate-800">{col.label}</h3>
                 </div>
                 <span className="inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-white/70 px-2 text-xs font-semibold text-slate-500">
-                  {colTasks.length}
+                  {colState.total}
                 </span>
               </div>
 
-              <div className="flex-1 space-y-3">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
                 {colTasks.length === 0 ? (
                   <div className="flex h-28 items-center justify-center rounded-2xl border border-dashed border-slate-200/80 text-xs text-slate-400">
                     Drop tasks here
@@ -559,6 +740,20 @@ export default function TasksPage() {
                     );
                   })
                 )}
+                {remaining > 0 && (
+                  <button
+                    type="button"
+                    disabled={colState.loadingMore}
+                    onClick={() => void fetchColumn(col.key, colState.page + 1, true)}
+                    className="w-full rounded-2xl border border-dashed border-slate-300/80 bg-white/60 py-2 text-xs font-semibold text-slate-500 transition-colors hover:border-indigo-300 hover:text-indigo-600 disabled:opacity-60"
+                  >
+                    {colState.loadingMore ? (
+                      <span className="inline-flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…</span>
+                    ) : (
+                      `+ Show ${Math.min(remaining, BOARD_PAGE_SIZE)} more (${remaining} hidden)`
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -567,7 +762,7 @@ export default function TasksPage() {
       ) : (
       /* Table View */
       <div className="space-y-2">
-        <p className="px-1 text-xs text-slate-500">Showing {filteredTasks.length} of {tasks.length} tasks</p>
+        <p className="px-1 text-xs text-slate-500">Showing {tableRows.length} of {tableTotal} tasks</p>
         <Table>
           <TableHeader>
             <TableRow>
@@ -581,14 +776,14 @@ export default function TasksPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredTasks.length === 0 ? (
+            {tableRows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="py-10 text-center text-sm text-slate-400">
                   No tasks match your filters.
                 </TableCell>
               </TableRow>
             ) : (
-              filteredTasks.map((task) => {
+              tableRows.map((task) => {
                 const subDone = (task.subtasks ?? []).filter((s) => s.isCompleted).length;
                 const subTotal = (task.subtasks ?? []).length;
                 const dueKey = task.dueDate ? new Date(task.dueDate.seconds * 1000).toISOString().split("T")[0] : null;
@@ -688,6 +883,16 @@ export default function TasksPage() {
             )}
           </TableBody>
         </Table>
+        <Pagination
+          page={tablePage}
+          totalPages={tableTotalPages}
+          totalCount={tableTotal}
+          pageSize={TABLE_PAGE_SIZE}
+          hasNext={tablePage < tableTotalPages - 1}
+          hasPrev={tablePage > 0}
+          onNext={() => setTablePage((p) => p + 1)}
+          onPrev={() => setTablePage((p) => Math.max(0, p - 1))}
+        />
       </div>
       )}
 
@@ -805,7 +1010,7 @@ export default function TasksPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => { const t = tasks.find((x) => x.id === editingId); if (t) { setDialogOpen(false); setDeleteTarget(t); } }}
+                onClick={() => { const t = findTask(editingId); if (t) { setDialogOpen(false); setDeleteTarget(t); } }}
                 className="border-red-200 text-red-600 hover:bg-red-50"
               >
                 <Trash2 className="h-4 w-4" /> Delete
@@ -843,7 +1048,7 @@ export default function TasksPage() {
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-sm text-slate-600">
-            Tell {returnTarget?.assigneeName || "the assignee"} what needs fixing on “{returnTarget?.title}”. This is posted as a comment.
+            Tell {returnTarget?.assigneeName || "the assignee"} what needs fixing on “{returnTarget?.title}”. This is posted as a comment.
           </p>
           <Textarea
             value={returnRemark}

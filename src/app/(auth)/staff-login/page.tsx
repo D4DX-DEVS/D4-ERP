@@ -11,6 +11,20 @@ import { ArrowLeft, CheckCircle2, Loader2, ShieldCheck, User } from "lucide-reac
 import Link from "next/link";
 import Image from "next/image";
 
+// display-mode alone misses iOS, which reports standalone only through the
+// legacy navigator flag, and misses Android launches from the installed icon.
+// Guessing "browser" here costs the user an 83-day-shorter session.
+function isInstalledApp() {
+  if (typeof window === "undefined") return false;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.matchMedia("(display-mode: fullscreen)").matches ||
+    window.matchMedia("(display-mode: minimal-ui)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+    document.referrer.startsWith("android-app://")
+  );
+}
+
 export default function StaffLoginPage() {
   const [mobile, setMobile] = useState("");
   const [code, setCode] = useState("");
@@ -32,7 +46,7 @@ export default function StaffLoginPage() {
           employeeCode: code,
           mobile,
           // Installed PWA → long-lived session (no daily re-login).
-          pwa: window.matchMedia("(display-mode: standalone)").matches,
+          pwa: isInstalledApp(),
         }),
       });
 
