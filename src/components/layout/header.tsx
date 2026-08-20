@@ -86,7 +86,8 @@ export function Header() {
   return (
     <header className="sticky top-0 z-20 px-4 pt-3 sm:px-6 lg:px-8 lg:pt-4">
       <div className="page-frame glass-panel flex min-h-0 flex-row items-center justify-between gap-2 rounded-2xl px-3 py-2 sm:px-5 lg:min-h-[var(--header-height)] lg:rounded-[26px] lg:px-6 lg:py-3">
-        <div className="min-w-0 pl-12 lg:pl-0">
+        {/* No left padding any more: the mobile hamburger that used to sit there is gone. */}
+        <div className="min-w-0">
           <div className="mb-2 hidden flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400 lg:flex">
             <span>Admin Workspace</span>
             {breadcrumb.map((item, index) => (

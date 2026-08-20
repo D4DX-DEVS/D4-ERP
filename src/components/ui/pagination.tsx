@@ -24,7 +24,7 @@ export function Pagination({
   onPrev,
   pageSize,
 }: PaginationProps) {
-  if (totalPages <= 1) return null;
+  if (totalCount === 0) return null;
 
   const from = page * pageSize + 1;
   const to = Math.min((page + 1) * pageSize, totalCount);
@@ -34,17 +34,20 @@ export function Pagination({
       <p className="text-xs text-gray-500">
         Showing {from}–{to} of {totalCount}
       </p>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-500">
-          Page {page + 1} of {totalPages}
-        </span>
-        <Button variant="outline" size="sm" disabled={!hasPrev} onClick={onPrev}>
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <Button variant="outline" size="sm" disabled={!hasNext} onClick={onNext}>
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
+      {/* ponytail: single page still shows the count — only the controls drop out */}
+      {totalPages > 1 && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">
+            Page {page + 1} of {totalPages}
+          </span>
+          <Button variant="outline" size="sm" disabled={!hasPrev} onClick={onPrev}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="sm" disabled={!hasNext} onClick={onNext}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
