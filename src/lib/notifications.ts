@@ -25,7 +25,17 @@ export function sendPush(recipientIds: string[], title: string, message: string,
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ recipientIds, title, message, link }),
-  }).catch((error) => console.error("Failed to send push:", error));
+  })
+    // A wrong app id / REST key answers 200-with-reason or 502, not a thrown
+    // error, so without this a push that never left the server looks like a
+    // success. Still best-effort — the in-app record already landed.
+    .then(async (res) => {
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || body?.sent === false) {
+        console.error("Push not delivered:", res.status, body?.reason ?? body);
+      }
+    })
+    .catch((error) => console.error("Failed to send push:", error));
 }
 
 /**

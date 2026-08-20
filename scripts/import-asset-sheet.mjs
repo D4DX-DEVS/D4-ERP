@@ -47,17 +47,20 @@ const CUSTODIAN_ALIAS = {
 };
 
 const categoryOf = (name) => {
-  const n = name.toLowerCase();
-  // Computers first: long retail titles mention "FaceTime HD Camera" and would
-  // otherwise land in Camera.
+  // Retail titles lead with the product and trail into spec soup ("...|Quad
+  // Speaker|8GB"); matching the whole string files a tablet under Audio.
+  const n = name.slice(0, 60).toLowerCase();
+  // Peripherals first: "keyboard" contains "board", "laptop bag" contains "laptop".
+  if (/keyboard|mouse|bag|case|cover|cable|charger|adapter|cleaning|cloth/.test(n)) return "Accessory";
   if (/macbook|mac book|mac mini|laptop|imac|i mac|cpu|desktop/.test(n)) return "Laptop";
+  if (/tablet|redmi pad|ipad/.test(n)) return "Tablet";
   if (/headphone|headset|earphone|buds|mic |mic,|microphone|lapel|speaker|audio|sound card/.test(n)) return "Audio";
   if (/camera|lens|dslr|mirrorless|tripod|gimbal|flash|filter|stabli|stebli/.test(n)) return "Camera";
   if (/ssd|hdd|hard disk|hardisk|memmory card|memory card|pendrive|card reader|sd card|cloud servor/.test(n)) return "Storage";
   if (/monitor|display|screen|projector/.test(n)) return "Display";
   if (/phone|iphone|galaxy|walkie|netsetter/.test(n)) return "Phone";
   if (/router|wifi|lan |usb hub|hub|switcher|convertor|converter|bridge|dongle|capture card|ups/.test(n)) return "Network";
-  if (/light|led|halogon|stand|chair|stool|bed|kettle|cup|flask|plant|shelf|board|cleaner|vacuum/.test(n)) return "Studio & Office";
+  if (/light|led|halogon|stand|chair|stool|bed|kettle|cup|flask|plant|shelf|sign board|cleaner|vacuum/.test(n)) return "Studio & Office";
   return "Accessory";
 };
 

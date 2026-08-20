@@ -46,6 +46,16 @@ import { useToast } from "@/components/ui/toast";
 
 type TabKey = "overview" | "salary" | "access" | "documents" | "assets";
 
+// Imported assets carry their sheet provenance in `notes`. On a staff page the
+// custodian is already the person you are looking at, and the import row number
+// is bookkeeping — keep only what tells you something about the item.
+function assetDetail(notes?: string): string {
+  return (notes || "")
+    .split(" | ")
+    .filter((part) => !/^(Custodian per sheet|Holder per sheet|Imported from)/i.test(part))
+    .join(" · ");
+}
+
 export default function StaffProfilePage() {
   const params = useParams();
   const router = useRouter();
@@ -726,7 +736,9 @@ export default function StaffProfilePage() {
                       {asset.serialNumber && (
                         <p className="mt-0.5 font-mono text-[11px] text-gray-400">SN: {asset.serialNumber}</p>
                       )}
-                      {asset.notes && <p className="mt-1 text-xs text-gray-500">{asset.notes}</p>}
+                      {assetDetail(asset.notes) && (
+                        <p className="mt-1 text-xs text-gray-500">{assetDetail(asset.notes)}</p>
+                      )}
                     </div>
                     <Badge variant={getStatusColor(asset.status)}>{asset.status}</Badge>
                   </div>

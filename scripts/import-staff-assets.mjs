@@ -92,7 +92,8 @@ const categoryOf = (name) => {
   if (/macbook|mac book|mac mini|laptop/.test(n)) return "Laptop";
   if (/ssd|hdd|hard disk|cd drive/.test(n)) return "Storage";
   if (/display|monitor/.test(n)) return "Display";
-  if (/phone|redmi pad/.test(n)) return "Phone";
+  if (/redmi pad|tablet|ipad/.test(n)) return "Tablet";
+  if (/phone/.test(n)) return "Phone";
   return "Accessory";
 };
 

@@ -32,12 +32,21 @@ function whenReady(fn: (os: OneSignalApi) => void | Promise<void>) {
 // downstream waits on this one promise instead of racing the SDK.
 let initDone: Promise<void> | null = null;
 
+// Push needs a secure origin, and OneSignal rejects init outright when the
+// origin is not the Site URL configured on the app ("Can only be used on:
+// https://..."). On http://localhost that is expected, not a fault — skip the
+// SDK entirely so dev consoles stay clean. To actually test push locally,
+// enable Local Testing in the app's Web config instead.
+function pushSupportedHere() {
+  return typeof window !== "undefined" && window.location.protocol === "https:";
+}
+
 export function OneSignalPush() {
   const user = useAuthStore((s) => s.user);
 
   // init once — the deferred queue runs it whenever the SDK finishes loading.
   useEffect(() => {
-    if (!APP_ID) return;
+    if (!APP_ID || !pushSupportedHere()) return;
     if (initDone) return;
     initDone = new Promise((resolve, reject) => {
       whenReady((OneSignal) =>
@@ -56,7 +65,7 @@ export function OneSignalPush() {
   // Tie the browser subscription to the staff record so the server can push by
   // staff id, and drop it on logout so a shared device stops receiving.
   useEffect(() => {
-    if (!APP_ID) return;
+    if (!APP_ID || !pushSupportedHere()) return;
     const uid = user?.uid;
     whenReady(async (OneSignal) => {
       try {
@@ -75,6 +84,8 @@ export function OneSignalPush() {
     });
   }, [user?.uid]);
 
+  // Render-time origin checks would differ between server and client, so the
+  // tag always ships and only init() is gated above — an uninitialised SDK is inert.
   if (!APP_ID) return null;
   return (
     <Script
