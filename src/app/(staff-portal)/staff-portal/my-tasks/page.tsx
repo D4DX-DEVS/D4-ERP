@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
-import { getDocuments, where } from "@/lib/firestore";
+import { countDocuments, where, QueryConstraint } from "@/lib/firestore";
+import { usePagination } from "@/hooks/use-pagination";
 import { changeTaskStatus } from "@/lib/tasks";
 import { useToast } from "@/components/ui/toast";
 import { Task } from "@/types";
@@ -13,6 +14,7 @@ import { formatDate, getStatusColor } from "@/lib/utils";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { ListingHeader, ListingPanel, ListingStatCard, ListingStatGrid } from "@/components/ui/listing";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { CheckCircle2, CircleDashed, ClipboardList, Eye, TimerReset } from "lucide-react";
 
 const priorityColors: Record<string, string> = {
@@ -20,79 +22,52 @@ const priorityColors: Record<string, string> = {
   high: "bg-orange-100 text-orange-700", urgent: "bg-red-100 text-red-700",
 };
 
+const PAGE_SIZE = 10;
+
 export default function MyTasksPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
-  const [tasks, setTasks] = useState<(Task & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const [reviewCount, setReviewCount] = useState(0);
+  const [tick, setTick] = useState(0);
 
-  const fetchTasks = async () => {
-    if (!user?.staffId) {
-      setLoading(false);
-      return;
-    }
-    try {
-      const data = await getDocuments<Task>("tasks", [
-        where("assigneeId", "==", user.staffId),
-      ]);
-      setTasks(data);
-    } catch (error) {
-      console.error("Error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Server-side pagination: the API returns only the current page per section.
+  // "__none__" matches nothing while the auth store hydrates.
+  const staffId = user?.staffId ?? "__none__";
+  const activeConstraints = useMemo<QueryConstraint[]>(
+    () => [where("assigneeId", "==", staffId), where("status", "!=", "done")],
+    [staffId]
+  );
+  const doneConstraints = useMemo<QueryConstraint[]>(
+    () => [where("assigneeId", "==", staffId), where("status", "==", "done")],
+    [staffId]
+  );
+  const active = usePagination<Task>("tasks", { pageSize: PAGE_SIZE, constraints: activeConstraints });
+  // "Recently closed" — order finished work by last touch, not creation date.
+  const done = usePagination<Task>("tasks", { pageSize: PAGE_SIZE, constraints: doneConstraints, orderByField: "updatedAt" });
 
   useEffect(() => {
-    const staffId = user?.staffId;
-    if (!staffId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLoading(false);
-      return;
-    }
-
-    let isMounted = true;
-
-    async function loadInitialTasks() {
-      try {
-        const data = await getDocuments<Task>("tasks", [
-          where("assigneeId", "==", staffId),
-        ]);
-
-        if (!isMounted) return;
-        setTasks(data);
-      } catch (error) {
-        console.error("Error:", error);
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadInitialTasks();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [user]);
+    if (!user?.staffId) return;
+    countDocuments("tasks", [where("assigneeId", "==", user.staffId), where("status", "==", "review")])
+      .then(setReviewCount)
+      .catch(() => {});
+  }, [user?.staffId, tick]);
 
   const handleStatusChange = async (task: Task & { id: string }, status: Task["status"]) => {
     if (!user) return;
     try {
       await changeTaskStatus(task, status, user);
-      fetchTasks();
+      active.refresh();
+      done.refresh();
+      setTick((t) => t + 1);
     } catch (error) {
       toast("error", error instanceof Error ? error.message : "Failed to update status");
     }
   };
 
-  if (loading) return <PageLoader />;
+  if (active.loading || done.loading) return <PageLoader />;
 
-  const activeTasks = tasks.filter((t) => t.status !== "done");
-  const doneTasks = tasks.filter((t) => t.status === "done");
-  const reviewTasks = tasks.filter((t) => t.status === "review");
+  const totalTasks = active.totalCount + done.totalCount;
 
   return (
     <div className="space-y-6">
@@ -102,14 +77,14 @@ export default function MyTasksPage() {
       />
 
       <ListingStatGrid>
-        <ListingStatCard icon={<ClipboardList className="h-5 w-5" />} label="Total Tasks" value={tasks.length} toneClassName="bg-slate-100 text-slate-700" meta="Assigned to you" />
-        <ListingStatCard icon={<CircleDashed className="h-5 w-5" />} label="Active" value={activeTasks.length} toneClassName="bg-sky-50 text-sky-700" meta="Not yet completed" />
-        <ListingStatCard icon={<TimerReset className="h-5 w-5" />} label="In Review" value={reviewTasks.length} toneClassName="bg-amber-50 text-amber-700" meta="Waiting for approval" />
-        <ListingStatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Completed" value={doneTasks.length} toneClassName="bg-indigo-50 text-indigo-700" meta="Finished tasks" />
+        <ListingStatCard icon={<ClipboardList className="h-5 w-5" />} label="Total Tasks" value={totalTasks} toneClassName="bg-slate-100 text-slate-700" meta="Assigned to you" />
+        <ListingStatCard icon={<CircleDashed className="h-5 w-5" />} label="Active" value={active.totalCount} toneClassName="bg-sky-50 text-sky-700" meta="Not yet completed" />
+        <ListingStatCard icon={<TimerReset className="h-5 w-5" />} label="In Review" value={reviewCount} toneClassName="bg-amber-50 text-amber-700" meta="Waiting for approval" />
+        <ListingStatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Completed" value={done.totalCount} toneClassName="bg-indigo-50 text-indigo-700" meta="Finished tasks" />
       </ListingStatGrid>
 
       <ListingPanel title="Active Tasks" description="Track progress, update status, or open the full task detail page." contentClassName="space-y-4">
-        {activeTasks.length === 0 ? (
+        {active.totalCount === 0 ? (
           <EmptyState title="No active tasks" description="New assignments will appear here once they are linked to your account." />
         ) : (
           <Table>
@@ -123,7 +98,7 @@ export default function MyTasksPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {activeTasks.map((task) => {
+              {active.data.map((task) => {
                 const detailHref = `/staff-portal/my-tasks/${task.id}`;
 
                 return (
@@ -173,10 +148,20 @@ export default function MyTasksPage() {
             </TableBody>
           </Table>
         )}
+        <Pagination
+          page={active.page}
+          totalPages={active.totalPages}
+          totalCount={active.totalCount}
+          pageSize={active.pageSize}
+          hasNext={active.hasNext}
+          hasPrev={active.hasPrev}
+          onNext={active.nextPage}
+          onPrev={active.prevPage}
+        />
       </ListingPanel>
 
       <ListingPanel title="Completed Tasks" description="Recently closed items stay available for review and reference.">
-        {doneTasks.length === 0 ? (
+        {done.totalCount === 0 ? (
           <p className="text-sm text-slate-500">No completed tasks yet.</p>
         ) : (
           <Table>
@@ -189,7 +174,7 @@ export default function MyTasksPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {doneTasks.slice(0, 8).map((task) => {
+              {done.data.map((task) => {
                 const detailHref = `/staff-portal/my-tasks/${task.id}`;
 
                 return (
@@ -222,6 +207,16 @@ export default function MyTasksPage() {
             </TableBody>
           </Table>
         )}
+        <Pagination
+          page={done.page}
+          totalPages={done.totalPages}
+          totalCount={done.totalCount}
+          pageSize={done.pageSize}
+          hasNext={done.hasNext}
+          hasPrev={done.hasPrev}
+          onNext={done.nextPage}
+          onPrev={done.prevPage}
+        />
       </ListingPanel>
     </div>
   );

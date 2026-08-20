@@ -59,6 +59,23 @@ export function verifyTokenString(token: string | undefined | null): TokenPayloa
   }
 }
 
+/**
+ * Lifetime the given token was originally issued with, or null if it is not a
+ * valid session. Lets a renewal keep the issuing context's window (7 days for a
+ * browser, 90 for an installed PWA) without stashing that choice anywhere.
+ */
+export function tokenTtlSeconds(token: string | undefined | null): number | null {
+  if (!token) return null;
+  try {
+    const decoded = jwt.verify(token, getJwtSecret()) as jwt.JwtPayload;
+    if (typeof decoded?.iat !== "number" || typeof decoded?.exp !== "number") return null;
+    const ttl = decoded.exp - decoded.iat;
+    return ttl > 0 ? ttl : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Extract and verify the session from a request (cookie first, then Bearer header). */
 export function getAuthUser(req: NextRequest): TokenPayload | null {
   const cookieToken = req.cookies.get(AUTH_COOKIE)?.value;
