@@ -60,6 +60,12 @@ const emptyForm = {
   tags: "",
 };
 
+// DatePicker speaks "yyyy-mm-dd"; en-CA formats exactly that, in local time.
+// toISOString() would hand back the UTC day, which is yesterday before 05:30 IST.
+function todayValue() {
+  return new Date().toLocaleDateString("en-CA");
+}
+
 export default function TasksPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
@@ -724,7 +730,10 @@ export default function TasksPage() {
             </div>
             <div className="space-y-2">
               <Label>Due Date *</Label>
-              <DatePicker value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} required />
+              {/* A new task cannot be due before today. Editing stays open — an
+                  already-overdue task must still be reschedulable to any date. */}
+              <DatePicker value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
+                min={editingId ? undefined : todayValue()} required />
             </div>
           </div>
 
