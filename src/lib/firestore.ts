@@ -68,10 +68,37 @@ export function startAfter(): QueryConstraint {
 let _auditUser: { uid: string; firstName: string; lastName: string } | null = null;
 
 export function setAuditUser(user: typeof _auditUser) {
+  // Identity change = different server-side scoping. Drop everything cached for the old user.
+  if (_auditUser?.uid !== user?.uid) clearCache();
   _auditUser = user;
 }
 
-async function apiCall(body: Record<string, unknown>) {
+// ── Read cache (stale-while-TTL + in-flight dedupe) ───────────────────────────
+// Reads hit /api/db on every mount otherwise, so every navigation re-showed a
+// PageLoader for data that had not changed. Writes invalidate their collection.
+const CACHE_TTL_MS = 30_000;
+const READ_ACTIONS = new Set(["find", "paginate", "count", "findOne", "findSub"]);
+
+const _cache = new Map<string, { at: number; collection: string; data: unknown }>();
+const _inflight = new Map<string, Promise<unknown>>();
+
+export function clearCache(collection?: string) {
+  if (!collection) {
+    _cache.clear();
+    return;
+  }
+  for (const [key, entry] of _cache) {
+    if (entry.collection === collection) _cache.delete(key);
+  }
+}
+
+// Callers sort/splice the arrays they get back; hand out a copy so the cached
+// value cannot be mutated underneath the next reader.
+function detach<T>(data: T): T {
+  return Array.isArray(data) ? ([...data] as T) : data;
+}
+
+async function rawCall(body: Record<string, unknown>) {
   // Attach audit user info for server-side audit logging
   if (_auditUser) {
     body.auditUser = { uid: _auditUser.uid, name: `${_auditUser.firstName} ${_auditUser.lastName}` };
@@ -86,6 +113,39 @@ async function apiCall(body: Record<string, unknown>) {
     throw new Error(err.error || "Request failed");
   }
   return res.json();
+}
+
+async function apiCall(body: Record<string, unknown>) {
+  const action = body.action as string;
+  const collection = body.collection as string;
+
+  if (!READ_ACTIONS.has(action)) {
+    const result = await rawCall(body);
+    clearCache(collection);
+    // Sub-collection writes are keyed on the parent collection too.
+    if (typeof body.parentCollection === "string") clearCache(body.parentCollection);
+    return result;
+  }
+
+  const key = JSON.stringify(body);
+  const hit = _cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return detach(hit.data);
+
+  const pending = _inflight.get(key);
+  if (pending) return detach(await pending);
+
+  const promise = rawCall(body)
+    .then((data) => {
+      _cache.set(key, { at: Date.now(), collection, data });
+      _inflight.delete(key);
+      return data;
+    })
+    .catch((err) => {
+      _inflight.delete(key);
+      throw err;
+    });
+  _inflight.set(key, promise);
+  return detach(await promise);
 }
 
 // ── Generic CRUD (same signatures as before) ──────────────────────────────────

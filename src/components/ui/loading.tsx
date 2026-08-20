@@ -7,9 +7,11 @@ export function LoadingSpinner({ className }: { className?: string }) {
   return <Loader2 className={cn("h-6 w-6 animate-spin text-blue-600", className)} />;
 }
 
+// ponytail: CSS-only delay, no timer state. Warm-cache reads resolve in a
+// microtask, so the spinner unmounts before it ever fades in.
 export function PageLoader() {
   return (
-    <div className="flex items-center justify-center min-h-[400px]">
+    <div className="delayed-appear flex items-center justify-center min-h-[400px]">
       <LoadingSpinner className="h-8 w-8" />
     </div>
   );

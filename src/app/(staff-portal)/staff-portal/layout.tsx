@@ -245,7 +245,8 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
       </aside>
 
       <div className="relative z-10 min-h-screen lg:pl-[304px]">
-        <header className="px-4 pt-4 sm:px-6 lg:px-8 lg:pt-5">
+        {/* ponytail: header is mobile-only on the portal home; other pages hide it under lg */}
+        <header className={cn("px-4 pt-4 sm:px-6 lg:px-8 lg:pt-5", pathname !== "/staff-portal" && "hidden lg:block")}>
           {/* Mobile: one compact row (title + avatar). Full hero from sm up. */}
           <div className="page-frame glass-panel flex items-center justify-between gap-4 rounded-[24px] px-4 py-3 sm:min-h-[var(--header-height)] sm:rounded-[32px] sm:px-6 sm:py-4 lg:px-8">
             <div className="min-w-0">

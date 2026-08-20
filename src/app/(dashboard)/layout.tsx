@@ -158,7 +158,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <BottomNav />
       <CommandSearch />
       <div className="relative z-10 min-h-screen lg:pl-[calc(var(--sidebar-width)+1.75rem)]">
-        <Header />
+        {/* ponytail: header is mobile-only on the dashboard root; every other page hides it under lg */}
+        <div className={pathname === "/dashboard" ? undefined : "hidden lg:block"}>
+          <Header />
+        </div>
         <main className="page-frame px-4 pb-24 pt-4 sm:px-5 lg:px-6 lg:pb-16 lg:pt-5">
           <div>{children}</div>
         </main>
