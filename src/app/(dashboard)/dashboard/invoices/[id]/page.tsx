@@ -57,6 +57,11 @@ export default function InvoiceDetailPage() {
     terms: "",
   });
   const [editSaving, setEditSaving] = useState(false);
+  const editSubtotal = editForm.items.reduce((s, it) => s + it.amount, 0);
+  // ponytail: clamp to [0, subtotal] so a typo can't make the total negative
+  const editDiscountAmount = Math.min(editSubtotal, Math.max(0, editForm.discount.type === "percentage"
+    ? (editSubtotal * editForm.discount.value) / 100
+    : editForm.discount.value));
   const [loading, setLoading] = useState(true);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -309,11 +314,8 @@ export default function InvoiceDetailPage() {
     if (!invoice) return;
     setEditSaving(true);
     try {
-      const subtotal = editForm.items.reduce((s, it) => s + it.amount, 0);
-      const discountAmount = editForm.discount.type === "percentage"
-        ? (subtotal * editForm.discount.value) / 100
-        : editForm.discount.value;
-      const taxable = subtotal - discountAmount;
+      const subtotal = editSubtotal;
+      const taxable = subtotal - editDiscountAmount;
       let cgst = 0, sgst = 0, igst = 0;
       if (editForm.taxType === "gst") {
         if (editForm.isInterState) igst = (taxable * editForm.gstRate) / 100;
@@ -761,7 +763,8 @@ export default function InvoiceDetailPage() {
                 </div>
                 {invoice.discount?.value > 0 && (
                   <div className="flex items-baseline justify-between gap-8 text-sm text-red-600">
-                    <span className="whitespace-nowrap">Discount</span><span className="whitespace-nowrap">-{formatCurrency(invoice.discount.value)}</span>
+                    <span className="whitespace-nowrap">Discount{invoice.discount.type === "percentage" ? ` (${invoice.discount.value}%)` : ""}</span>
+                    <span className="whitespace-nowrap">-{formatCurrency(invoice.discount.type === "percentage" ? (invoice.subtotal * invoice.discount.value) / 100 : invoice.discount.value)}</span>
                   </div>
                 )}
                 {invoice.gstDetails && !invoice.gstDetails.isInterState && (
@@ -1001,6 +1004,32 @@ export default function InvoiceDetailPage() {
                 <Input type="number" value={editForm.gstRate} onChange={(e) => setEditForm({ ...editForm, gstRate: Number(e.target.value) })} placeholder="e.g. 18" />
               </div>
             )}
+            <div className="space-y-1">
+              <Label>Discount Type</Label>
+              <SelectRoot value={editForm.discount.type} onValueChange={(v) => setEditForm({ ...editForm, discount: { ...editForm.discount, type: v as "fixed" | "percentage" } })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">Fixed Amount</SelectItem>
+                  <SelectItem value="percentage">Percentage (%)</SelectItem>
+                </SelectContent>
+              </SelectRoot>
+            </div>
+            <div className="space-y-1">
+              <Label>Discount (optional)</Label>
+              <div className="relative">
+                <Input type="number" min="0" step="0.01" max={editForm.discount.type === "percentage" ? 100 : undefined}
+                  placeholder="0" className="pr-8" value={editForm.discount.value || ""}
+                  onChange={(e) => setEditForm({ ...editForm, discount: { ...editForm.discount, value: Math.max(0, Number(e.target.value) || 0) } })} />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+                  {editForm.discount.type === "percentage" ? "%" : "₹"}
+                </span>
+              </div>
+              {editForm.discount.value > 0 && (
+                <p className="text-xs text-red-600">
+                  -{formatCurrency(editDiscountAmount)} off {formatCurrency(editSubtotal)}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Items */}
