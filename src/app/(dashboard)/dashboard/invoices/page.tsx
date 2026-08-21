@@ -127,7 +127,8 @@ export default function InvoicesPage() {
 
   const calculateTotals = () => {
     const subtotal = form.items.reduce((sum, item) => sum + item.amount, 0);
-    const discountAmount = form.discount.type === "percentage" ? (subtotal * form.discount.value) / 100 : form.discount.value;
+    // ponytail: clamp to [0, subtotal] so a typo can't make the total negative
+    const discountAmount = Math.min(subtotal, Math.max(0, form.discount.type === "percentage" ? (subtotal * form.discount.value) / 100 : form.discount.value));
     const taxable = subtotal - discountAmount;
     let cgst = 0, sgst = 0, igst = 0;
     if (form.taxType === "gst") {
@@ -399,6 +400,35 @@ export default function InvoicesPage() {
                 />
               </div>
             ))}
+          </div>
+
+          {/* Discount (optional) */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Discount Type</Label>
+              <Select value={form.discount.type} onChange={(e) => setForm({ ...form, discount: { ...form.discount, type: e.target.value as "fixed" | "percentage" } })}
+                options={[{ value: "fixed", label: "Fixed Amount" }, { value: "percentage", label: "Percentage (%)" }]} />
+            </div>
+            <div className="space-y-2">
+              <Label>Discount Value (optional)</Label>
+              <div className="relative">
+                <Input type="number" min="0" step="0.01" max={form.discount.type === "percentage" ? 100 : undefined}
+                  placeholder="0" className="pr-8" value={form.discount.value || ""}
+                  onChange={(e) => setForm({ ...form, discount: { ...form.discount, value: Math.max(0, Number(e.target.value) || 0) } })} />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+                  {form.discount.type === "percentage" ? "%" : "₹"}
+                </span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Discount Amount</Label>
+              <div className="h-10 flex items-center text-sm text-red-600">
+                -{formatCurrency(totals.discountAmount)}
+                {form.discount.type === "percentage" && form.discount.value > 0 && (
+                  <span className="ml-1 text-slate-400">({form.discount.value}% of {formatCurrency(totals.subtotal)})</span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Tax Settings */}
