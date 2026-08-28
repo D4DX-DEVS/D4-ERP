@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getModel } from "@/models";
-import { getAuthUser, signToken, sessionCookieOptions, tokenTtlSeconds, AUTH_COOKIE } from "@/lib/auth";
+import {
+  getAuthUser,
+  signToken,
+  sessionCookieOptions,
+  tokenTtlSeconds,
+  renewalTtlSeconds,
+  AUTH_COOKIE,
+} from "@/lib/auth";
 
 /**
  * Current effective authorization state, resolved from the staff document so
@@ -28,8 +35,10 @@ export async function GET(req: NextRequest) {
   // Slide the session forward on every workspace load. Without this the cookie
   // counts down from login and expires mid-use — an installed PWA that the OS
   // kills and relaunches then comes back logged out. Renewed with the window it
-  // was issued with, so a browser login stays 7 days and a PWA login stays 90.
-  const ttl = tokenTtlSeconds(req.cookies.get(AUTH_COOKIE)?.value);
+  // was issued with (browser 7 days, PWA 90); the x-pwa header upgrades a
+  // browser-issued session when the app was installed after login.
+  const issuedTtl = tokenTtlSeconds(req.cookies.get(AUTH_COOKIE)?.value);
+  const ttl = renewalTtlSeconds(issuedTtl, req.headers.get("x-pwa") === "1");
   if (ttl) {
     res.cookies.set(AUTH_COOKIE, signToken(user, ttl), sessionCookieOptions(ttl));
   }

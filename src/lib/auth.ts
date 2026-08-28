@@ -76,6 +76,18 @@ export function tokenTtlSeconds(token: string | undefined | null): number | null
   }
 }
 
+/**
+ * TTL to renew a session with. Normally the window it was issued with, but a
+ * request from an installed PWA upgrades a shorter browser-issued session to
+ * the PWA window — covers "logged in from a browser tab, installed the app
+ * afterwards", which would otherwise stay on the 7-day clock forever.
+ */
+export function renewalTtlSeconds(issuedTtl: number | null, isPwa: boolean): number | null {
+  if (issuedTtl === null) return null;
+  if (isPwa && issuedTtl < PWA_TOKEN_TTL_SECONDS) return PWA_TOKEN_TTL_SECONDS;
+  return issuedTtl;
+}
+
 /** Extract and verify the session from a request (cookie first, then Bearer header). */
 export function getAuthUser(req: NextRequest): TokenPayload | null {
   const cookieToken = req.cookies.get(AUTH_COOKIE)?.value;
