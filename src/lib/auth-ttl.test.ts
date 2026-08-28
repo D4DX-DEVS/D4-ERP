@@ -24,3 +24,27 @@ describe("tokenTtlSeconds", () => {
     expect(tokenTtlSeconds(signToken(payload, -10))).toBeNull();
   });
 });
+
+describe("renewalTtlSeconds", () => {
+  it("keeps the issued window for a plain browser session", async () => {
+    const { renewalTtlSeconds } = await import("./auth");
+    expect(renewalTtlSeconds(3600, false)).toBe(3600);
+  });
+
+  it("upgrades a browser-issued session to the PWA window when the app is installed", async () => {
+    const { renewalTtlSeconds, PWA_TOKEN_TTL_SECONDS } = await import("./auth");
+    expect(renewalTtlSeconds(60 * 60 * 24 * 7, true)).toBe(PWA_TOKEN_TTL_SECONDS);
+  });
+
+  it("never shortens an already-long PWA session", async () => {
+    const { renewalTtlSeconds, PWA_TOKEN_TTL_SECONDS } = await import("./auth");
+    expect(renewalTtlSeconds(PWA_TOKEN_TTL_SECONDS, true)).toBe(PWA_TOKEN_TTL_SECONDS);
+    expect(renewalTtlSeconds(PWA_TOKEN_TTL_SECONDS, false)).toBe(PWA_TOKEN_TTL_SECONDS);
+  });
+
+  it("passes null through — a dead session is never renewed", async () => {
+    const { renewalTtlSeconds } = await import("./auth");
+    expect(renewalTtlSeconds(null, true)).toBeNull();
+    expect(renewalTtlSeconds(null, false)).toBeNull();
+  });
+});

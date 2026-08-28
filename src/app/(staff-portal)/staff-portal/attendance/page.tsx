@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
-import { ChevronDown, ChevronLeft, ChevronRight, ClipboardEdit, Send } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ClipboardEdit, RotateCw, Send } from "lucide-react";
 
 const CORRECTION_STATUS_VALUES: ActiveAttendanceStatus[] = [
   "on-duty",
@@ -86,6 +86,19 @@ export default function StaffAttendancePage() {
   const [submittingCorrection, setSubmittingCorrection] = useState(false);
   const [corrections, setCorrections] = useState<(AttendanceCorrection & { id: string })[]>([]);
 
+  // Bumping this refetches attendance + corrections. Installed PWAs keep this
+  // page mounted for days, so mount-only fetches go stale — e.g. an admin
+  // approves a correction and the staff view never shows it. Refetch when the
+  // app is resumed, plus a manual refresh button.
+  const [refreshKey, setRefreshKey] = useState(0);
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") setRefreshKey((k) => k + 1);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+
   // Correction request history — staff can see where each request stands.
   useEffect(() => {
     if (!user?.staffId) return;
@@ -101,7 +114,7 @@ export default function StaffAttendancePage() {
     return () => {
       active = false;
     };
-  }, [user?.staffId]);
+  }, [user?.staffId, refreshKey]);
 
   // Fetch the whole year once — covers both views, no refetch on month change.
   useEffect(() => {
@@ -133,7 +146,7 @@ export default function StaffAttendancePage() {
     return () => {
       active = false;
     };
-  }, [user?.staffId, year, toast]);
+  }, [user?.staffId, year, toast, refreshKey]);
 
   const recordByDay = useMemo(() => {
     const map = new Map<string, Attendance & { id: string }>();
@@ -333,6 +346,15 @@ export default function StaffAttendancePage() {
               )}
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setRefreshKey((k) => k + 1)}
+                disabled={loading}
+                aria-label="Refresh attendance"
+              >
+                <RotateCw className={"h-4 w-4" + (loading ? " animate-spin" : "")} />
+              </Button>
               {view === "year" && (
                 <Select
                   value={String(year)}
