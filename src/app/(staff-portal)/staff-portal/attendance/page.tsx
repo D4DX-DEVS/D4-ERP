@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
-import { createDocument, getDocuments, orderBy, where, Timestamp } from "@/lib/firestore";
+import { clearCache, createDocument, getDocuments, orderBy, where, Timestamp } from "@/lib/firestore";
+import { pickAttendanceRecord } from "@/lib/attendance-dedupe";
 import { Attendance, AttendanceCorrection } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
 import { getAdminStaffIds, getDeptHeadStaffId } from "@/lib/requests";
@@ -91,13 +92,20 @@ export default function StaffAttendancePage() {
   // approves a correction and the staff view never shows it. Refetch when the
   // app is resumed, plus a manual refresh button.
   const [refreshKey, setRefreshKey] = useState(0);
+  // Bust the 30s read cache first — a refetch with identical constraints would
+  // otherwise hit the same cache key and hand back the stale data.
+  const refresh = useCallback(() => {
+    clearCache("attendance");
+    clearCache("attendance_corrections");
+    setRefreshKey((k) => k + 1);
+  }, []);
   useEffect(() => {
     const onVisibility = () => {
-      if (document.visibilityState === "visible") setRefreshKey((k) => k + 1);
+      if (document.visibilityState === "visible") refresh();
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, []);
+  }, [refresh]);
 
   // Correction request history — staff can see where each request stands.
   useEffect(() => {
@@ -152,7 +160,11 @@ export default function StaffAttendancePage() {
     const map = new Map<string, Attendance & { id: string }>();
     for (const r of records) {
       const s = secOf(r.date);
-      if (s) map.set(localDateKey(new Date(s * 1000)), r);
+      if (!s) continue;
+      const key = localDateKey(new Date(s * 1000));
+      const prev = map.get(key);
+      // Duplicate rows for one day: correction > manual > import, then newest write
+      map.set(key, prev ? pickAttendanceRecord(prev, r) : r);
     }
     return map;
   }, [records]);
@@ -349,7 +361,7 @@ export default function StaffAttendancePage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setRefreshKey((k) => k + 1)}
+                onClick={refresh}
                 disabled={loading}
                 aria-label="Refresh attendance"
               >

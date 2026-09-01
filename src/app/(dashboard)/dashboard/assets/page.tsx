@@ -31,6 +31,7 @@ export default function AssetsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
+  const [pageSize, setPageSize] = useState(10);
   const { toast } = useToast();
   const constraints = useMemo(() => {
     const nextConstraints: Array<ReturnType<typeof where> | ReturnType<typeof searchConstraint>> = [];
@@ -54,7 +55,7 @@ export default function AssetsPage() {
     prevPage,
     refresh,
   } = usePagination<Asset>("assets", {
-    pageSize: 10,
+    pageSize,
     orderByField: "createdAt",
     orderDirection: "desc",
     constraints,
@@ -236,7 +237,7 @@ export default function AssetsPage() {
               ))}
             </TableBody>
           </Table>
-          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={10} />
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
         </CardContent></Card>
       )}
 

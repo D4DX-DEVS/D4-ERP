@@ -77,7 +77,7 @@ export function setAuditUser(user: typeof _auditUser) {
 // Reads hit /api/db on every mount otherwise, so every navigation re-showed a
 // PageLoader for data that had not changed. Writes invalidate their collection.
 const CACHE_TTL_MS = 30_000;
-const READ_ACTIONS = new Set(["find", "paginate", "count", "findOne", "findSub"]);
+const READ_ACTIONS = new Set(["find", "paginate", "count", "sum", "findOne", "findSub"]);
 
 const _cache = new Map<string, { at: number; collection: string; data: unknown }>();
 const _inflight = new Map<string, Promise<unknown>>();
@@ -174,6 +174,16 @@ export async function countDocuments(
   return result.total;
 }
 
+/** Server-side SUM of a numeric field over every document matching the constraints. */
+export async function sumDocuments(
+  collectionName: string,
+  constraints: QueryConstraint[] = [],
+  field: string
+): Promise<number> {
+  const result = await apiCall({ action: "sum", collection: collectionName, constraints, field });
+  return result.total;
+}
+
 export async function getDocument<T>(
   collectionName: string,
   docId: string
@@ -211,8 +221,11 @@ export async function deleteDocument(
  * Backed by a server-side findOneAndUpdate ($inc, upsert) so concurrent callers
  * never receive the same value — guaranteeing duplicate-free document numbers.
  */
-export async function getNextSequence(key: string): Promise<number> {
-  const result = await apiCall({ action: "nextSequence", collection: "number_sequences", key });
+export async function getNextSequence(
+  key: string,
+  legacy?: { prefix: string; suffix?: string }
+): Promise<number> {
+  const result = await apiCall({ action: "nextSequence", collection: "number_sequences", key, legacy });
   return result.value as number;
 }
 

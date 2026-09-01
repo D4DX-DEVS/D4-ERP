@@ -17,7 +17,7 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
   ({ className, options, placeholder, value, onChange, disabled, id, name, required, footerAction }, ref) => {
     const [open, setOpen] = React.useState(false);
     const [mounted, setMounted] = React.useState(false);
-    const [coords, setCoords] = React.useState({ top: 0, left: 0, width: 0 });
+    const [coords, setCoords] = React.useState<{ top?: number; bottom?: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
     const triggerRef = React.useRef<HTMLButtonElement>(null);
     const listRef = React.useRef<HTMLDivElement>(null);
 
@@ -32,7 +32,17 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
       const el = triggerRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
-      setCoords({ top: r.bottom + 6, left: r.left, width: r.width });
+      // List is max-h-60 (240px). When it can't fit below the trigger (e.g. a
+      // pagination footer at the bottom of the page), open upward instead.
+      // Anchored via `bottom` (not a translate) so the fade-in animation's
+      // transform can't override the position and flash the list downward.
+      const spaceBelow = window.innerHeight - r.bottom;
+      const dropUp = spaceBelow < 254 && r.top > spaceBelow;
+      setCoords(
+        dropUp
+          ? { bottom: window.innerHeight - r.top + 6, left: r.left, width: r.width }
+          : { top: r.bottom + 6, left: r.left, width: r.width }
+      );
     }, []);
 
     const toggle = () => {
@@ -102,7 +112,13 @@ const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
               <div
                 ref={listRef}
                 role="listbox"
-                style={{ position: "fixed", top: coords.top, left: coords.left, width: coords.width }}
+                style={{
+                  position: "fixed",
+                  top: coords.top,
+                  bottom: coords.bottom,
+                  left: coords.left,
+                  width: coords.width,
+                }}
                 className="scrollbar-hide z-[201] max-h-60 overflow-y-auto rounded-[20px] border border-slate-200/80 bg-white p-1.5 shadow-[0_8px_32px_rgba(15,23,42,0.12),0_2px_8px_rgba(15,23,42,0.06)] backdrop-blur-xl animate-in"
               >
                 {options.length === 0 && (

@@ -245,6 +245,12 @@ export default function StaffProfilePage() {
               <InfoRow icon={<Building className="h-4 w-4" />} label="Company" value={company?.name || staff.companyId || "—"} />
               <InfoRow icon={<Calendar className="h-4 w-4" />} label="Joining Date" value={staff.dateOfJoining ? formatDate(new Date(staff.dateOfJoining.seconds * 1000)) : "—"} />
               <InfoRow icon={<IndianRupee className="h-4 w-4" />} label="Current Salary" value={staff.currentSalary ? formatCurrency(staff.currentSalary) : "—"} />
+              {staff.jobDescription && (
+                <div className="pt-3 border-t">
+                  <p className="text-xs text-gray-500 mb-1">Job Description</p>
+                  <p className="text-sm text-gray-900 whitespace-pre-wrap">{staff.jobDescription}</p>
+                </div>
+              )}
             </CardContent>
           </Card>
 

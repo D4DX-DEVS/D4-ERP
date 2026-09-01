@@ -22,6 +22,7 @@ import { ArrowLeft, DollarSign, Download, Loader2, MessageCircle, Pencil, Plus, 
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { clampDiscount, discountAmount } from "@/lib/invoice-discount";
 import { generateDocNumber } from "@/lib/numbering";
 import { generateDocumentPdfBlob, downloadPdfBlob as savePdfBlob, printPdfBlob as printPdfDoc } from "@/lib/document-pdf";
 import { useWorkspaceBase } from "@/hooks/use-workspace-base";
@@ -58,10 +59,8 @@ export default function InvoiceDetailPage() {
   });
   const [editSaving, setEditSaving] = useState(false);
   const editSubtotal = editForm.items.reduce((s, it) => s + it.amount, 0);
-  // ponytail: clamp to [0, subtotal] so a typo can't make the total negative
-  const editDiscountAmount = Math.min(editSubtotal, Math.max(0, editForm.discount.type === "percentage"
-    ? (editSubtotal * editForm.discount.value) / 100
-    : editForm.discount.value));
+  // Clamped to [0, subtotal] so a typo can't make the total negative
+  const editDiscountAmount = discountAmount(editForm.discount, editSubtotal);
   const [loading, setLoading] = useState(true);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -330,7 +329,9 @@ export default function InvoiceDetailPage() {
         dueDate: editForm.dueDate ? Timestamp.fromDate(new Date(editForm.dueDate)) : null,
         items: editForm.items,
         subtotal,
-        discount: editForm.discount,
+        // Store the same clamped value the totals were computed with — an
+        // unclamped 150% would reload as a discount larger than the subtotal.
+        discount: clampDiscount(editForm.discount, subtotal),
         taxType: editForm.taxType,
         gstDetails: editForm.taxType === "gst" ? {
           gstRate: editForm.gstRate,
@@ -764,7 +765,7 @@ export default function InvoiceDetailPage() {
                 {invoice.discount?.value > 0 && (
                   <div className="flex items-baseline justify-between gap-8 text-sm text-red-600">
                     <span className="whitespace-nowrap">Discount{invoice.discount.type === "percentage" ? ` (${invoice.discount.value}%)` : ""}</span>
-                    <span className="whitespace-nowrap">-{formatCurrency(invoice.discount.type === "percentage" ? (invoice.subtotal * invoice.discount.value) / 100 : invoice.discount.value)}</span>
+                    <span className="whitespace-nowrap">-{formatCurrency(discountAmount(invoice.discount, invoice.subtotal))}</span>
                   </div>
                 )}
                 {invoice.gstDetails && !invoice.gstDetails.isInterState && (

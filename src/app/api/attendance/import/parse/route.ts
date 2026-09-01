@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getModel } from "@/models";
 import { getAuthUser } from "@/lib/auth";
+import { effectiveSubject } from "@/lib/effective-grants";
 import { hasFeature } from "@/lib/permissions";
 import { isStorageConfigured, uploadToSpaces } from "@/lib/storage";
 import { parseAttendancePdf } from "@/lib/attendance-import/parsers";
@@ -16,7 +17,9 @@ export interface StaffMatch {
 export async function POST(req: NextRequest) {
   const user = getAuthUser(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!hasFeature({ role: user.role, grantedFeatures: user.features }, "attendance-import")) {
+  await connectDB();
+  // Fresh grants, not the login-time JWT snapshot — see effective-grants.ts
+  if (!hasFeature(await effectiveSubject(user), "attendance-import")) {
     return NextResponse.json({ error: "You do not have permission to import attendance." }, { status: 403 });
   }
   if (!isStorageConfigured()) {

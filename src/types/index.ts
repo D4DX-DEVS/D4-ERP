@@ -977,12 +977,15 @@ export type EventManagementStatus =
   | "completed"
   | "cancelled";
 export type EventManagementType =
-  | "shoot"
-  | "wedding"
+  | "event"
+  | "podcast-shoot"
   | "corporate"
-  | "concert"
   | "exhibition"
   | "other"
+  // legacy values still present on old records
+  | "shoot"
+  | "wedding"
+  | "concert"
   | (string & {}); // custom types added at runtime via Event Type "+ Add"
 
 export interface EventStaffAssignment {
@@ -1009,6 +1012,8 @@ export interface ManagedEvent extends BaseDocument {
   budget?: number;
   actualCost?: number;
   assignedStaff: EventStaffAssignment[];
+  /** Denormalized staff ids from assignedStaff — enables array-contains queries. */
+  assignedStaffIds?: string[];
   linkedAssets?: string[];
   linkedStudioBookings?: string[];
   linkedQuotationId?: string;

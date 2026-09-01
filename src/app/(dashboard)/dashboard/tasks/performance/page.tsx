@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getDocuments, orderBy } from "@/lib/firestore";
+import { getDocuments, orderBy, where, QueryConstraint } from "@/lib/firestore";
 import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/loading";
@@ -22,27 +22,29 @@ export default function PerformancePage() {
   const [period, setPeriod] = useState<"week" | "month" | "all">("month");
 
   useEffect(() => {
-    async function fetch() {
-      try {
-        const data = await getDocuments<WorkLog>("work_logs", [orderBy("date", "desc")]);
-        setLogs(data);
-      } catch (error) {
-        console.error("Failed:", error);
-      } finally {
-        setLoading(false);
-      }
+    // Period filter lives in the query — week/month views never pull the whole
+    // log history. "All time" is an explicit full scan the user opts into.
+    let cancelled = false;
+    const constraints: QueryConstraint[] = [orderBy("date", "desc")];
+    if (period !== "all") {
+      const days = period === "week" ? 7 : 30;
+      const cutoff = new Date(Date.now() - days * 86_400_000).toISOString().split("T")[0];
+      constraints.unshift(where("date", ">=", cutoff));
     }
-    void fetch();
-  }, []);
+    getDocuments<WorkLog>("work_logs", constraints)
+      .then((data) => {
+        if (!cancelled) setLogs(data);
+      })
+      .catch((error) => console.error("Failed:", error))
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [period]);
 
-  const now = new Date();
-  const filtered = logs.filter((l) => {
-    if (period === "all") return true;
-    const logDate = new Date(l.date);
-    const diffDays = Math.ceil((now.getTime() - logDate.getTime()) / (1000 * 60 * 60 * 24));
-    if (period === "week") return diffDays <= 7;
-    return diffDays <= 30;
-  });
+  const filtered = logs;
 
   // Aggregate per staff
   const staffMap = new Map<string, StaffSummary>();

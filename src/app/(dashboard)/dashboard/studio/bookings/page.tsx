@@ -7,10 +7,11 @@ import {
   createDocument,
   updateDocument,
   deleteDocument,
-  orderBy,
   where,
+  search as searchConstraint,
   Timestamp,
 } from "@/lib/firestore";
+import { usePagination } from "@/hooks/use-pagination";
 import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast";
 import { ListingHeader } from "@/components/ui/listing";
@@ -24,6 +25,7 @@ import { TimePicker } from "@/components/ui/time-picker";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/loading";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -104,14 +106,12 @@ export default function StudioBookingsPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
 
-  const [bookings, setBookings] = useState<StudioBooking[]>([]);
   const [studios, setStudios] = useState<Studio[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [assets, setAssets] = useState<(Asset & { id: string })[]>([]);
   const [equipment, setEquipment] = useState<(StudioEquipment & { id: string })[]>([]);
   const [outMovements, setOutMovements] = useState<(AssetMovement & { id: string })[]>([]);
   const [assetEvents, setAssetEvents] = useState<(AssetEvent & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<BookingForm>(emptyForm);
@@ -119,11 +119,41 @@ export default function StudioBookingsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [pageSize, setPageSize] = useState(20);
+  // Conflict/availability checks need every booking on the chosen day — the
+  // paginated listing only holds one page, so the day's bookings load separately.
+  const [dateBookings, setDateBookings] = useState<StudioBooking[]>([]);
+
+  const constraints = useMemo(() => {
+    const c: ReturnType<typeof where>[] = [];
+    if (statusFilter !== "all") c.push(where("status", "==", statusFilter));
+    if (searchQuery.trim()) {
+      c.push(searchConstraint(["purpose", "clientName", "studioName", "requestedByName"], searchQuery.trim()));
+    }
+    return c;
+  }, [statusFilter, searchQuery]);
+
+  const {
+    data: bookings,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<StudioBooking>("studio_bookings", {
+    pageSize,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints,
+  });
 
   const fetchData = async () => {
     try {
-      const [b, s, c, a, eq, mv, ev] = await Promise.all([
-        getDocuments<StudioBooking>("studio_bookings", [orderBy("createdAt", "desc")]),
+      const [s, c, a, eq, mv, ev] = await Promise.all([
         getDocuments<Studio>("studios", []),
         getDocuments<Client>("clients", []),
         getDocuments<Asset>("assets", [where("isActive", "!=", false)]),
@@ -131,7 +161,6 @@ export default function StudioBookingsPage() {
         getDocuments<AssetMovement>("asset-movements", [where("status", "==", "OUT")]),
         getDocuments<AssetEvent>("asset-events", []),
       ]);
-      setBookings(b);
       setStudios(s);
       setClients(c);
       setAssets(a);
@@ -140,8 +169,6 @@ export default function StudioBookingsPage() {
       setAssetEvents(ev);
     } catch (error) {
       console.error("Failed to fetch data:", error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -149,6 +176,20 @@ export default function StudioBookingsPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchData();
   }, []);
+
+  useEffect(() => {
+    // Refetches on every dialog open, so a stale day list never survives a save
+    if (!dialogOpen || !form.date) return;
+    let cancelled = false;
+    getDocuments<StudioBooking>("studio_bookings", [where("date", "==", form.date)])
+      .then((rows) => {
+        if (!cancelled) setDateBookings(rows);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [dialogOpen, form.date]);
 
   // Compute conflict warning as derived state
   const conflictWarning = useMemo(() => {
@@ -160,14 +201,14 @@ export default function StudioBookingsPage() {
     }
     const conflict = findConflict(
       { studioId: form.studioId, date: form.date, startTime: form.startTime, endTime: form.endTime },
-      bookings.filter((b): b is StudioBooking & { id: string } => !!b.id),
+      dateBookings.filter((b): b is StudioBooking & { id: string } => !!b.id),
       editingId || undefined
     );
     if (conflict) {
       return `Conflicts with booking: ${conflict.purpose || conflict.studioName} (${conflict.startTime}–${conflict.endTime})`;
     }
     return "";
-  }, [form.studioId, form.date, form.startTime, form.endTime, bookings, editingId]);
+  }, [form.studioId, form.date, form.startTime, form.endTime, dateBookings, editingId]);
 
   // ── Cross-availability of assets + studio equipment for the chosen slot ──
   const hasValidWindow = !!form.date && isValidTimeRange(form.startTime, form.endTime);
@@ -176,10 +217,10 @@ export default function StudioBookingsPage() {
     () => ({
       outMovements,
       assetEvents,
-      studioBookings: bookings,
+      studioBookings: dateBookings,
       ignoreBookingId: editingId || undefined,
     }),
-    [outMovements, assetEvents, bookings, editingId]
+    [outMovements, assetEvents, dateBookings, editingId]
   );
 
   const itemRows = useMemo(() => {
@@ -224,19 +265,7 @@ export default function StudioBookingsPage() {
     });
   };
 
-  const filteredBookings = bookings.filter((b) => {
-    if (statusFilter !== "all" && b.status !== statusFilter) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return (
-        b.purpose?.toLowerCase().includes(q) ||
-        b.clientName?.toLowerCase().includes(q) ||
-        b.studioName?.toLowerCase().includes(q) ||
-        b.requestedByName?.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
+  const filteredBookings = bookings;
 
   const handleSave = async () => {
     if (!user || !form.studioId || !form.date || !form.startTime || !form.endTime) {
@@ -321,7 +350,7 @@ export default function StudioBookingsPage() {
         toast("success", "Booking created");
       }
       setDialogOpen(false);
-      await fetchData();
+      refresh();
     } catch (error) {
       console.error("Save failed:", error);
       toast("error", "Failed to save booking");
@@ -337,7 +366,7 @@ export default function StudioBookingsPage() {
       await logAudit("delete", "studio", "studio_booking", deleteId, "Deleted booking", user);
       toast("success", "Booking deleted");
       setDeleteId(null);
-      await fetchData();
+      refresh();
     } catch (error) {
       console.error("Delete failed:", error);
       toast("error", "Failed to delete");
@@ -369,7 +398,7 @@ export default function StudioBookingsPage() {
         });
       }
       toast("success", `Booking ${newStatus}`);
-      await fetchData();
+      refresh();
     } catch (error) {
       console.error("Status change failed:", error);
       toast("error", "Failed to update status");
@@ -498,6 +527,21 @@ export default function StudioBookingsPage() {
             ))}
           </TableBody>
         </Table>
+      )}
+      {!loading && totalCount > 0 && (
+        <Card className="p-0">
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            hasNext={hasNext}
+            hasPrev={hasPrev}
+            onNext={nextPage}
+            onPrev={prevPage}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+          />
+        </Card>
       )}
 
       {/* Create/Edit Dialog */}

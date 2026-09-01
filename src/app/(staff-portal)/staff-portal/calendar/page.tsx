@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocuments, where } from "@/lib/firestore";
-import { LeaveRequest } from "@/types";
+import { LeaveRequest, ManagedEvent } from "@/types";
 import { getAppSettings, AppSettings } from "@/lib/settings";
 import {
   CalendarItem,
   holidayToItem,
   leaveToItem,
+  managedEventToItem,
   itemsForDay,
   categoryMeta,
   dayStart,
@@ -34,12 +35,18 @@ export default function StaffCalendarPage() {
 
   useEffect(() => {
     if (!user) return;
+    const staffId = user.staffId;
     let isMounted = true;
     async function load() {
       try {
-        const [appSettings, leaves] = await Promise.all([
+        const [appSettings, leaves, assignedEvents] = await Promise.all([
           getAppSettings(),
           getDocuments<LeaveRequest>("leaveRequests", [where("status", "==", "approved")]),
+          staffId
+            ? getDocuments<ManagedEvent>("events", [
+                where("assignedStaffIds", "array-contains", staffId),
+              ])
+            : Promise.resolve([] as ManagedEvent[]),
         ]);
         if (!isMounted) return;
         setSettings(appSettings);
@@ -47,7 +54,11 @@ export default function StaffCalendarPage() {
         const leaveItems = leaves
           .map((l) => leaveToItem({ ...l, id: l.id }))
           .filter((i): i is CalendarItem => i !== null);
-        setItems([...holidayItems, ...leaveItems]);
+        const eventItems = assignedEvents
+          .filter((e) => e.status !== "cancelled")
+          .map((e) => managedEventToItem({ ...e, id: e.id! }, "/staff-portal"))
+          .filter((i): i is CalendarItem => i !== null);
+        setItems([...holidayItems, ...leaveItems, ...eventItems]);
       } catch (error) {
         console.error("Error:", error);
       } finally {
@@ -171,7 +182,18 @@ export default function StaffCalendarPage() {
                       <div key={it.key} className="flex items-start gap-2 rounded-lg border border-slate-100 p-2">
                         <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full`} style={{ background: categoryMeta(it.type).hex }} />
                         <div className="min-w-0">
-                          <p className="text-sm font-medium">{it.title}</p>
+                          {it.href ? (
+                            <a href={it.href} className="text-sm font-medium text-indigo-700 hover:underline">
+                              {it.title}
+                            </a>
+                          ) : (
+                            <p className="text-sm font-medium">{it.title}</p>
+                          )}
+                          {(it.startTime || it.endTime) && (
+                            <p className="text-xs text-gray-500">
+                              {it.startTime}{it.endTime ? ` – ${it.endTime}` : ""}
+                            </p>
+                          )}
                           <Badge variant={categoryMeta(it.type).badge}>{categoryMeta(it.type).label}</Badge>
                           {it.description && <p className="mt-1 text-xs text-gray-500">{it.description}</p>}
                         </div>

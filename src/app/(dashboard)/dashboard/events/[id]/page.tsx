@@ -105,8 +105,11 @@ export default function EventDetailPage() {
   }, [eventId]);
 
   useEffect(() => {
-    void fetchEvent();
-    void getDocuments<Staff>("staff", [where("isActive", "==", true)]).then(setStaffList);
+    void (async () => {
+      await fetchEvent();
+      const staff = await getDocuments<Staff>("staff", [where("isActive", "==", true)]);
+      setStaffList(staff);
+    })();
   }, [fetchEvent]);
 
   const handleStatusChange = async () => {
@@ -173,6 +176,7 @@ export default function EventDetailPage() {
     try {
       await updateDocument("events", eventId, {
         assignedStaff: updatedStaff,
+        assignedStaffIds: updatedStaff.map((s) => s.staffId),
         updatedAt: Timestamp.now(),
       });
 
@@ -203,6 +207,7 @@ export default function EventDetailPage() {
     try {
       await updateDocument("events", eventId, {
         assignedStaff: updatedStaff,
+        assignedStaffIds: updatedStaff.map((s) => s.staffId),
         updatedAt: Timestamp.now(),
       });
       toast("success", "Staff member removed");

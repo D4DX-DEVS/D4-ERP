@@ -62,9 +62,37 @@ export function formatDocNumber(template: string, tokens: FormatTokens): string 
     .replace(/\{SEQ\}/g, String(tokens.seq));
 }
 
-/** Builds the scope key the running sequence resets on (series + company + FY). */
-function sequenceKey(series: DocSeries, comp: string, fy: FinancialYear): string {
-  return `${series}__${comp}__${fy.startYear}`;
+export interface SequenceScope {
+  key: string;
+  /** When set, a brand-new sequence is seeded from the highest legacy counter
+   * matching prefix/suffix so numbering continues instead of restarting at 1. */
+  legacy?: { prefix: string; suffix?: string };
+}
+
+/**
+ * Builds the scope key the running sequence resets on. The scope only includes
+ * parts the template can actually render: a template without a year token
+ * ({YYYY}/{YY}/{FY}) never resets — one continuous serial — and a template
+ * without {COMP} shares a single series across companies. Legacy keys were
+ * always `${series}__${comp}__${startYear}`.
+ */
+export function sequenceScope(
+  series: DocSeries,
+  template: string,
+  comp: string,
+  fy: FinancialYear
+): SequenceScope {
+  const usesComp = template.includes("{COMP}");
+  const usesYear = /\{YYYY\}|\{YY\}|\{FY\}/.test(template);
+  const parts: string[] = [series];
+  if (usesComp) parts.push(comp);
+  if (usesYear) parts.push(String(fy.startYear));
+  const key = parts.join("__");
+
+  if (usesComp && usesYear) return { key }; // same shape as legacy keys — nothing to migrate
+  if (usesComp) return { key, legacy: { prefix: `${key}__` } };
+  if (usesYear) return { key, legacy: { prefix: `${series}__`, suffix: `__${fy.startYear}` } };
+  return { key, legacy: { prefix: `${series}__` } };
 }
 
 export interface GenerateNumberOptions {
@@ -87,7 +115,8 @@ export async function generateDocNumber(options: GenerateNumberOptions): Promise
   const comp = companyCode(options.company);
   const template = settings.numberFormats?.[options.series] ?? "{COMP}/{YYYY}/{SEQ:3}";
 
-  const seq = await getNextSequence(sequenceKey(options.series, comp, fy));
+  const scope = sequenceScope(options.series, template, comp, fy);
+  const seq = await getNextSequence(scope.key, scope.legacy);
   return formatDocNumber(template, { comp, fy, seq });
 }
 
