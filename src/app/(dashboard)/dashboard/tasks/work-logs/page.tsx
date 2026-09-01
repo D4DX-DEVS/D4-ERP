@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getDocuments, updateDocument, where, orderBy, Timestamp } from "@/lib/firestore";
+import { useMemo, useState } from "react";
+import { updateDocument, where, Timestamp } from "@/lib/firestore";
+import { usePagination } from "@/hooks/use-pagination";
 import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast";
 import { ListingHeader } from "@/components/ui/listing";
@@ -12,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/ui/loading";
 import { ClipboardList } from "lucide-react";
 import type { WorkLog } from "@/types";
@@ -26,28 +28,33 @@ const STATUS_COLORS: Record<string, string> = {
 export default function WorkLogsAdminPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
-  const [logs, setLogs] = useState<WorkLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>("submitted");
+  const [pageSize, setPageSize] = useState(20);
   const [reviewLog, setReviewLog] = useState<WorkLog | null>(null);
   const [remarks, setRemarks] = useState("");
 
-  useEffect(() => {
-    async function fetch() {
-      try {
-        const constraints = statusFilter
-          ? [where("status", "==", statusFilter), orderBy("date", "desc")]
-          : [orderBy("date", "desc")];
-        const data = await getDocuments<WorkLog>("work_logs", constraints);
-        setLogs(data);
-      } catch (error) {
-        console.error("Failed:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    void fetch();
-  }, [statusFilter]);
+  const constraints = useMemo(
+    () => (statusFilter ? [where("status", "==", statusFilter)] : []),
+    [statusFilter]
+  );
+
+  const {
+    data: logs,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<WorkLog>("work_logs", {
+    pageSize,
+    orderByField: "date",
+    orderDirection: "desc",
+    constraints,
+  });
 
   const handleMarkReviewed = async (log: WorkLog) => {
     try {
@@ -58,7 +65,7 @@ export default function WorkLogsAdminPage() {
         updatedAt: Timestamp.now(),
       });
       toast("success", "Marked as reviewed");
-      setLogs((prev) => prev.filter((l) => l.id !== log.id));
+      refresh();
     } catch {
       toast("error", "Failed to update");
     }
@@ -80,7 +87,7 @@ export default function WorkLogsAdminPage() {
       toast("success", "Revision requested");
       setReviewLog(null);
       setRemarks("");
-      setLogs((prev) => prev.filter((l) => l.id !== reviewLog.id));
+      refresh();
     } catch {
       toast("error", "Failed to update");
     }
@@ -94,7 +101,7 @@ export default function WorkLogsAdminPage() {
         {["submitted", "reviewed", "needs-revision", ""].map((s) => (
           <button
             key={s}
-            onClick={() => { setStatusFilter(s); setLoading(true); }}
+            onClick={() => setStatusFilter(s)}
             className={`rounded-full px-3.5 py-1.5 text-xs font-semibold border transition-colors capitalize ${
               statusFilter === s
                 ? "bg-gradient-to-r from-indigo-600 to-violet-600 text-white border-transparent shadow-sm"
@@ -151,6 +158,17 @@ export default function WorkLogsAdminPage() {
               ))}
             </TableBody>
           </Table>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            hasNext={hasNext}
+            hasPrev={hasPrev}
+            onNext={nextPage}
+            onPrev={prevPage}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+          />
         </Card>
       )}
 

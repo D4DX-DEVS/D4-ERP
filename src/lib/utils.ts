@@ -7,11 +7,14 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatCurrency(amount: number): string {
   const safe = isNaN(amount) || amount == null ? 0 : amount;
+  // "₹ 5,000.00" — a space after the rupee sign keeps documents readable.
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 2,
-  }).format(safe);
+  })
+    .format(safe)
+    .replace(/^(-?)₹\s?/, "$1₹ ");
 }
 
 export function formatDate(date: Date | string): string {

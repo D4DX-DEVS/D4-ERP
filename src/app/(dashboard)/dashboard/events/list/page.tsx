@@ -1,7 +1,7 @@
 "use client";
 import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import {
@@ -9,10 +9,13 @@ import {
   createDocument,
   updateDocument,
   deleteDocument,
+  countDocuments,
   where,
   orderBy,
+  search as searchConstraint,
   Timestamp,
 } from "@/lib/firestore";
+import { usePagination } from "@/hooks/use-pagination";
 import { useAuthStore } from "@/store/auth-store";
 import { useToast } from "@/components/ui/toast";
 import { ListingHeader } from "@/components/ui/listing";
@@ -25,6 +28,7 @@ import { TimePicker } from "@/components/ui/time-picker";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/loading";
 import { formatCurrency } from "@/lib/utils";
@@ -33,7 +37,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { QuickAddClient } from "@/components/clients/quick-add-client";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { pushStatusChange } from "@/lib/status-history";
-import { createNotification } from "@/lib/notifications";
+import { createBulkNotifications } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
 import type {
   ManagedEvent,
@@ -45,13 +49,19 @@ import type {
 } from "@/types";
 
 const EVENT_TYPES: { value: EventManagementType; label: string }[] = [
-  { value: "shoot", label: "Shoot" },
-  { value: "wedding", label: "Wedding" },
-  { value: "corporate", label: "Corporate" },
-  { value: "concert", label: "Concert" },
+  { value: "event", label: "Event" },
+  { value: "podcast-shoot", label: "Podcast Shoot" },
+  { value: "corporate", label: "Corporate Event" },
   { value: "exhibition", label: "Exhibition" },
   { value: "other", label: "Other" },
 ];
+
+/** Labels for event types no longer offered in the dropdown but present on old records. */
+const LEGACY_TYPE_LABELS: Record<string, string> = {
+  shoot: "Shoot",
+  wedding: "Wedding",
+  concert: "Concert",
+};
 
 const EVENT_STATUSES: { value: EventManagementStatus; label: string }[] = [
   { value: "inquiry", label: "Inquiry" },
@@ -88,12 +98,13 @@ interface EventForm {
   budget: string;
   notes: string;
   tags: string;
+  staffIds: string[];
 }
 
 const emptyForm: EventForm = {
   title: "",
   description: "",
-  eventType: "shoot",
+  eventType: "event",
   clientId: "",
   clientName: "",
   venue: "",
@@ -105,6 +116,7 @@ const emptyForm: EventForm = {
   budget: "",
   notes: "",
   tags: "",
+  staffIds: [],
 };
 
 export default function EventsListPage() {
@@ -113,9 +125,8 @@ export default function EventsListPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
 
-  const [events, setEvents] = useState<ManagedEvent[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [staffList, setStaffList] = useState<Staff[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<EventForm>(emptyForm);
@@ -129,6 +140,7 @@ export default function EventsListPage() {
   const [showAddType, setShowAddType] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
   const [addingType, setAddingType] = useState(false);
+  const [pageSize, setPageSize] = useState(20);
 
   const allEventTypes = [
     ...EVENT_TYPES,
@@ -137,24 +149,41 @@ export default function EventsListPage() {
       .map((t) => ({ value: t.name, label: t.name })),
   ];
 
-  const fetchEvents = useCallback(async () => {
-    try {
-      const docs = await getDocuments<ManagedEvent>("events", [orderBy("createdAt", "desc")]);
-      setEvents(docs);
-    } catch (error) {
-      console.error("Failed to fetch events:", error);
-    } finally {
-      setLoading(false);
+  const constraints = useMemo(() => {
+    const c: ReturnType<typeof where>[] = [];
+    if (statusFilter !== "all") c.push(where("status", "==", statusFilter));
+    if (typeFilter !== "all") c.push(where("eventType", "==", typeFilter));
+    if (searchQuery.trim()) {
+      c.push(searchConstraint(["title", "clientName", "venue", "eventId"], searchQuery.trim()));
     }
-  }, []);
+    return c;
+  }, [statusFilter, typeFilter, searchQuery]);
+
+  const {
+    data: filteredEvents,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<ManagedEvent>("events", {
+    pageSize,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints,
+  });
 
   useEffect(() => {
-    void fetchEvents();
     void getDocuments<Client>("clients", [where("isActive", "==", true)]).then(setClients);
+    void getDocuments<Staff>("staff", [where("isActive", "==", true)]).then(setStaffList);
     void getDocuments<{ id: string; name: string }>("eventTypes", [orderBy("name", "asc")])
       .then(setCustomTypes)
       .catch(() => setCustomTypes([]));
-  }, [fetchEvents]);
+  }, []);
 
   const handleAddType = async () => {
     const name = newTypeName.trim();
@@ -178,21 +207,6 @@ export default function EventsListPage() {
     }
   };
 
-  const filteredEvents = events.filter((e) => {
-    if (statusFilter !== "all" && e.status !== statusFilter) return false;
-    if (typeFilter !== "all" && e.eventType !== typeFilter) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return (
-        e.title.toLowerCase().includes(q) ||
-        e.clientName?.toLowerCase().includes(q) ||
-        e.venue?.toLowerCase().includes(q) ||
-        e.eventId?.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
-
   const handleOpenCreate = () => {
     setForm(emptyForm);
     setEditingId(null);
@@ -215,9 +229,45 @@ export default function EventsListPage() {
       budget: event.budget?.toString() || "",
       notes: event.notes || "",
       tags: event.tags?.join(", ") || "",
+      staffIds: (event.assignedStaff || []).map((s) => s.staffId),
     });
     setEditingId(event.id!);
     setDialogOpen(true);
+  };
+
+  const toggleStaff = (id: string) => {
+    setForm((p) => ({
+      ...p,
+      staffIds: p.staffIds.includes(id)
+        ? p.staffIds.filter((x) => x !== id)
+        : [...p.staffIds, id],
+    }));
+  };
+
+  // Keeps existing role for staff already assigned; new picks default to Team Member.
+  const buildAssignments = (prev: EventStaffAssignment[]): EventStaffAssignment[] =>
+    form.staffIds.map((id) => {
+      const existing = prev.find((a) => a.staffId === id);
+      if (existing) return existing;
+      const s = staffList.find((st) => st.id === id);
+      return {
+        staffId: id,
+        staffName: s ? `${s.firstName} ${s.lastName}` : "Staff",
+        role: "Team Member",
+      };
+    });
+
+  const notifyAssignedStaff = async (staffIds: string[], eventDocId: string) => {
+    if (staffIds.length === 0 || !user) return;
+    await createBulkNotifications(staffIds, {
+      type: "event",
+      title: "You've been assigned to an event",
+      message: `You were added to "${form.title.trim()}" (${form.startDate})`,
+      link: `/staff-portal/events/${eventDocId}`,
+      entityId: eventDocId,
+      entityType: "event",
+      senderName: `${user.firstName} ${user.lastName}`,
+    });
   };
 
   const handleSave = async () => {
@@ -234,6 +284,9 @@ export default function EventsListPage() {
     setSaving(true);
     try {
       if (editingId) {
+        const prevAssigned =
+          filteredEvents.find((e) => e.id === editingId)?.assignedStaff ?? [];
+        const assignedStaff = buildAssignments(prevAssigned);
         await updateDocument("events", editingId, {
           title: form.title.trim(),
           description: form.description.trim(),
@@ -249,13 +302,20 @@ export default function EventsListPage() {
           budget: form.budget ? Number(form.budget) : null,
           notes: form.notes.trim(),
           tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+          assignedStaff,
+          assignedStaffIds: form.staffIds,
           updatedAt: Timestamp.now(),
         });
+        const newlyAdded = form.staffIds.filter(
+          (id) => !prevAssigned.some((a) => a.staffId === id)
+        );
+        await notifyAssignedStaff(newlyAdded, editingId);
         await logAudit("update", "events", "event", editingId, `Updated event: ${form.title}`, user);
         toast("success", "Event updated");
       } else {
-        // Generate event ID (simple sequential)
-        const count = events.length + 1;
+        // Generate event ID (simple sequential, from the full collection count —
+        // the paginated page only holds one page of events)
+        const count = (await countDocuments("events")) + 1;
         const eventId = `EVT-${String(count).padStart(3, "0")}`;
 
         const statusHistory = pushStatusChange([], "inquiry", user);
@@ -277,7 +337,8 @@ export default function EventsListPage() {
           statusHistory,
           budget: form.budget ? Number(form.budget) : null,
           actualCost: null,
-          assignedStaff: [],
+          assignedStaff: buildAssignments([]),
+          assignedStaffIds: form.staffIds,
           linkedAssets: [],
           linkedStudioBookings: [],
           linkedQuotationId: null,
@@ -290,11 +351,12 @@ export default function EventsListPage() {
           source: base === "/staff-portal" ? "staff" : "admin",
           createdAt: Timestamp.now(),
         });
+        await notifyAssignedStaff(form.staffIds, docId as string);
         await logAudit("create", "events", "event", docId as string, `Created event: ${form.title}`, user);
         toast("success", "Event created");
       }
       setDialogOpen(false);
-      await fetchEvents();
+      refresh();
     } catch (error) {
       console.error("Save failed:", error);
       toast("error", "Failed to save event");
@@ -310,7 +372,7 @@ export default function EventsListPage() {
       await logAudit("delete", "events", "event", deleteId, "Deleted event", user);
       toast("success", "Event deleted");
       setDeleteId(null);
-      await fetchEvents();
+      refresh();
     } catch (error) {
       console.error("Delete failed:", error);
       toast("error", "Failed to delete event");
@@ -400,7 +462,11 @@ export default function EventsListPage() {
                   <p className="font-semibold text-slate-900">{event.title}</p>
                   <p className="text-xs text-slate-400">{event.eventId}</p>
                 </TableCell>
-                <TableCell className="capitalize">{event.eventType}</TableCell>
+                <TableCell className="capitalize">
+                  {allEventTypes.find((t) => t.value === event.eventType)?.label ??
+                    LEGACY_TYPE_LABELS[event.eventType] ??
+                    event.eventType}
+                </TableCell>
                 <TableCell>{event.clientName || "—"}</TableCell>
                 <TableCell>
                   <p className="text-xs">{event.startDate}</p>
@@ -433,6 +499,21 @@ export default function EventsListPage() {
             ))}
           </TableBody>
         </Table>
+      )}
+      {!loading && totalCount > 0 && (
+        <Card className="p-0">
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            hasNext={hasNext}
+            hasPrev={hasPrev}
+            onNext={nextPage}
+            onPrev={prevPage}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+          />
+        </Card>
       )}
 
       {/* Create/Edit Dialog */}
@@ -568,6 +649,33 @@ export default function EventsListPage() {
               onChange={(e) => setForm((p) => ({ ...p, tags: e.target.value }))}
               placeholder="Comma-separated tags"
             />
+          </div>
+
+          <div className="md:col-span-2 space-y-2">
+            <Label>Assign Staff ({form.staffIds.length} selected)</Label>
+            <div className="max-h-44 overflow-y-auto rounded-xl border border-slate-200 p-2">
+              {staffList.length === 0 ? (
+                <p className="px-2 py-1.5 text-sm text-slate-400">No active staff found.</p>
+              ) : (
+                staffList.map((s) => (
+                  <label
+                    key={s.id}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={form.staffIds.includes(s.id!)}
+                      onChange={() => toggleStaff(s.id!)}
+                    />
+                    <span>{s.firstName} {s.lastName}</span>
+                    <span className="text-xs text-gray-400">{s.employeeCode}</span>
+                  </label>
+                ))
+              )}
+            </div>
+            <p className="text-xs text-slate-400">
+              Assigned staff see the event on their calendar and get notified.
+            </p>
           </div>
 
           <div className="md:col-span-2 space-y-2">

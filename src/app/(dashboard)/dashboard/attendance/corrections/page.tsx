@@ -17,6 +17,8 @@ import {
   evaluateWorkSummary,
 } from "@/lib/settings";
 import { useRoleGuard } from "@/hooks/use-role-guard";
+import { usePagination } from "@/hooks/use-pagination";
+import { dayKeyFromSec, localDayKey } from "@/lib/attendance-dedupe";
 import { deptScopeFor, inDeptScope } from "@/lib/dept-scope";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,7 @@ import { useToast } from "@/components/ui/toast";
 import { PageLoader } from "@/components/ui/loading";
 import { ListingHeader, ListingPanel, ListingStatCard, ListingStatGrid } from "@/components/ui/listing";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { Check, ClipboardEdit, Clock3, Inbox, X } from "lucide-react";
 
 type Correction = AttendanceCorrection & { id: string };
@@ -47,10 +50,9 @@ export default function AttendanceCorrectionsPage() {
   const { user, authorized, isLoading } = useRoleGuard(["admin", "department-head"]);
   const { toast } = useToast();
 
-  const [corrections, setCorrections] = useState<Correction[]>([]);
   const [staffMap, setStaffMap] = useState<Record<string, Staff & { id: string }>>({});
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [metaLoading, setMetaLoading] = useState(true);
   const [filter, setFilter] = useState<StatusFilter>("pending");
   const [processing, setProcessing] = useState<string | null>(null);
 
@@ -58,43 +60,71 @@ export default function AttendanceCorrectionsPage() {
   const [rejectRemarks, setRejectRemarks] = useState("");
 
   const isDeptHead = user?.role === "department-head";
-
-  async function loadData() {
-    setLoading(true);
-    try {
-      const [list, staffList, appSettings] = await Promise.all([
-        getDocuments<AttendanceCorrection>("attendance_corrections", [where("status", "==", filter)]),
-        getDocuments<Staff>("staff", []),
-        getAppSettings(),
-      ]);
-
-      const map: Record<string, Staff & { id: string }> = {};
-      for (const s of staffList) map[s.id] = s as Staff & { id: string };
-
-      const scope = deptScopeFor(user?.role, user?.departmentId);
-      const visible = (list as Correction[]).filter((c) => inDeptScope(scope, map[c.staffId]?.departmentId));
-      visible.sort((a, b) => (b.date?.seconds ?? 0) - (a.date?.seconds ?? 0));
-
-      setStaffMap(map);
-      setCorrections(visible);
-      setSettings(appSettings);
-    } catch (error) {
-      console.error("Error:", error);
-      toast("error", "Failed to load correction requests");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const scope = deptScopeFor(user?.role, user?.departmentId);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (authorized) loadData();
+    if (!authorized) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [staffList, appSettings] = await Promise.all([
+          getDocuments<Staff>("staff", []),
+          getAppSettings(),
+        ]);
+        if (cancelled) return;
+        const map: Record<string, Staff & { id: string }> = {};
+        for (const s of staffList) map[s.id] = s as Staff & { id: string };
+        setStaffMap(map);
+        setSettings(appSettings);
+      } catch (error) {
+        console.error("Error:", error);
+        toast("error", "Failed to load correction requests");
+      } finally {
+        if (!cancelled) setMetaLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authorized, filter]);
+  }, [authorized]);
+
+  // Dept heads are scoped in the query itself so page counts stay correct.
+  // Until the roster loads this is an empty $in — fail closed, refetch after.
+  const scopedStaffIds = useMemo(() => {
+    if (scope === null) return null;
+    return Object.values(staffMap)
+      .filter((s) => inDeptScope(scope, s.departmentId))
+      .map((s) => s.id);
+  }, [scope, staffMap]);
+
+  const constraints = useMemo(() => {
+    const c = [where("status", "==", filter)];
+    if (scopedStaffIds !== null) c.push(where("staffId", "in", scopedStaffIds));
+    return c;
+  }, [filter, scopedStaffIds]);
+
+  const {
+    data: corrections,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<AttendanceCorrection>("attendance_corrections", {
+    pageSize: 15,
+    orderByField: "date",
+    orderDirection: "desc",
+    constraints,
+  });
 
   const pendingCount = useMemo(
-    () => (filter === "pending" ? corrections.length : 0),
-    [filter, corrections.length]
+    () => (filter === "pending" ? totalCount : 0),
+    [filter, totalCount]
   );
 
   function staffName(c: Correction) {
@@ -128,14 +158,27 @@ export default function AttendanceCorrectionsPage() {
       const base = new Date((c.date?.seconds ?? 0) * 1000);
       base.setHours(0, 0, 0, 0);
 
-      // Range query, not exact equality — stored dates aren't always exactly midnight (clock-ins, old imports)
-      const nextDay = new Date(base);
-      nextDay.setDate(nextDay.getDate() + 1);
-      const existing = await getDocuments<{ id: string; status: AttendanceStatus }>("attendance", [
+      // Writers disagree on which midnight a day's row carries (ESSL import uses
+      // server-local, client pages use device-local), so a tight [midnight, +1d)
+      // window can miss the very row the register displays. Query a ±1 day
+      // window and keep only rows whose LOCAL day key matches — the same
+      // grouping the register uses to draw the grid.
+      const dayKey = localDayKey(base);
+      const windowStart = new Date(base.getTime() - 86_400_000);
+      const windowEnd = new Date(base.getTime() + 2 * 86_400_000);
+      const nearby = await getDocuments<{
+        id: string;
+        status: AttendanceStatus;
+        date?: { seconds: number };
+        isDeleted?: boolean;
+      }>("attendance", [
         where("staffId", "==", c.staffId),
-        where("date", ">=", Timestamp.fromDate(base)),
-        where("date", "<", Timestamp.fromDate(nextDay)),
+        where("date", ">=", Timestamp.fromDate(windowStart)),
+        where("date", "<", Timestamp.fromDate(windowEnd)),
       ]);
+      const existing = nearby.filter(
+        (r) => !r.isDeleted && r.date?.seconds && dayKeyFromSec(r.date.seconds) === dayKey
+      );
 
       const checkInTs = tsFromDateTime(base, c.requestedCheckIn);
       const checkOutTs = tsFromDateTime(base, c.requestedCheckOut);
@@ -167,8 +210,24 @@ export default function AttendanceCorrectionsPage() {
 
       let attendanceId = existing[0]?.id;
       if (attendanceId) {
+        // Overwrite punch fields AND everything derived from them when the
+        // correction doesn't set them — a $set merge would otherwise keep the
+        // old import's times/hours next to the corrected status, and those
+        // stale workingHours/overtimeHours feed payroll and reports.
+        if (!checkInTs) {
+          data.checkIn = null;
+          data.isLate = false;
+        }
+        if (!checkOutTs) {
+          data.checkOut = null;
+          data.isEarlyDeparture = false;
+        }
+        if (!checkInTs || !checkOutTs) {
+          data.workingHours = 0;
+          data.overtimeHours = 0;
+        }
         await updateDocument("attendance", attendanceId, data);
-        // Soft-delete duplicate rows for the same day so the register can't show a stale status
+        // Soft-delete every other row for the same day so the register can't show a stale status
         for (const dup of existing.slice(1)) {
           await updateDocument("attendance", dup.id, { isDeleted: true });
         }
@@ -186,7 +245,7 @@ export default function AttendanceCorrectionsPage() {
 
       await notifyStaff(c, true);
       toast("success", "Correction approved and attendance updated");
-      await loadData();
+      refresh();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to approve correction");
@@ -211,7 +270,7 @@ export default function AttendanceCorrectionsPage() {
       toast("success", "Correction rejected");
       setRejectTarget(null);
       setRejectRemarks("");
-      await loadData();
+      refresh();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to reject correction");
@@ -221,7 +280,7 @@ export default function AttendanceCorrectionsPage() {
   }
 
   if (isLoading || !authorized) return <PageLoader />;
-  if (loading) return <PageLoader />;
+  if (loading || metaLoading) return <PageLoader />;
 
   return (
     <div className="space-y-6">
@@ -232,7 +291,7 @@ export default function AttendanceCorrectionsPage() {
 
       <ListingStatGrid cols={3}>
         <ListingStatCard icon={<Inbox className="h-5 w-5" />} label="Pending" value={pendingCount} toneClassName="bg-amber-50 text-amber-700" meta="Awaiting review" />
-        <ListingStatCard icon={<ClipboardEdit className="h-5 w-5" />} label="Showing" value={corrections.length} toneClassName="bg-sky-50 text-sky-700" meta={`${filter} requests`} />
+        <ListingStatCard icon={<ClipboardEdit className="h-5 w-5" />} label="Showing" value={totalCount} toneClassName="bg-sky-50 text-sky-700" meta={`${filter} requests`} />
         <ListingStatCard icon={<Clock3 className="h-5 w-5" />} label="Scope" value={isDeptHead ? "Department" : "All staff"} toneClassName="bg-indigo-50 text-indigo-700" meta="Visibility" />
       </ListingStatGrid>
 
@@ -311,6 +370,16 @@ export default function AttendanceCorrectionsPage() {
             )}
           </TableBody>
         </Table>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalCount={totalCount}
+          hasNext={hasNext}
+          hasPrev={hasPrev}
+          onNext={nextPage}
+          onPrev={prevPage}
+          pageSize={15}
+        />
       </ListingPanel>
 
       <Dialog open={!!rejectTarget} onOpenChange={(o) => { if (!o) setRejectTarget(null); }}>

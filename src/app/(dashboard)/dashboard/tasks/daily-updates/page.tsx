@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getDocuments, where, orderBy } from "@/lib/firestore";
+import { useMemo, useState } from "react";
+import { where } from "@/lib/firestore";
+import { usePagination } from "@/hooks/use-pagination";
 import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Pagination } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/ui/loading";
 import { Clock, Users, FileText, AlertTriangle } from "lucide-react";
 import type { WorkLog } from "@/types";
@@ -18,32 +20,40 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function DailyUpdatesPage() {
-  const [logs, setLogs] = useState<WorkLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState(() => new Date().toISOString().split("T")[0]);
+  const [pageSize, setPageSize] = useState(50);
 
-  useEffect(() => {
-    async function fetchLogs() {
-      try {
-        const allLogs = await getDocuments<WorkLog>("work_logs", [
-          where("status", "in", ["submitted", "reviewed", "needs-revision"]),
-          orderBy("date", "desc"),
-        ]);
-        setLogs(allLogs);
-      } catch (error) {
-        console.error("Failed:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    void fetchLogs();
-  }, []);
+  // Date filter lives in the query — a single day is roster-sized, so the
+  // default view fits one page and the stat cards stay exact.
+  const constraints = useMemo(() => {
+    const c = [where("status", "in", ["submitted", "reviewed", "needs-revision"])];
+    if (dateFilter) c.push(where("date", "==", dateFilter));
+    return c;
+  }, [dateFilter]);
 
-  const filtered = dateFilter ? logs.filter((l) => l.date === dateFilter) : logs;
+  const {
+    data: filtered,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+  } = usePagination<WorkLog>("work_logs", {
+    pageSize,
+    orderByField: "date",
+    orderDirection: "desc",
+    constraints,
+  });
 
   const totalHoursToday = filtered.reduce((s, l) => s + (l.totalHours || 0), 0);
   const uniqueStaff = new Set(filtered.map((l) => l.staffId)).size;
   const withBlockers = filtered.filter((l) => l.entries.some((e) => e.blockers)).length;
+  // Page-scoped stats are only partial when the result spills past one page
+  const partial = totalCount > filtered.length;
+  const pageMeta = partial ? "on this page" : undefined;
 
   return (
     <div className="space-y-6">
@@ -62,10 +72,10 @@ export default function DailyUpdatesPage() {
       </div>
 
       <ListingStatGrid>
-        <ListingStatCard label="Submissions" value={filtered.length} icon={<FileText className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-indigo-500 to-violet-600 text-white" />
-        <ListingStatCard label="Staff Logged" value={uniqueStaff} icon={<Users className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white" />
-        <ListingStatCard label="Total Hours" value={`${totalHoursToday}h`} icon={<Clock className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white" />
-        <ListingStatCard label="With Blockers" value={withBlockers} icon={<AlertTriangle className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-rose-500 to-red-500 text-white" />
+        <ListingStatCard label="Submissions" value={totalCount} icon={<FileText className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-indigo-500 to-violet-600 text-white" />
+        <ListingStatCard label="Staff Logged" value={uniqueStaff} meta={pageMeta} icon={<Users className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-sky-500 to-blue-500 text-white" />
+        <ListingStatCard label="Total Hours" value={`${totalHoursToday}h`} meta={pageMeta} icon={<Clock className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-amber-500 to-orange-500 text-white" />
+        <ListingStatCard label="With Blockers" value={withBlockers} meta={pageMeta} icon={<AlertTriangle className="h-5 w-5" />} toneClassName="bg-gradient-to-br from-rose-500 to-red-500 text-white" />
       </ListingStatGrid>
 
       {loading ? (
@@ -106,6 +116,19 @@ export default function DailyUpdatesPage() {
               </CardContent>
             </Card>
           ))}
+          <Card className="p-0">
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              hasNext={hasNext}
+              hasPrev={hasPrev}
+              onNext={nextPage}
+              onPrev={prevPage}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
+          </Card>
         </div>
       )}
     </div>

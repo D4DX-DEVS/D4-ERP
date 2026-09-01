@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Transaction, Category, Company } from "@/types";
-import { getDocuments, createDocument, deleteDocument, orderBy, where, Timestamp } from "@/lib/firestore";
+import { getDocuments, createDocument, deleteDocument, sumDocuments, where, Timestamp } from "@/lib/firestore";
+import { usePagination } from "@/hooks/use-pagination";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,18 +30,16 @@ export default function AccountingPage() {
   // Feature-granted staff can view/add; destructive + config actions stay with admin/accounts.
   const canManage = ["admin", "accounts"].includes(user?.role || "");
   const { toast } = useToast();
-  const [transactions, setTransactions] = useState<(Transaction & { id: string })[]>([]);
   const [categories, setCategories] = useState<(Category & { id: string })[]>([]);
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{ id: string } | null>(null);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterType, setFilterType] = useState("");
   const [filterCompany, setFilterCompany] = useState("");
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 25;
+  const [pageSize, setPageSize] = useState(20);
+  const [totals, setTotals] = useState({ income: 0, expense: 0 });
 
   const [form, setForm] = useState({
     type: "income" as Transaction["type"],
@@ -60,25 +59,62 @@ export default function AccountingPage() {
     isActive: true,
   });
 
+  const constraints = useMemo(() => {
+    const c: ReturnType<typeof where>[] = [];
+    if (filterType) c.push(where("type", "==", filterType));
+    if (filterCompany) c.push(where("companyId", "==", filterCompany));
+    return c;
+  }, [filterType, filterCompany]);
+
+  const {
+    data: paged,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<Transaction>("transactions", {
+    pageSize,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints,
+  });
+
+  // Summary cards sum the WHOLE ledger server-side; the page only holds one page of rows.
+  const loadTotals = useCallback(async () => {
+    try {
+      const [income, expense] = await Promise.all([
+        sumDocuments("transactions", [where("type", "==", "income")], "amount"),
+        sumDocuments("transactions", [where("type", "==", "expense")], "amount"),
+      ]);
+      setTotals({ income, expense });
+    } catch (error) {
+      console.error("Error:", error);
+    }
+  }, []);
+
   const fetchData = async () => {
     try {
-      const [txns, cats, comps] = await Promise.all([
-        getDocuments<Transaction>("transactions", [orderBy("createdAt", "desc")]),
+      const [cats, comps] = await Promise.all([
         getDocuments<Category>("categories", [where("isActive", "==", true)]),
         getDocuments<Company>("companies", [where("isActive", "==", true)]),
       ]);
-      setTransactions(txns);
       setCategories(cats);
       setCompanies(comps);
     } catch (error) {
       console.error("Error:", error);
-    } finally {
-      setLoading(false);
     }
   };
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchData();
+    void loadTotals();
+  }, [loadTotals]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,7 +132,8 @@ export default function AccountingPage() {
       });
       setDialogOpen(false);
       toast("success", "Transaction added successfully");
-      fetchData();
+      refresh();
+      void loadTotals();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to add transaction");
@@ -131,24 +168,16 @@ export default function AccountingPage() {
     try {
       await deleteDocument("transactions", id);
       toast("success", "Transaction deleted");
-      fetchData();
+      refresh();
+      void loadTotals();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to delete transaction");
     }
   };
 
-  const filtered = transactions.filter((t) => {
-    const matchType = !filterType || t.type === filterType;
-    const matchCompany = !filterCompany || t.companyId === filterCompany;
-    return matchType && matchCompany;
-  });
-
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  const totalIncome = transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const totalExpense = transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const totalIncome = totals.income;
+  const totalExpense = totals.expense;
 
   const getCompanyName = (id: string) => companies.find((c) => c.id === id)?.name || "—";
 
@@ -221,7 +250,7 @@ export default function AccountingPage() {
           className="w-[200px]" />
       </div>
 
-      {filtered.length === 0 ? (
+      {paged.length === 0 ? (
         <Card><CardContent>
           <EmptyState icon={<DollarSign className="h-12 w-12" />} title="No transactions found" />
         </CardContent></Card>
@@ -276,7 +305,7 @@ export default function AccountingPage() {
               ))}
             </TableBody>
           </Table>
-          <Pagination page={page} totalPages={totalPages} totalCount={filtered.length} hasNext={page < totalPages - 1} hasPrev={page > 0} onNext={() => setPage(page + 1)} onPrev={() => setPage(page - 1)} pageSize={PAGE_SIZE} />
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
         </CardContent></Card>
       )}
 

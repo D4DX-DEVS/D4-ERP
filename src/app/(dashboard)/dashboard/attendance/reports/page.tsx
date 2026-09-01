@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getDocuments, where, orderBy, Timestamp } from "@/lib/firestore";
 import { Attendance, AttendanceStatus, Department, Staff } from "@/types";
 import { normalizeAttendanceStatus } from "@/lib/attendance-status";
+import { dedupeAttendance } from "@/lib/attendance-dedupe";
 import { useRoleGuard } from "@/hooks/use-role-guard";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/asset-export-utils";
 import { Button } from "@/components/ui/button";
@@ -139,7 +140,8 @@ export default function AttendanceReportsPage() {
 
   const scopedStaffIds = useMemo(() => new Set(scopedStaff.map((s) => s.id)), [scopedStaff]);
   const scopedRecords = useMemo(() => {
-    let list = records.filter((r) => scopedStaffIds.has(r.staffId));
+    // One row per staff+day — duplicate rows (import + correction) must not double-count
+    let list = dedupeAttendance(records.filter((r) => scopedStaffIds.has(r.staffId)));
     if (statusFilter !== "all") {
       list = list.filter((r) => normalizeAttendanceStatus(r.status) === statusFilter);
     }

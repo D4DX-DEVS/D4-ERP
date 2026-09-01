@@ -40,7 +40,10 @@ export async function GET(req: NextRequest) {
   const issuedTtl = tokenTtlSeconds(req.cookies.get(AUTH_COOKIE)?.value);
   const ttl = renewalTtlSeconds(issuedTtl, req.headers.get("x-pwa") === "1");
   if (ttl) {
-    res.cookies.set(AUTH_COOKIE, signToken(user, ttl), sessionCookieOptions(ttl));
+    // Renew with CURRENT role + grants, not the stale claims baked in at login —
+    // otherwise a grant made after login never reaches token-checked endpoints.
+    const fresh = { ...user, role: staff.role || user.role, features: grantedFeatures };
+    res.cookies.set(AUTH_COOKIE, signToken(fresh, ttl), sessionCookieOptions(ttl));
   }
   return res;
 }

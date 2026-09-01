@@ -60,14 +60,16 @@ export default function PayrollPage() {
   const [savingPayroll, setSavingPayroll] = useState(false);
   const { toast } = useToast();
 
+  // Month-bounded fetch: one month's slips are roster-sized, so the page never
+  // pulls the whole payroll history to show a single month.
   const fetchData = async () => {
     setLoading(true);
     try {
       const [p, s] = await Promise.all([
-        getDocuments<Payroll>("payroll"),
+        getDocuments<Payroll>("payroll", [where("month", "==", month)]),
         getDocuments<Staff>("staff"),
       ]);
-      setPayrolls(p.sort((a, b) => (b.month > a.month ? 1 : -1)));
+      setPayrolls(p);
       setStaffList(s.filter((st) => st.status === "active"));
     } catch (error) {
       console.error("Error:", error);
@@ -77,7 +79,7 @@ export default function PayrollPage() {
   };
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [month]);
 
   const staffMap = Object.fromEntries(staffList.map((s) => [s.id, s]));
 

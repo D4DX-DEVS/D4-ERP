@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getDocuments, orderBy, where, Timestamp } from "@/lib/firestore";
+import { pickAttendanceRecord } from "@/lib/attendance-dedupe";
 import { Attendance } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
 import {
@@ -76,7 +77,11 @@ export function AttendanceMonthGrid({ staffId }: { staffId: string }) {
     const recordByDay = new Map<string, Attendance>();
     for (const r of records) {
       const s = secOf(r.date);
-      if (s) recordByDay.set(localDateKey(new Date(s * 1000)), r);
+      if (!s) continue;
+      const key = localDateKey(new Date(s * 1000));
+      const prev = recordByDay.get(key);
+      // Duplicate rows for one day: correction > manual > import, then newest write
+      recordByDay.set(key, prev ? pickAttendanceRecord(prev, r) : r);
     }
     const holidayMap = new Map(holidays.map((h) => [h.date, h.name]));
     const todayKey = localDateKey(new Date());

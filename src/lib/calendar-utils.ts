@@ -4,6 +4,7 @@ import type {
   EventPriority,
   EventScope,
   LeaveRequest,
+  ManagedEvent,
   StudioBooking,
   Task,
 } from "@/types";
@@ -246,6 +247,35 @@ export function holidayToItem(holiday: Holiday): CalendarItem {
     start: dayStart(d),
     end: dayStart(d),
     isAllDay: true,
+    editable: false,
+  };
+}
+
+/**
+ * Convert a managed event (events module) into a calendar overlay item.
+ * `basePath` picks the shell the deep-link opens in ("/staff-portal" or "/dashboard").
+ */
+export function managedEventToItem(
+  event: ManagedEvent & { id: string },
+  basePath: string
+): CalendarItem | null {
+  if (!event.startDate) return null;
+  const start = parseDateKey(event.startDate);
+  const end = event.endDate ? parseDateKey(event.endDate) : start;
+  return {
+    key: `managed-event-${event.id}`,
+    id: event.id,
+    source: "event",
+    title: event.title,
+    type: event.eventType === "shoot" || event.eventType === "podcast-shoot" ? "shoot" : "event",
+    start: dayStart(start),
+    end: dayStart(end),
+    startTime: event.startTime,
+    endTime: event.endTime,
+    isAllDay: !event.startTime,
+    location: event.venue || event.location,
+    description: event.venue ? `Venue: ${event.venue}` : undefined,
+    href: `${basePath}/events/${event.id}`,
     editable: false,
   };
 }

@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { createDocument, getDocuments, orderBy, where, Timestamp, updateDocument } from "@/lib/firestore";
-import { Attendance, AttendanceStatus, Staff } from "@/types";
+import { Attendance, AttendanceStatus, Department, Staff } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
 import { ATTENDANCE_STATUS_CONFIG, attendanceStatusMeta, normalizeAttendanceStatus, type ActiveAttendanceStatus } from "@/lib/attendance-status";
+import { pickAttendanceRecord } from "@/lib/attendance-dedupe";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 import { exportToCSV } from "@/lib/asset-export-utils";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { exportAttendanceSheetPDF, groupStaffForSheet, type SheetStaffEntry } from "@/lib/attendance-sheet";
 import {
   Users,
   UserCheck,
@@ -27,6 +29,7 @@ import {
   ListChecks,
   Rows3,
   Grid3x3,
+  X,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { PageLoader } from "@/components/ui/loading";
@@ -88,6 +91,7 @@ export default function AttendanceRegisterPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | ActiveAttendanceStatus>("all");
 
   const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
+  const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
   const [records, setRecords] = useState<Rec[]>([]);
   const [weeklyOff, setWeeklyOff] = useState<string[]>(["Sunday"]);
   const [holidays, setHolidays] = useState<Holiday[]>([]);
@@ -98,18 +102,22 @@ export default function AttendanceRegisterPage() {
   const [editCheckIn, setEditCheckIn] = useState("");
   const [editCheckOut, setEditCheckOut] = useState("");
   const [saving, setSaving] = useState(false);
+  // Expanded per-staff month view (tap a name in the grid — primary mobile affordance)
+  const [staffDetail, setStaffDetail] = useState<(Staff & { id: string }) | null>(null);
 
   // Load staff + attendance settings once
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const [staff, settings] = await Promise.all([
+        const [staff, settings, depts] = await Promise.all([
           getDocuments<Staff>("staff", [orderBy("firstName", "asc")]),
           getAppSettings(),
+          getDocuments<Department>("departments"),
         ]);
         if (!active) return;
         setStaffList(staff);
+        setDepartments(depts);
         setWeeklyOff(weeklyOffDayNames(settings));
         setHolidays(settings.holidays);
       } catch (error) {
@@ -132,10 +140,15 @@ export default function AttendanceRegisterPage() {
     const s = staffList.find((x) => x.id === staffId);
     setEditTarget({ record, staffId, staffName: fullName(s), date });
     setEditStatus(record ? normalizeAttendanceStatus(record.status) : "present");
-    const inSec = secOf(record?.checkIn);
-    const outSec = secOf(record?.checkOut);
-    setEditCheckIn(inSec ? new Date(inSec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }).replace(/\s/g, "") : "");
-    setEditCheckOut(outSec ? new Date(outSec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }).replace(/\s/g, "") : "");
+    // <input type="time"> needs 24h HH:mm — locale strings like "02:58pm" get rejected,
+    // leaving the field blank and silently wiping punches on save.
+    const hhmm = (sec?: number) => {
+      if (!sec) return "";
+      const d = new Date(sec * 1000);
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    };
+    setEditCheckIn(hhmm(secOf(record?.checkIn)));
+    setEditCheckOut(hhmm(secOf(record?.checkOut)));
   }
 
   function openEditDialog(record: Rec) {
@@ -340,8 +353,8 @@ export default function AttendanceRegisterPage() {
       if (!s) continue;
       const k = `${r.staffId}_${dateKeyFromSec(s)}`;
       const prev = map.get(k);
-      // Duplicate rows for one day: a non-absent record (correction/leave) beats a stale "absent"
-      if (!prev || (prev.status === "absent" && r.status !== "absent")) map.set(k, r);
+      // Duplicate rows for one day: correction > manual > import, then newest write
+      map.set(k, prev ? pickAttendanceRecord(prev, r) : r);
     }
     return map;
   }, [records]);
@@ -385,8 +398,10 @@ export default function AttendanceRegisterPage() {
     return STATUS_CONFIG.absent;
   }
 
+  const deptNameById = useMemo(() => new Map(departments.map((d) => [d.id, d.name])), [departments]);
+
   // ── Export ────────────────────────────────────────────────────────────────────
-  function handleExport() {
+  async function handleExport() {
     const monthText = monthStart.toLocaleDateString("en-IN", { month: "short", year: "numeric" });
     if (view === "logs") {
       const rows = logEvents.map((e) => ({
@@ -413,15 +428,29 @@ export default function AttendanceRegisterPage() {
       }));
       exportToCSV(rows, `attendance-daily-${month}`);
     } else {
-      const rows = filteredStaff.map((s) => {
-        const row: Record<string, string> = { Staff: fullName(s), Code: s.employeeCode ?? "" };
-        for (const meta of dayMeta) {
+      // Monthly grid exports as the org's printed D4 attendance sheet (PDF)
+      const entries: SheetStaffEntry[] = filteredStaff.map((s) => ({
+        name: fullName(s),
+        empCode: s.employeeCode ?? "",
+        dept: deptNameById.get(s.departmentId) ?? s.designation ?? "",
+        employmentType: s.employmentType,
+        cells: dayMeta.map((meta) => {
           const c = cellFor(s, meta);
-          row[String(meta.day)] = c?.code ?? "";
-        }
-        return row;
+          return c ? { code: c.code, cell: c.cell } : null;
+        }),
+      }));
+      await exportAttendanceSheetPDF({
+        monthLabel: monthStart.toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+        days: dayMeta.map((m) => ({
+          day: m.day,
+          weekday: m.short.toUpperCase(),
+          isOff: m.isOff,
+          isHoliday: !!m.holidayName,
+        })),
+        sections: groupStaffForSheet(entries),
+        legend: Object.values(STATUS_CONFIG).map((c) => ({ code: c.code, label: c.label })),
+        filename: `D4-attendance-sheet-${month}`,
       });
-      exportToCSV(rows, `attendance-grid-${month}`);
     }
     toast("success", `Exported ${monthText} ${view} register`);
   }
@@ -484,7 +513,7 @@ export default function AttendanceRegisterPage() {
 
       {/* View switcher + filters */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="inline-flex rounded-full border border-slate-200/90 bg-white/80 p-1 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+        <div className="flex w-full rounded-full border border-slate-200/90 bg-white/80 p-1 shadow-[0_10px_30px_rgba(15,23,42,0.05)] sm:w-fit">
           {VIEWS.map((v) => {
             const Icon = v.icon;
             const active = view === v.id;
@@ -494,13 +523,13 @@ export default function AttendanceRegisterPage() {
                 type="button"
                 onClick={() => setView(v.id)}
                 className={
-                  "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition-all " +
+                  "flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2 py-2 text-xs font-semibold transition-all sm:flex-none sm:gap-2 sm:px-4 sm:text-sm " +
                   (active
                     ? "bg-gradient-to-r from-indigo-700 via-indigo-600 to-violet-600 text-white shadow-[0_10px_24px_rgba(55,48,163,0.24)]"
                     : "text-slate-600 hover:text-slate-950")
                 }
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="hidden h-4 w-4 shrink-0 sm:block" />
                 {v.label}
               </button>
             );
@@ -712,7 +741,7 @@ export default function AttendanceRegisterPage() {
       {view === "grid" ? (
         <ListingPanel
           title={`Monthly Grid — ${monthLabel}`}
-          description="Staff down the side, days across the top. Each cell is the logged status."
+          description="Staff down the side, days across the top. Tap a name to expand their full month."
           contentClassName="p-0"
         >
           <div className="overflow-x-auto">
@@ -747,9 +776,20 @@ export default function AttendanceRegisterPage() {
                 ) : (
                   filteredStaff.map((s) => (
                     <tr key={s.id} className="border-b border-slate-50 hover:bg-slate-50/60">
-                      <td className="sticky left-0 z-10 bg-white px-4 py-2 font-medium text-slate-950">
-                        <div className="whitespace-nowrap">{fullName(s)}</div>
-                        <div className="text-xs text-slate-400">{s.employeeCode || s.designation}</div>
+                      <td className="sticky left-0 z-10 bg-white px-3 py-2 sm:px-4">
+                        <button
+                          type="button"
+                          onClick={() => setStaffDetail(s)}
+                          title="View full month"
+                          className="block min-h-11 w-full text-left"
+                        >
+                          <div className="max-w-[116px] truncate whitespace-nowrap font-medium text-slate-950 sm:max-w-none">
+                            {fullName(s)}
+                          </div>
+                          <div className="max-w-[116px] truncate text-xs text-slate-400 sm:max-w-none">
+                            {s.employeeCode || s.designation}
+                          </div>
+                        </button>
                       </td>
                       {dayMeta.map((m) => {
                         const c = cellFor(s, m);
@@ -801,12 +841,134 @@ export default function AttendanceRegisterPage() {
         ))}
       </div>
 
-      {editTarget && (
-        <div className="fixed inset-0 z-50 flex items-end bg-black/40 sm:items-center">
-          <div className="w-full bg-white p-6 shadow-2xl sm:mx-auto sm:max-w-md sm:rounded-2xl">
-            <h3 className="text-lg font-semibold text-slate-950">
-              {editTarget.record ? "Edit Attendance" : "Add Attendance"}
-            </h3>
+      {/* Expanded per-staff month view (bottom sheet on mobile, centered on desktop) */}
+      {staffDetail &&
+        (() => {
+          const detailDays = dayMeta.map((m) => ({
+            meta: m,
+            cell: cellFor(staffDetail, m),
+            rec: gridLookup.get(`${staffDetail.id}_${m.key}`),
+          }));
+          const counts = new Map<string, { label: string; cell: string; n: number }>();
+          for (const d of detailDays) {
+            if (!d.cell) continue;
+            const prev = counts.get(d.cell.code);
+            if (prev) prev.n += 1;
+            else counts.set(d.cell.code, { label: d.cell.label, cell: d.cell.cell, n: 1 });
+          }
+          // Portal to <body>: the layout's content wrapper is its own stacking
+          // context (relative z-10), so anything inside it paints under the
+          // fixed bottom nav (z-50) no matter the z-index.
+          return createPortal(
+            <div
+              className="fixed inset-0 z-[60] flex items-end bg-black/40 sm:items-center"
+              onClick={() => setStaffDetail(null)}
+            >
+              <div
+                className="flex max-h-[88vh] w-full flex-col rounded-t-3xl bg-white shadow-2xl sm:mx-auto sm:max-h-[85vh] sm:max-w-lg sm:rounded-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 pb-3 pt-5">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-lg font-semibold text-slate-950">{fullName(staffDetail)}</h3>
+                    <p className="truncate text-sm text-slate-500">
+                      {[staffDetail.employeeCode || staffDetail.designation, monthLabel].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Close"
+                    onClick={() => setStaffDetail(null)}
+                    className="shrink-0 rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {counts.size > 0 ? (
+                  <div className="flex flex-wrap gap-2 border-b border-slate-100 px-5 py-3">
+                    {Array.from(counts.entries()).map(([code, c]) => (
+                      <span
+                        key={code}
+                        title={c.label}
+                        className={"inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold " + c.cell}
+                      >
+                        {code}
+                        <span className="font-normal">× {c.n}</span>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+                  {detailDays.map(({ meta: m, cell: c, rec }) => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      disabled={!c}
+                      title={c ? "Tap to edit" : undefined}
+                      onClick={() => beginEdit(rec ?? null, staffDetail.id, new Date(year, monthNum - 1, m.day))}
+                      className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      <div className="w-8 shrink-0 text-center">
+                        <div className="text-sm font-semibold text-slate-950">{m.day}</div>
+                        <div className={"text-[10px] " + (m.holidayName || m.isOff ? "text-rose-400" : "text-slate-400")}>
+                          {m.short}
+                        </div>
+                      </div>
+                      <span
+                        className={
+                          "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-semibold " +
+                          (c ? c.cell : "bg-slate-50 text-slate-300")
+                        }
+                      >
+                        {c ? c.code : "·"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-slate-700">
+                          {c ? c.label : m.isFuture ? "Upcoming" : "Before joining"}
+                        </div>
+                        {rec && (secOf(rec.checkIn) || secOf(rec.checkOut)) ? (
+                          <div className="truncate text-xs text-slate-400">
+                            {timeStr(rec.checkIn)} – {timeStr(rec.checkOut)}
+                            {rec.workingHours ? ` · ${rec.workingHours.toFixed(1)}h` : ""}
+                            {rec.isLate ? " · Late" : rec.isEarlyDeparture ? " · Early out" : ""}
+                          </div>
+                        ) : null}
+                      </div>
+                      {c ? <Edit2 className="h-3.5 w-3.5 shrink-0 text-slate-300" /> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>,
+            document.body
+          );
+        })()}
+
+      {editTarget &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[60] flex items-end bg-black/40 sm:items-center"
+            onClick={() => setEditTarget(null)}
+          >
+          <div
+            className="max-h-[90vh] w-full overflow-y-auto rounded-t-3xl bg-white p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl sm:mx-auto sm:max-w-md sm:rounded-2xl sm:pb-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="text-lg font-semibold text-slate-950">
+                {editTarget.record ? "Edit Attendance" : "Add Attendance"}
+              </h3>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setEditTarget(null)}
+                className="-mr-2 -mt-2 shrink-0 rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
             <p className="mb-4 mt-0.5 text-sm text-slate-500">
               {editTarget.staffName} —{" "}
               {editTarget.date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
@@ -838,8 +1000,9 @@ export default function AttendanceRegisterPage() {
               </Button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body
+        )}
     </div>
   );
 }

@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getModel } from "@/models";
 import { getAuthUser } from "@/lib/auth";
+import { effectiveSubject } from "@/lib/effective-grants";
 import { hasFeature } from "@/lib/permissions";
 import type { ParsedEmployee } from "@/lib/attendance-import/parsers";
 import type { AttendanceStatus } from "@/types";
-import { normalizeSettings, isNonWorkingDay, type AppSettings } from "@/lib/settings";
+import { normalizeSettings, isNonWorkingDay, evaluateCheckIn, type AppSettings } from "@/lib/settings";
 
 interface ParsedRecord {
   date: string;
@@ -43,7 +44,9 @@ function workingHoursOf(checkIn?: Date, checkOut?: Date): number {
 export async function POST(req: NextRequest) {
   const user = getAuthUser(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!hasFeature({ role: user.role, grantedFeatures: user.features }, "attendance-import")) {
+  await connectDB();
+  // Fresh grants, not the login-time JWT snapshot — see effective-grants.ts
+  if (!hasFeature(await effectiveSubject(user), "attendance-import")) {
     return NextResponse.json({ error: "You do not have permission to import attendance." }, { status: 403 });
   }
 
@@ -68,17 +71,20 @@ export async function POST(req: NextRequest) {
     settings = normalizeSettings(null);
   }
 
-  const staffDocs = (await Staff.find({}, { biometricId: 1, employeeCode: 1 }).lean()) as unknown as {
+  const staffDocs = (await Staff.find({}, { biometricId: 1, employeeCode: 1, companyId: 1 }).lean()) as unknown as {
     _id: unknown;
     biometricId?: string;
     employeeCode?: string;
+    companyId?: string;
   }[];
   const byBiometricId = new Map<string, string>();
   const byEmployeeCode = new Map<string, string>();
+  const companyByStaffId = new Map<string, string | undefined>();
   for (const s of staffDocs) {
     const id = String(s._id);
     if (s.biometricId) byBiometricId.set(s.biometricId, id);
     if (s.employeeCode) byEmployeeCode.set(s.employeeCode, id);
+    companyByStaffId.set(id, s.companyId);
   }
 
   const batchDoc = await Batch.create({
@@ -121,10 +127,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const companyId = companyByStaffId.get(staffId);
+
     for (const rec of emp.records) {
       try {
         const date = dateOnly(rec.date);
-        if (rec.status === "absent" && !rec.checkIn && !rec.checkOut && isNonWorkingDay(settings, date)) {
+        if (rec.status === "absent" && !rec.checkIn && !rec.checkOut && isNonWorkingDay(settings, date, companyId)) {
           rec.status = "week-off";
         }
         const checkIn = dateAt(rec.date, rec.checkIn);
@@ -134,7 +142,16 @@ export async function POST(req: NextRequest) {
           checkOut = new Date(checkOut.getTime() + 86400000);
         }
 
-        const existing = (await Attendance.findOne({ staffId, date, isDeleted: { $ne: true } }).lean()) as { _id: unknown } | null;
+        // Late flag mirrors the manual register edit: schedule + grace, off days never late.
+        const isLate = checkIn ? evaluateCheckIn(settings, checkIn, null, companyId).isLate : false;
+
+        // Same staff+day rows can carry different midnight conventions (see
+        // attendance-dedupe.ts), so match the whole local day, not one exact Date.
+        const existing = (await Attendance.findOne({
+          staffId,
+          date: { $gte: date, $lt: new Date(date.getTime() + 86400000) },
+          isDeleted: { $ne: true },
+        }).lean()) as { _id: unknown } | null;
 
         if (existing && !overwriteExisting) {
           skippedCount += 1;
@@ -149,7 +166,7 @@ export async function POST(req: NextRequest) {
           status: rec.status,
           workingHours: workingHoursOf(checkIn, checkOut),
           overtimeHours: 0,
-          isLate: false,
+          isLate,
           isEarlyDeparture: false,
           source: "biometric",
           importBatchId: batchId,

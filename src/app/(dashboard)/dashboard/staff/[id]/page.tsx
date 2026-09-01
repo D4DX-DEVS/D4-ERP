@@ -140,6 +140,7 @@ export default function StaffProfilePage() {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffId]);
@@ -160,7 +161,7 @@ export default function StaffProfilePage() {
       await updateDocument("staff", staffId, { currentSalary: incrementForm.newSalary });
       setIncrementOpen(false);
       toast("success", "Salary updated successfully");
-      fetchData();
+      await fetchData();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to update salary");
@@ -226,7 +227,7 @@ export default function StaffProfilePage() {
       setStatusDialogOpen(false);
       setReturnAssetsOnTerminate(false);
       toast("success", "Staff status updated");
-      fetchData();
+      await fetchData();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to update staff status");
@@ -258,7 +259,7 @@ export default function StaffProfilePage() {
 
       setContractDialogOpen(false);
       toast("success", "Contract updated");
-      fetchData();
+      await fetchData();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to update contract");
@@ -277,8 +278,10 @@ export default function StaffProfilePage() {
     setSavingFeatures(true);
     try {
       await updateDocument("staff", staffId, { grantedFeatures });
+      // Re-read before declaring success so the checkboxes reflect what the
+      // server actually stored, not the optimistic local state.
+      await fetchData();
       toast("success", "Access updated");
-      fetchData();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to update access");

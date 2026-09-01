@@ -445,11 +445,36 @@ export async function POST(req: NextRequest) {
       // ── NEXT SEQUENCE (atomic counter for document numbering) ───────────
       // Guarantees gap-free, duplicate-free numbers even with concurrent users.
       case "nextSequence": {
-        const { key } = body;
+        const { key, legacy } = body;
         if (!key || typeof key !== "string") {
           return NextResponse.json({ error: "Sequence key is required" }, { status: 400 });
         }
         const SeqModel = getModel("number_sequences");
+        // Scope migration: when this key has no counter yet, seed it from the
+        // highest legacy counter it replaces (e.g. per-FY keys collapsing into
+        // one continuous serial) so numbering continues instead of restarting.
+        if (legacy && typeof legacy.prefix === "string" && legacy.prefix) {
+          const existing = await SeqModel.findOne({ key }).lean();
+          if (!existing) {
+            const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const suffix = typeof legacy.suffix === "string" ? legacy.suffix : "";
+            const pattern = `^${esc(legacy.prefix)}.*${esc(suffix)}$`;
+            const legacyDocs = await SeqModel.find({ key: { $regex: pattern } }).lean();
+            const seed = legacyDocs.reduce(
+              (max: number, d: Record<string, unknown>) => Math.max(max, Number(d.current) || 0),
+              0
+            );
+            if (seed > 0) {
+              // $setOnInsert keeps this race-safe: a concurrent first call
+              // either inserts the seed or no-ops, then both $inc atomically.
+              await SeqModel.updateOne(
+                { key },
+                { $setOnInsert: { current: seed, createdAt: new Date() } },
+                { upsert: true }
+              );
+            }
+          }
+        }
         const doc = await SeqModel.findOneAndUpdate(
           { key },
           { $inc: { current: 1 }, $setOnInsert: { createdAt: new Date() }, $set: { updatedAt: new Date() } },
@@ -494,6 +519,21 @@ export async function POST(req: NextRequest) {
         const filter = await applyReadScope(authzUser, collectionName, rawFilter);
         const total = await Model.countDocuments(filter);
         return NextResponse.json({ total });
+      }
+
+      // ── SUM (aggregate a numeric field over the full filtered set) ──────
+      case "sum": {
+        const { constraints = [], field } = body;
+        if (typeof field !== "string" || !/^[a-zA-Z][a-zA-Z0-9_.]*$/.test(field)) {
+          return NextResponse.json({ error: "A valid field name is required" }, { status: 400 });
+        }
+        const { filter: rawFilter } = buildQuery(constraints);
+        const filter = await applyReadScope(authzUser, collectionName, rawFilter);
+        const rows = await Model.aggregate([
+          { $match: filter },
+          { $group: { _id: null, total: { $sum: `$${field}` } } },
+        ]);
+        return NextResponse.json({ total: rows[0]?.total ?? 0 });
       }
 
       // ── PAGINATE ────────────────────────────────────────────────────────

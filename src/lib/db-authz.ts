@@ -221,7 +221,7 @@ export const OWN_SCOPED_FOR_STAFF: Record<string, string> = {
 };
 
 export function isReadAction(action: string): boolean {
-  return action === "find" || action === "count" || action === "paginate";
+  return action === "find" || action === "count" || action === "paginate" || action === "sum";
 }
 
 /**

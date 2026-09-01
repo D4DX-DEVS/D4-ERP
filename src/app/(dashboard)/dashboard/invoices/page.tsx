@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
+import { clampDiscount, discountAmount as discountValueOf } from "@/lib/invoice-discount";
 import { cn, formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
 import { FileText, Plus, Trash2, Loader2, Eye, Search } from "lucide-react";
 import Link from "next/link";
@@ -127,8 +128,8 @@ export default function InvoicesPage() {
 
   const calculateTotals = () => {
     const subtotal = form.items.reduce((sum, item) => sum + item.amount, 0);
-    // ponytail: clamp to [0, subtotal] so a typo can't make the total negative
-    const discountAmount = Math.min(subtotal, Math.max(0, form.discount.type === "percentage" ? (subtotal * form.discount.value) / 100 : form.discount.value));
+    // Clamped to [0, subtotal] so a typo can't make the total negative
+    const discountAmount = discountValueOf(form.discount, subtotal);
     const taxable = subtotal - discountAmount;
     let cgst = 0, sgst = 0, igst = 0;
     if (form.taxType === "gst") {
@@ -164,7 +165,8 @@ export default function InvoicesPage() {
         dueDate: form.dueDate ? Timestamp.fromDate(new Date(form.dueDate)) : Timestamp.now(),
         items: form.items,
         subtotal: totals.subtotal,
-        discount: form.discount,
+        // Store the same clamped value the totals were computed with
+        discount: clampDiscount(form.discount, totals.subtotal),
         taxType: form.taxType,
         gstDetails: form.taxType === "gst" ? {
           gstRate: form.gstRate,

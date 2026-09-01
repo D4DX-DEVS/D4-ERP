@@ -1,8 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getDocuments, createDocument, Timestamp } from "@/lib/firestore";
+import {
+  getDocuments,
+  createDocument,
+  countDocuments,
+  where,
+  search as searchConstraint,
+  Timestamp,
+} from "@/lib/firestore";
+import { usePagination } from "@/hooks/use-pagination";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +25,7 @@ import { useToast } from "@/components/ui/toast";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { ListingHeader, ListingPanel, ListingStatCard, ListingStatGrid } from "@/components/ui/listing";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 
 interface WhatsAppMessage {
   id: string;
@@ -38,12 +47,12 @@ const TEMPLATES = [
 ];
 
 export default function WhatsAppPage() {
-  const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [clients, setClients] = useState<(Client & { id: string })[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showSend, setShowSend] = useState(false);
   const [search, setSearch] = useState("");
   const [sending, setSending] = useState(false);
+  const [pageSize, setPageSize] = useState(20);
+  const [stats, setStats] = useState({ total: 0, outbound: 0, read: 0, failed: 0 });
   const { toast } = useToast();
   const router = useRouter();
 
@@ -54,56 +63,49 @@ export default function WhatsAppPage() {
     message: "",
   });
 
-  const fetchData = async () => {
-    setLoading(true);
+  const constraints = useMemo(
+    () => (search.trim() ? [searchConstraint(["phone", "message"], search.trim())] : []),
+    [search]
+  );
+
+  const {
+    data: filtered,
+    loading,
+    totalCount,
+    page,
+    totalPages,
+    hasNext,
+    hasPrev,
+    nextPage,
+    prevPage,
+    refresh,
+  } = usePagination<WhatsAppMessage>("whatsapp_messages", {
+    pageSize,
+    orderByField: "createdAt",
+    orderDirection: "desc",
+    constraints,
+  });
+
+  // Stat cards cover the whole collection, not the visible page — count server-side
+  const loadStats = useCallback(async () => {
     try {
-      const [msgs, cls] = await Promise.all([
-        getDocuments<WhatsAppMessage>("whatsapp_messages"),
-        getDocuments<Client>("clients"),
+      const [total, outbound, read, failed] = await Promise.all([
+        countDocuments("whatsapp_messages"),
+        countDocuments("whatsapp_messages", [where("type", "==", "outgoing")]),
+        countDocuments("whatsapp_messages", [where("status", "==", "read")]),
+        countDocuments("whatsapp_messages", [where("status", "==", "failed")]),
       ]);
-      setMessages(msgs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-      setClients(cls);
+      setStats({ total, outbound, read, failed });
     } catch (error) {
       console.error("Error:", error);
-      toast("error", "Failed to load messages");
-    } finally {
-      setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadInitialData() {
-      setLoading(true);
-      try {
-        const [msgs, cls] = await Promise.all([
-          getDocuments<WhatsAppMessage>("whatsapp_messages"),
-          getDocuments<Client>("clients"),
-        ]);
-
-        if (!isMounted) return;
-
-        setMessages(msgs.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)));
-        setClients(cls);
-      } catch (error) {
-        console.error("Error:", error);
-        if (isMounted) {
-          toast("error", "Failed to load messages");
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void loadInitialData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [toast]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async: state set after await, not synchronously
+    void loadStats();
+    void getDocuments<Client>("clients").then(setClients).catch(() => setClients([]));
+  }, [loadStats]);
 
   const clientMap = Object.fromEntries(clients.map((c) => [c.id, c]));
 
@@ -145,7 +147,8 @@ export default function WhatsAppPage() {
       setForm({ clientId: "", phone: "", template: "", message: "" });
       setShowSend(false);
       toast("success", "Message sent");
-      fetchData();
+      refresh();
+      void loadStats();
     } catch (error) {
       console.error("Error:", error);
       toast("error", "Failed to send message");
@@ -153,16 +156,6 @@ export default function WhatsAppPage() {
       setSending(false);
     }
   };
-
-  const filtered = messages.filter((m) => {
-    if (!search) return true;
-    const client = clientMap[m.clientId];
-    return (
-      m.phone?.includes(search) ||
-      m.message?.toLowerCase().includes(search.toLowerCase()) ||
-      client?.companyName?.toLowerCase().includes(search.toLowerCase())
-    );
-  });
 
   const statusIcon = (s: string) => {
     switch (s) {
@@ -172,10 +165,6 @@ export default function WhatsAppPage() {
       default: return <span className="text-red-400 text-xs">!</span>;
     }
   };
-
-  const totalOutbound = messages.filter((message) => message.type === "outgoing").length;
-  const totalRead = messages.filter((message) => message.status === "read").length;
-  const totalFailed = messages.filter((message) => message.status === "failed").length;
 
   return (
     <div className="space-y-6">
@@ -231,10 +220,10 @@ export default function WhatsAppPage() {
       />
 
       <ListingStatGrid>
-        <ListingStatCard icon={<MessageSquare className="h-5 w-5" />} label="Total Messages" value={messages.length} toneClassName="bg-slate-100 text-slate-700" meta="All recorded conversations" />
-        <ListingStatCard icon={<Send className="h-5 w-5" />} label="Outbound" value={totalOutbound} toneClassName="bg-emerald-50 text-emerald-700" meta="Messages initiated by your team" />
-        <ListingStatCard icon={<CheckCheck className="h-5 w-5" />} label="Read" value={totalRead} toneClassName="bg-sky-50 text-sky-700" meta="Messages seen by recipients" />
-        <ListingStatCard icon={<Clock className="h-5 w-5" />} label="Failed" value={totalFailed} toneClassName="bg-rose-50 text-rose-700" meta="Delivery issues needing follow-up" />
+        <ListingStatCard icon={<MessageSquare className="h-5 w-5" />} label="Total Messages" value={stats.total} toneClassName="bg-slate-100 text-slate-700" meta="All recorded conversations" />
+        <ListingStatCard icon={<Send className="h-5 w-5" />} label="Outbound" value={stats.outbound} toneClassName="bg-emerald-50 text-emerald-700" meta="Messages initiated by your team" />
+        <ListingStatCard icon={<CheckCheck className="h-5 w-5" />} label="Read" value={stats.read} toneClassName="bg-sky-50 text-sky-700" meta="Messages seen by recipients" />
+        <ListingStatCard icon={<Clock className="h-5 w-5" />} label="Failed" value={stats.failed} toneClassName="bg-rose-50 text-rose-700" meta="Delivery issues needing follow-up" />
       </ListingStatGrid>
 
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
@@ -278,7 +267,7 @@ export default function WhatsAppPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.slice(0, 50).map((message) => {
+                {filtered.map((message) => {
                   const detailHref = `/dashboard/whatsapp/${message.id}`;
 
                   return (
@@ -330,6 +319,19 @@ export default function WhatsAppPage() {
                 })}
               </TableBody>
             </Table>
+          )}
+          {!loading && (
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              hasNext={hasNext}
+              hasPrev={hasPrev}
+              onNext={nextPage}
+              onPrev={prevPage}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+            />
           )}
         </ListingPanel>
       </div>
