@@ -31,6 +31,9 @@ import { deptScopeFor, inDeptScope } from "@/lib/dept-scope";
 
 type TaskDoc = Task & { id: string };
 
+/** Stable empty list so suppressed filters don't hand a new array each render. */
+const EMPTY_TABLE_ROWS: TaskDoc[] = [];
+
 const statusColumns = [
   { key: "todo", label: "To Do", dot: "bg-slate-400", accent: "from-slate-50/80 to-white/40", ring: "ring-slate-200/70" },
   { key: "in-progress", label: "In Progress", dot: "bg-sky-500", accent: "from-sky-50/80 to-white/40", ring: "ring-sky-200/70" },
@@ -178,24 +181,31 @@ export default function TasksPage() {
     [baseConstraints, toast]
   );
 
+  /**
+   * Columns the current filters exclude. Derived on every render (instead of
+   * blanking them in state) so a skipped column reads as empty immediately and
+   * its last-loaded tasks come straight back when the filter is cleared.
+   */
+  const isColumnSkipped = useCallback(
+    (key: string) =>
+      // Overdue / no-update are open-task filters — the Done column sits out.
+      (statusFilter !== "all" && statusFilter !== key) ||
+      (key === "done" && (overdueOnly || pendingUpdateOnly)) ||
+      pendingInactive,
+    [statusFilter, overdueOnly, pendingUpdateOnly, pendingInactive]
+  );
+
+  const colStateFor = (key: string): ColState =>
+    isColumnSkipped(key) ? emptyCol : cols[key] ?? emptyCol;
+
   const fetchBoard = useCallback(async () => {
-    // Overdue / no-update are open-task filters — the Done column sits out.
-    const excludeDone = overdueOnly || pendingUpdateOnly;
     await Promise.all(
-      statusColumns.map((col) => {
-        const skipped =
-          (statusFilter !== "all" && statusFilter !== col.key) ||
-          (col.key === "done" && excludeDone) ||
-          pendingInactive;
-        if (skipped) {
-          setCols((p) => ({ ...p, [col.key]: { ...emptyCol } }));
-          return Promise.resolve();
-        }
-        return fetchColumn(col.key, 0, false);
-      })
+      statusColumns.map((col) =>
+        isColumnSkipped(col.key) ? Promise.resolve() : fetchColumn(col.key, 0, false)
+      )
     );
     setBoardLoaded(true);
-  }, [fetchColumn, statusFilter, overdueOnly, pendingUpdateOnly, pendingInactive]);
+  }, [fetchColumn, isColumnSkipped]);
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -221,21 +231,30 @@ export default function TasksPage() {
   }, [baseConstraints, statusFilter]);
 
   useEffect(() => {
+    // Board + counts load from the API; state is set from the responses.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchBoard();
     void fetchCounts();
   }, [fetchBoard, fetchCounts, refreshTick]);
 
-  useEffect(() => {
+  // Filters changed -> jump back to the first table page. Render-time reset so
+  // page 3 of the old filter is never requested for the new one.
+  const tableResetKey = `${statusFilter}|${JSON.stringify(baseConstraints)}`;
+  const [prevTableResetKey, setPrevTableResetKey] = useState(tableResetKey);
+  if (prevTableResetKey !== tableResetKey) {
+    setPrevTableResetKey(tableResetKey);
     setTablePage(0);
-  }, [baseConstraints, statusFilter]);
+  }
+
+  // Filter combinations that can never match anything (pending-update before the
+  // 6 PM cutoff, overdue + done). Derived rather than written into state so the
+  // fetch effect never has to blank the rows synchronously.
+  const tableSuppressed = pendingInactive || (overdueOnly && statusFilter === "done");
+  const visibleTableRows = tableSuppressed ? EMPTY_TABLE_ROWS : tableRows;
+  const visibleTableTotal = tableSuppressed ? 0 : tableTotal;
 
   useEffect(() => {
-    if (view !== "table") return;
-    if (pendingInactive || (overdueOnly && statusFilter === "done")) {
-      setTableRows([]);
-      setTableTotal(0);
-      return;
-    }
+    if (view !== "table" || tableSuppressed) return;
     let alive = true;
     (async () => {
       try {
@@ -254,7 +273,7 @@ export default function TasksPage() {
     return () => {
       alive = false;
     };
-  }, [view, tablePage, baseConstraints, statusFilter, overdueOnly, pendingUpdateOnly, pendingInactive, refreshTick, toast]);
+  }, [view, tablePage, baseConstraints, statusFilter, overdueOnly, pendingUpdateOnly, tableSuppressed, refreshTick, toast]);
 
   // Staff + departments load once.
   useEffect(() => {
@@ -296,7 +315,7 @@ export default function TasksPage() {
       const hit = c.tasks.find((t) => t.id === id);
       if (hit) return hit;
     }
-    return tableRows.find((t) => t.id === id);
+    return visibleTableRows.find((t) => t.id === id);
   };
 
   const patchTaskEverywhere = (id: string, patch: Partial<TaskDoc>) => {
@@ -465,7 +484,7 @@ export default function TasksPage() {
   const deptScope = deptScopeFor(user?.role, user?.departmentId);
   const visibleStaff = staffList.filter((s) => inDeptScope(deptScope, s.departmentId));
 
-  const colTotal = (key: string) => cols[key]?.total ?? 0;
+  const colTotal = (key: string) => colStateFor(key).total;
   const stats = {
     total: statusColumns.reduce((sum, c) => sum + colTotal(c.key), 0),
     inProgress: colTotal("in-progress"),
@@ -474,7 +493,7 @@ export default function TasksPage() {
     pendingUpdate: pendingCount,
   };
 
-  const tableTotalPages = Math.ceil(tableTotal / TABLE_PAGE_SIZE);
+  const tableTotalPages = Math.ceil(visibleTableTotal / TABLE_PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -622,7 +641,7 @@ export default function TasksPage() {
       /* Kanban Board */
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {statusColumns.map((col) => {
-          const colState = cols[col.key] ?? emptyCol;
+          const colState = colStateFor(col.key);
           const colTasks = colState.tasks;
           const remaining = colState.total - colTasks.length;
           const isOver = dragOverCol === col.key;
@@ -762,7 +781,7 @@ export default function TasksPage() {
       ) : (
       /* Table View */
       <div className="space-y-2">
-        <p className="px-1 text-xs text-slate-500">Showing {tableRows.length} of {tableTotal} tasks</p>
+        <p className="px-1 text-xs text-slate-500">Showing {visibleTableRows.length} of {visibleTableTotal} tasks</p>
         <Table>
           <TableHeader>
             <TableRow>
@@ -776,14 +795,14 @@ export default function TasksPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {tableRows.length === 0 ? (
+            {visibleTableRows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="py-10 text-center text-sm text-slate-400">
                   No tasks match your filters.
                 </TableCell>
               </TableRow>
             ) : (
-              tableRows.map((task) => {
+              visibleTableRows.map((task) => {
                 const subDone = (task.subtasks ?? []).filter((s) => s.isCompleted).length;
                 const subTotal = (task.subtasks ?? []).length;
                 const dueKey = task.dueDate ? new Date(task.dueDate.seconds * 1000).toISOString().split("T")[0] : null;
@@ -886,7 +905,7 @@ export default function TasksPage() {
         <Pagination
           page={tablePage}
           totalPages={tableTotalPages}
-          totalCount={tableTotal}
+          totalCount={visibleTableTotal}
           pageSize={TABLE_PAGE_SIZE}
           hasNext={tablePage < tableTotalPages - 1}
           hasPrev={tablePage > 0}

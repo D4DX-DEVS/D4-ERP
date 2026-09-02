@@ -44,6 +44,7 @@ const ROUTE_ROLES: Record<string, StaffRole[]> = {
   "/dashboard/whatsapp": ["admin"],
   "/dashboard/audit-log": ["admin"],
   "/dashboard/settings": ["admin"],
+  "/dashboard/tools": ["admin"],
 };
 
 /** Routes that can also be accessed if the user has a granted feature. */
@@ -64,6 +65,7 @@ const ROUTE_FEATURES: Record<string, FeatureKey> = {
   "/dashboard/items": "items",
   "/dashboard/payroll": "payroll",
   "/dashboard/reports": "reports",
+  "/dashboard/tools": "tools-vault",
 };
 
 function getRouteRoles(pathname: string): StaffRole[] | null {

@@ -67,6 +67,8 @@ export default function StaffPayrollDossierPage() {
   };
 
   useEffect(() => {
+    // Loads the dossier from the API; state is set from the response, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffId]);

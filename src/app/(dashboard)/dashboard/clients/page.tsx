@@ -109,6 +109,8 @@ export default function ClientsPage() {
   const searchParams = useSearchParams();
   useEffect(() => {
     if (searchParams.get("new") === "1") {
+      // Deep link "?new=1" opens the create dialog once, then strips the param.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       handleOpen();
       router.replace(`${base}/clients`);
     }

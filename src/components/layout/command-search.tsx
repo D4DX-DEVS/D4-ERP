@@ -67,10 +67,15 @@ export function CommandSearch() {
     );
   }, [allItems, query]);
 
-  // Reset selection when results change
-  useEffect(() => {
+  // Reset the highlighted row when the result set changes. Adjusting state
+  // during render (instead of in an effect) avoids the extra render pass that
+  // would briefly paint a stale highlight.
+  const resultsKey = `${query}|${filtered.length}`;
+  const [prevResultsKey, setPrevResultsKey] = useState(resultsKey);
+  if (prevResultsKey !== resultsKey) {
+    setPrevResultsKey(resultsKey);
     setSelectedIndex(0);
-  }, [filtered.length, query]);
+  }
 
   // Scroll selected item into view
   useEffect(() => {
@@ -94,13 +99,21 @@ export function CommandSearch() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Focus input when opened
-  useEffect(() => {
+  // Clear the previous search as soon as the palette opens (render-time reset,
+  // same reason as above), then focus the input once it is mounted.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
     if (open) {
       setQuery("");
       setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 10);
     }
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 10);
+    return () => clearTimeout(t);
   }, [open]);
 
   const navigate = useCallback(

@@ -23,7 +23,8 @@ export type FeatureKey =
   | "items"
   | "payroll"
   | "reports"
-  | "events";
+  | "events"
+  | "tools-vault";
 
 export type PortalSection = "Operations" | "Work" | "Finance" | "Insights";
 
@@ -161,6 +162,14 @@ export const FEATURES: FeatureMeta[] = [
     description: "Access reporting dashboards.",
     defaultRoles: ["admin", "accounts"],
     portal: { section: "Insights", href: "/staff-portal/reports" },
+  },
+  {
+    // Grants the stored logins too — the credentials are shown in the page
+    // rather than behind a second check, so grant this sparingly.
+    key: "tools-vault",
+    label: "Tools & Accounts",
+    description: "Manage company software subscriptions, licences and their stored logins.",
+    defaultRoles: ["admin"],
   },
 ];
 

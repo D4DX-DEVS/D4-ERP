@@ -2,9 +2,10 @@
 import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Search, Eye, Pencil, Trash2 } from "lucide-react";
 import {
+  getDocument,
   getDocuments,
   createDocument,
   updateDocument,
@@ -234,6 +235,27 @@ export default function EventsListPage() {
     setEditingId(event.id!);
     setDialogOpen(true);
   };
+
+  // Deep link from the event detail page: /events/list?edit=<id> opens that
+  // event straight in the edit dialog. The doc is fetched by id so it works
+  // even when the event is not on the current page of the list.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const id = searchParams.get("edit");
+    if (!id) return;
+    void (async () => {
+      try {
+        const doc = await getDocument<ManagedEvent>("events", id);
+        if (doc) handleOpenEdit({ ...doc, id });
+        else toast("error", "Event not found");
+      } catch {
+        toast("error", "Failed to open the event");
+      } finally {
+        router.replace(`${base}/events/list`);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const toggleStaff = (id: string) => {
     setForm((p) => ({

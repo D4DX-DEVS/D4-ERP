@@ -1144,6 +1144,81 @@ export interface IssuedLetter extends BaseDocument {
   issuedByName?: string;
 }
 
+// ==================== Tools & Accounts (subscription + credential vault) ====================
+export type ToolBillingCycle = "monthly" | "quarterly" | "yearly" | "one-time";
+export type ToolLoginMethod = "email-password" | "google" | "microsoft" | "sso" | "api-key" | "other";
+/** Derived from `renewalDate` at render time — never stored. See lib/tool-status.ts. */
+export type ToolStatus = "active" | "expiring" | "expired" | "cancelled";
+
+export interface ToolSecurityFlag {
+  key: string;
+  label: string;
+}
+
+/**
+ * The confidential half of a tool record. Stored as a single AES-256-GCM blob
+ * (see lib/vault.ts) and only unsealed by /api/db for a session that holds the
+ * `tools-vault` feature.
+ */
+export interface ToolSecret {
+  password?: string;
+  licenseKey?: string;
+  recoveryEmail?: string;
+  recoveryPhone?: string;
+  notes?: string;
+  /**
+   * Authenticator seed (base32 or a full `otpauth://` URI) for accounts whose
+   * 2-step verification uses an app. Lets the vault show the rotating code so a
+   * shared account is not locked to one person's phone. See lib/totp.ts.
+   */
+  totpSecret?: string;
+}
+
+export interface CompanyTool extends BaseDocument {
+  name: string;
+  category: string;
+  description?: string;
+  url?: string;
+  vendor?: string;
+  plan?: string;
+
+  // Access
+  username?: string;
+  loginMethod?: ToolLoginMethod;
+  twoFactorEnabled?: boolean;
+  /** True when a credential blob is stored — readable without unsealing `secret`. */
+  hasCredentials?: boolean;
+  secret?: ToolSecret | null;
+  /** Set by the server when a stored credential cannot be decrypted (vault key changed). */
+  secretLocked?: boolean;
+  lastPasswordChangedAt?: Timestamp;
+  lastVerifiedAt?: Timestamp;
+
+  // Ownership
+  ownerStaffId?: string;
+  assignedStaffIds?: string[];
+  seatsTotal?: number;
+  seatsUsed?: number;
+
+  // Subscription
+  purchasedDate?: Timestamp;
+  renewalDate?: Timestamp;
+  billingCycle?: ToolBillingCycle;
+  /** Amount per billing cycle, in INR. */
+  cost?: number;
+  /** cost normalised to a yearly figure on save, so spend can be summed server-side. */
+  annualCost?: number;
+  autoRenew?: boolean;
+  /** A label such as "HDFC corporate card" — never card numbers. */
+  paymentMethod?: string;
+  invoiceUrl?: string;
+  cancelled?: boolean;
+
+  notes?: string;
+  createdBy?: string;
+  createdByName?: string;
+}
+
 // ==================== Auth ====================
 export interface AuthUser {
   uid: string;

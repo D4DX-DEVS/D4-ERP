@@ -23,6 +23,7 @@ import {
   Calendar,
   PartyPopper,
   FileText,
+  KeyRound,
   type LucideIcon,
 } from "lucide-react";
 import type { FeatureKey } from "@/lib/permissions";
@@ -275,6 +276,7 @@ export const navigationModules: NavModule[] = [
     items: [
       { label: "Companies", href: "/dashboard/companies", icon: Building2, roles: ["admin"] },
       { label: "Departments", href: "/dashboard/departments", icon: Layers, roles: ["admin"] },
+      { label: "Tools & Accounts", href: "/dashboard/tools", icon: KeyRound, roles: ["admin"], feature: "tools-vault" },
       { label: "Notifications", href: "/dashboard/notifications", icon: Bell, roles: ["admin", "department-head", "accounts"] },
       { label: "Banners", href: "/dashboard/banners", icon: ImageIcon, roles: ["admin"] },
       { label: "WhatsApp", href: "/dashboard/whatsapp", icon: MessageSquare, roles: ["admin"] },

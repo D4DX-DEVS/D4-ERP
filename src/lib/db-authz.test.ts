@@ -278,6 +278,42 @@ describe("role authorization (/api/db permissions)", () => {
     });
   });
 
+  describe("company_tools (credential vault — closed reads AND writes)", () => {
+    const plainStaff = user("staff");
+    const granted = user("staff", ["tools-vault"]);
+
+    it("blocks reads for anyone without the tools-vault feature", () => {
+      for (const u of [plainStaff, deptHead, accounts]) {
+        expect(authorize(u, "find", "company_tools")).toMatch(/permission/i);
+        expect(authorize(u, "findOne", "company_tools")).toMatch(/permission/i);
+        expect(authorize(u, "paginate", "company_tools")).toMatch(/permission/i);
+        expect(authorize(u, "count", "company_tools")).toMatch(/permission/i);
+      }
+    });
+
+    it("blocks writes for anyone without the tools-vault feature", () => {
+      for (const u of [plainStaff, deptHead, accounts]) {
+        expect(authorize(u, "create", "company_tools")).toMatch(/permission/i);
+        expect(authorize(u, "update", "company_tools")).toMatch(/permission/i);
+        expect(authorize(u, "delete", "company_tools")).toMatch(/permission/i);
+      }
+    });
+
+    it("allows admins and explicitly granted users", () => {
+      for (const u of [admin, granted]) {
+        expect(authorize(u, "find", "company_tools")).toBeNull();
+        expect(authorize(u, "create", "company_tools")).toBeNull();
+        expect(authorize(u, "update", "company_tools")).toBeNull();
+        expect(authorize(u, "delete", "company_tools")).toBeNull();
+      }
+    });
+
+    it("does not let the grant unlock other modules", () => {
+      expect(authorize(granted, "create", "assets")).toMatch(/permission/i);
+      expect(authorize(granted, "find", "transactions")).toMatch(/permission/i);
+    });
+  });
+
   describe("grants must not broaden data scope", () => {
     it("a management grant leaves staff read scoping unchanged", () => {
       const plain = user("staff");

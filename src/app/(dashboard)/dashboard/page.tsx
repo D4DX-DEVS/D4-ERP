@@ -324,7 +324,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Today's Requests</CardTitle>
+            <CardTitle className="text-lg">Today&apos;s Requests</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (

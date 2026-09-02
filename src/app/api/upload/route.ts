@@ -27,6 +27,7 @@ const ALLOWED_FOLDERS = new Set([
   "banners",
   "notifications",
   "profiles",
+  "tool-invoices",
   "misc",
 ]);
 

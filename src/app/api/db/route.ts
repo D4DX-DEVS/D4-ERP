@@ -17,6 +17,7 @@ import {
 } from "@/lib/db-authz";
 import type { TokenPayload } from "@/lib/auth";
 import { canTransitionTask, transitionNeedsRemark } from "@/lib/task-workflow";
+import { decryptDocFields, encryptDocFields, redactEncryptedFields } from "@/lib/vault";
 import type { StaffRole, TaskStatus } from "@/types";
 
 // ── Timestamp helpers ─────────────────────────────────────────────────────────
@@ -56,6 +57,19 @@ function dateToTs(obj: unknown): unknown {
     return result;
   }
   return obj;
+}
+
+/**
+ * Shape a stored document for the client: drop sensitive fields, unseal vault
+ * fields (Tools & Accounts credentials), and convert Dates back to Timestamps.
+ */
+function outbound(collectionName: string, d: Record<string, unknown>) {
+  return dateToTs(
+    decryptDocFields(
+      collectionName,
+      sanitizeDoc({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined })
+    )
+  );
 }
 
 // ── Constraint → Mongo query builder ──────────────────────────────────────────
@@ -369,7 +383,7 @@ export async function POST(req: NextRequest) {
         q = q.limit(Math.min(lim || MAX_QUERY_LIMIT, MAX_QUERY_LIMIT));
         const docs = await q.lean();
         return NextResponse.json(
-          docs.map((d: Record<string, unknown>) => dateToTs(sanitizeDoc({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined })))
+          docs.map((d: Record<string, unknown>) => outbound(collectionName, d))
         );
       }
 
@@ -383,17 +397,20 @@ export async function POST(req: NextRequest) {
         if (deniedDoc) {
           return NextResponse.json({ error: deniedDoc }, { status: 403 });
         }
-        return NextResponse.json(dateToTs(sanitizeDoc({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined })));
+        return NextResponse.json(outbound(collectionName, d));
       }
 
       // ── CREATE ──────────────────────────────────────────────────────────
       case "create": {
-        const data = tsToDate(body.data) as Record<string, unknown>;
+        const data = encryptDocFields(collectionName, tsToDate(body.data) as Record<string, unknown>);
         data.createdAt = new Date();
         data.updatedAt = new Date();
         const doc = await Model.create(data);
         const id = doc._id.toString();
-        writeAuditLog("create", collectionName, id, `Created ${collectionName} record`, auditUser, { newData: body.data });
+        // Sealed fields are redacted: an audit entry must never carry a credential.
+        writeAuditLog("create", collectionName, id, `Created ${collectionName} record`, auditUser, {
+          newData: redactEncryptedFields(collectionName, body.data),
+        });
         return NextResponse.json({ id });
       }
 
@@ -414,8 +431,10 @@ export async function POST(req: NextRequest) {
           }
         }
         data.updatedAt = new Date();
-        await Model.findByIdAndUpdate(id, { $set: data });
-        writeAuditLog("update", collectionName, id, `Updated ${collectionName} record`, auditUser, { newData: rawData });
+        await Model.findByIdAndUpdate(id, { $set: encryptDocFields(collectionName, data) });
+        writeAuditLog("update", collectionName, id, `Updated ${collectionName} record`, auditUser, {
+          newData: redactEncryptedFields(collectionName, rawData),
+        });
         return NextResponse.json({ success: true });
       }
 
@@ -494,7 +513,7 @@ export async function POST(req: NextRequest) {
         if (Object.keys(sort).length) q = q.sort(sort);
         const docs = await q.lean();
         return NextResponse.json(
-          docs.map((d: Record<string, unknown>) => dateToTs(sanitizeDoc({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined })))
+          docs.map((d: Record<string, unknown>) => outbound(`${parentCollection}_${subCollection}`, d))
         );
       }
 
@@ -549,7 +568,7 @@ export async function POST(req: NextRequest) {
         q = q.skip(safePage * safePageSize).limit(safePageSize);
         const docs = await q.lean();
         return NextResponse.json({
-          data: docs.map((d: Record<string, unknown>) => dateToTs(sanitizeDoc({ ...d, id: (d._id as object).toString(), _id: undefined, __v: undefined }))),
+          data: docs.map((d: Record<string, unknown>) => outbound(collectionName, d)),
           total,
           page,
           pageSize,

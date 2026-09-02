@@ -9,7 +9,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { TimePicker } from "@/components/ui/time-picker";
 import { Label } from "@/components/ui/label";
 import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { Building, Save, Globe, Clock, IndianRupee, CalendarOff, Plus, Trash2, MapPin, FileText } from "lucide-react";
+import { Building, Save, Globe, Clock, IndianRupee, CalendarOff, Plus, Trash2, MapPin, FileText, Users } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import type { Company } from "@/types";
 import {
@@ -19,6 +19,7 @@ import {
   cloneWeeklySchedule,
   normalizeSettings,
 } from "@/lib/settings";
+import { addEventRole, hasRole, normalizeRoleName, removeEventRole } from "@/lib/event-roles";
 
 const SETTINGS_TABS = [
   { id: "general", label: "General", icon: Building },
@@ -27,6 +28,7 @@ const SETTINGS_TABS = [
   { id: "schedule", label: "Work Schedule", icon: Clock },
   { id: "attendance", label: "Attendance", icon: MapPin },
   { id: "holidays", label: "Holidays", icon: CalendarOff },
+  { id: "eventRoles", label: "Event Roles", icon: Users },
   { id: "leave", label: "Leave Policy", icon: Clock },
   { id: "integrations", label: "Integrations", icon: Globe },
 ] as const;
@@ -39,6 +41,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [newHoliday, setNewHoliday] = useState({ date: "", name: "", companyId: "" });
+  const [newRole, setNewRole] = useState("");
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
   const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
   const { toast } = useToast();
@@ -117,6 +120,24 @@ export default function SettingsPage() {
     ].sort((a, b) => a.date.localeCompare(b.date));
     setSettings({ ...settings, holidays });
     setNewHoliday({ date: "", name: "", companyId: "" });
+  };
+
+  const addRole = () => {
+    const name = normalizeRoleName(newRole);
+    if (!name) {
+      toast("error", "Enter a role name");
+      return;
+    }
+    if (hasRole(settings.eventStaffRoles, name)) {
+      toast("error", "That role is already in the list");
+      return;
+    }
+    setSettings({ ...settings, eventStaffRoles: addEventRole(settings.eventStaffRoles, name) });
+    setNewRole("");
+  };
+
+  const removeRole = (role: string) => {
+    setSettings({ ...settings, eventStaffRoles: removeEventRole(settings.eventStaffRoles, role) });
   };
 
   const removeHoliday = (date: string, companyId?: string) => {
@@ -611,6 +632,57 @@ export default function SettingsPage() {
       )}
 
       {/* Leave Policy */}
+      {/* Event Roles */}
+      {activeTab === "eventRoles" && (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" /> Event Staff Roles
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Roles offered in the dropdown when assigning staff to an event. Anyone can still type a
+            one-off role while assigning; roles typed by an admin are added here automatically.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 sm:items-end">
+            <div>
+              <Label>Role Name</Label>
+              <Input
+                value={newRole}
+                onChange={(e) => setNewRole(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addRole();
+                  }
+                }}
+                placeholder="e.g. Gimbal Shoot"
+              />
+            </div>
+            <Button type="button" variant="outline" onClick={addRole}>
+              <Plus className="h-4 w-4 mr-1" /> Add
+            </Button>
+          </div>
+
+          {settings.eventStaffRoles.length === 0 ? (
+            <p className="text-sm text-gray-400 py-2">No roles yet. Add the first one above.</p>
+          ) : (
+            <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+              {settings.eventStaffRoles.map((role) => (
+                <div key={role} className="flex items-center justify-between px-4 py-2.5">
+                  <p className="text-sm font-medium">{role}</p>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => removeRole(role)}>
+                    <Trash2 className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      )}
+
       {activeTab === "leave" && (
       <Card>
         <CardHeader>
