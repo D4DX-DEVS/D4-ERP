@@ -94,9 +94,13 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
   // Pick up grant changes without re-login (revoked features disappear + guard kicks in).
   useAuthRefresh();
 
-  useEffect(() => {
+  // Collapse the "More" sheet on navigation. Done during render rather than in
+  // an effect so the sheet never paints open on the new route.
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname);
     setMoreOpen(false);
-  }, [pathname]);
+  }
 
   const grantedModules = portalModules.filter((m) => hasFeature(user, m.feature));
   const grantedSections = SECTION_ORDER.map((section) => ({

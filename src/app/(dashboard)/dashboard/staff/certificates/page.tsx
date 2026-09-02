@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import {
@@ -46,6 +46,39 @@ import Link from "next/link";
 
 type Step = "template-select" | "staff-select" | "values-edit" | "preview" | "confirm";
 
+/** Field defaults for a certificate, derived from the picked staff + template. */
+function buildDefaultValues(
+  template: CertificateTemplate & { id: string },
+  staff: Staff & { id: string },
+  departments: (Department & { id: string })[],
+  companies: (Company & { id: string })[]
+): Record<string, string> {
+  const dept = departments.find((d) => d.id === staff.departmentId);
+  const comp = companies.find((c) => c.id === staff.companyId);
+  const toDate = (ts?: { seconds: number } | null) =>
+    ts ? new Date(ts.seconds * 1000).toISOString().split("T")[0] : "";
+
+  return {
+    name: `${staff.firstName} ${staff.lastName}`,
+    designation: staff.designation || "",
+    department: dept?.name || "",
+    companyName: comp?.name || "",
+    joinDate: toDate(staff.dateOfJoining),
+    endDate: toDate(staff.contractEndDate),
+    month: new Date().toLocaleString("default", { month: "long" }),
+    year: new Date().getFullYear().toString(),
+    issuanceDate: new Date().toISOString().split("T")[0],
+    address: staff.address
+      ? `${staff.address.street}, ${staff.address.city}, ${staff.address.state} ${staff.address.pincode}`
+      : "",
+    signatoryName: template.signatoryName || "",
+    logoUrl: template.logoUrl || "",
+    signatureUrl: template.signatureUrl || "",
+    reportingTo: "", // To be filled by user
+    employmentType: staff.employmentType || "permanent",
+  };
+}
+
 export default function CertificatesPage() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -70,7 +103,6 @@ export default function CertificatesPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<CertificateTemplate & { id: string } | null>(null);
   const [selectedStaff, setSelectedStaff] = useState<(Staff & { id: string }) | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
-  const [renderedHtml, setRenderedHtml] = useState("");
 
   // UI state
   const [managingTemplates, setManagingTemplates] = useState(false);
@@ -103,51 +135,29 @@ export default function CertificatesPage() {
     void init();
   }, [toast]);
 
-  // When template selected, prepare default values
-  useEffect(() => {
-    if (!selectedTemplate || !selectedStaff) return;
-
-    const dept = departments.find((d) => d.id === selectedStaff.departmentId);
-    const comp = companies.find((c) => c.id === selectedStaff.companyId);
-
-    const defaultValues: Record<string, string> = {
-      name: `${selectedStaff.firstName} ${selectedStaff.lastName}`,
-      designation: selectedStaff.designation || "",
-      department: dept?.name || "",
-      companyName: comp?.name || "",
-      joinDate: selectedStaff.dateOfJoining
-        ? new Date(selectedStaff.dateOfJoining.seconds * 1000)
-            .toISOString()
-            .split("T")[0]
-        : "",
-      endDate: selectedStaff.contractEndDate
-        ? new Date(selectedStaff.contractEndDate.seconds * 1000)
-            .toISOString()
-            .split("T")[0]
-        : "",
-      month: new Date().toLocaleString("default", { month: "long" }),
-      year: new Date().getFullYear().toString(),
-      issuanceDate: new Date().toISOString().split("T")[0],
-      address: selectedStaff.address
-        ? `${selectedStaff.address.street}, ${selectedStaff.address.city}, ${selectedStaff.address.state} ${selectedStaff.address.pincode}`
-        : "",
-      signatoryName: selectedTemplate?.signatoryName || "",
-      logoUrl: selectedTemplate?.logoUrl || "",
-      signatureUrl: selectedTemplate?.signatureUrl || "",
-      reportingTo: "", // To be filled by user
-      employmentType: selectedStaff.employmentType || "permanent",
-    };
-
-    setValues(defaultValues);
-  }, [selectedTemplate, selectedStaff, departments, companies]);
-
-  // Update preview
-  useEffect(() => {
-    if (selectedTemplate && values) {
-      const html = renderTemplate(selectedTemplate.bodyHtml, values);
-      setRenderedHtml(html);
+  // Seed the form with the staff/template defaults whenever the selection (or
+  // the freshly loaded lookup lists) change. Done during render rather than in
+  // an effect so the fields never flash empty before the defaults land.
+  const selectionKey = [
+    selectedTemplate?.id ?? "",
+    selectedStaff?.id ?? "",
+    departments.length,
+    companies.length,
+  ].join("|");
+  const [prevSelectionKey, setPrevSelectionKey] = useState(selectionKey);
+  if (prevSelectionKey !== selectionKey) {
+    setPrevSelectionKey(selectionKey);
+    if (selectedTemplate && selectedStaff) {
+      setValues(buildDefaultValues(selectedTemplate, selectedStaff, departments, companies));
     }
-  }, [selectedTemplate, values]);
+  }
+
+  // Preview is a pure function of the template and the filled values, so it is
+  // derived during render instead of mirrored into state.
+  const renderedHtml = useMemo(
+    () => (selectedTemplate && values ? renderTemplate(selectedTemplate.bodyHtml, values) : ""),
+    [selectedTemplate, values]
+  );
 
   const handleIssue = async () => {
     if (!selectedTemplate || !selectedStaff || !renderedHtml) return;
@@ -613,7 +623,7 @@ export default function CertificatesPage() {
           <DialogHeader>
             <DialogTitle>Issue Certificate</DialogTitle>
             <DialogDescription>
-              This will create a record in the staff member's documents and send them a notification.
+              This will create a record in the staff member&apos;s documents and send them a notification.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">

@@ -1,6 +1,7 @@
 import { getDocuments } from "@/lib/firestore";
 import type { Shift } from "@/types";
 import { DEFAULT_LETTER_BODIES } from "@/lib/letter-templates";
+import { DEFAULT_EVENT_STAFF_ROLES, mergeEventRoles } from "@/lib/event-roles";
 
 // ==================== Work Schedule ====================
 
@@ -122,6 +123,8 @@ export interface AppSettings {
   quotationPrefix: string;
   /** Templates that drive auto-generated document numbers (FR-QT-003). */
   numberFormats: NumberFormats;
+  /** Role catalog offered when assigning staff to an event. */
+  eventStaffRoles: string[];
 }
 
 /** JS Date.getDay() index (0 = Sunday) → weekday key. */
@@ -190,6 +193,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultGstRate: 18,
   invoicePrefix: "INV",
   quotationPrefix: "QTN",
+  eventStaffRoles: [...DEFAULT_EVENT_STAFF_ROLES],
   numberFormats: {
     quotation: "D4-Q-{SEQ:3}",
     estimate: "EST-{COMP}-{YYYY}/{SEQ:3}",
@@ -252,6 +256,11 @@ export function normalizeSettings(raw?: Partial<AppSettings> | null): AppSetting
     workingHours: { ...DEFAULT_SETTINGS.workingHours, ...(raw.workingHours ?? {}) },
     attendanceRules: { ...DEFAULT_SETTINGS.attendanceRules, ...(raw.attendanceRules ?? {}) },
     numberFormats,
+    // An empty saved list is respected (admin cleared it); only a missing list
+    // falls back to the seed catalog.
+    eventStaffRoles: Array.isArray(raw.eventStaffRoles)
+      ? mergeEventRoles(raw.eventStaffRoles)
+      : [...DEFAULT_EVENT_STAFF_ROLES],
     holidays: Array.isArray(raw.holidays) ? raw.holidays : [],
     weeklySchedule: schedule,
   };

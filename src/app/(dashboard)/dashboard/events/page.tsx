@@ -10,6 +10,7 @@ import {
   Users,
   TrendingUp,
   ArrowRight,
+  Pencil,
 } from "lucide-react";
 import { getDocuments, orderBy } from "@/lib/firestore";
 import { ListingHeader, ListingStatGrid, ListingStatCard } from "@/components/ui/listing";
@@ -136,6 +137,18 @@ export default function EventsDashboardPage() {
                     </span>
                   )}
                   <EventStatusBadge status={event.status} />
+                  <button
+                    type="button"
+                    title="Edit event"
+                    aria-label={`Edit ${event.title}`}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`${base}/events/list?edit=${event.id}`);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -166,7 +179,21 @@ export default function EventsDashboardPage() {
                     {event.clientName || "No client"}
                   </span>
                 </div>
-                <EventStatusBadge status={event.status} />
+                <div className="flex items-center gap-2">
+                  <EventStatusBadge status={event.status} />
+                  <button
+                    type="button"
+                    title="Edit event"
+                    aria-label={`Edit ${event.title}`}
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`${base}/events/list?edit=${event.id}`);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

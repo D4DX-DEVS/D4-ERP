@@ -59,6 +59,7 @@ export const FEATURE_WRITE: Record<string, FeatureKey> = {
   "asset-categories": "asset-management",
   "asset-persons": "asset-management",
   "asset-events": "asset-management",
+  company_tools: "tools-vault",
   // tasks intentionally absent: staff must update their own assigned tasks;
   // the task-workflow guard (role/assignee/status) is the write authority.
 };
@@ -73,6 +74,8 @@ export const FEATURE_READ: Record<string, FeatureKey[]> = {
   invoices: ["invoices", "quotations", "reports"],
   invoice_payments: ["invoices", "quotations", "reports"],
   items: ["items", "invoices", "quotations"],
+  // Holds sealed credentials — never readable on an open collection default.
+  company_tools: ["tools-vault"],
 };
 
 /**

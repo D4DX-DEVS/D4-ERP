@@ -11,6 +11,7 @@ import {
   Tag,
   Paperclip,
   Plus,
+  Pencil,
   X,
 } from "lucide-react";
 import {
@@ -21,6 +22,7 @@ import {
   Timestamp,
 } from "@/lib/firestore";
 import { useAuthStore } from "@/store/auth-store";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 import { useToast } from "@/components/ui/toast";
 import { StatusTimeline } from "@/components/ui/status-timeline";
 import { CommentsSection } from "@/components/ui/comments-section";
@@ -36,6 +38,15 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { formatCurrency } from "@/lib/utils";
 import { pushStatusChange } from "@/lib/status-history";
+import { getAppSettings } from "@/lib/settings";
+import {
+  CUSTOM_ROLE_OPTION,
+  FALLBACK_EVENT_STAFF_ROLE,
+  addEventRole,
+  hasRole,
+  mergeEventRoles,
+  normalizeRoleName,
+} from "@/lib/event-roles";
 import { createBulkNotifications } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
 import type {
@@ -81,6 +92,7 @@ export default function EventDetailPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { toast } = useToast();
+  const base = useWorkspaceBase();
 
   const eventId = params.id as string;
   const [event, setEvent] = useState<ManagedEvent | null>(null);
@@ -88,6 +100,11 @@ export default function EventDetailPage() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [showStaffPicker, setShowStaffPicker] = useState(false);
   const [staffRole, setStaffRole] = useState("");
+  /** Role catalog from settings, extended with any role already used on events. */
+  const [roleOptions, setRoleOptions] = useState<string[]>([]);
+  const [settingsDocId, setSettingsDocId] = useState<string | undefined>();
+  /** Free-text value shown when "+ Add new role" is picked in the dropdown. */
+  const [newRole, setNewRole] = useState("");
   const [selectedStaffId, setSelectedStaffId] = useState("");
   const [statusRemarks, setStatusRemarks] = useState("");
   const [showStatusDialog, setShowStatusDialog] = useState(false);
@@ -109,6 +126,13 @@ export default function EventDetailPage() {
       await fetchEvent();
       const staff = await getDocuments<Staff>("staff", [where("isActive", "==", true)]);
       setStaffList(staff);
+      try {
+        const settings = await getAppSettings();
+        setSettingsDocId(settings.id);
+        setRoleOptions(settings.eventStaffRoles);
+      } catch (error) {
+        console.error("Failed to load event roles:", error);
+      }
     })();
   }, [fetchEvent]);
 
@@ -161,15 +185,49 @@ export default function EventDetailPage() {
     }
   };
 
+  /** Catalog plus any ad-hoc role already stored on this event, so nothing is lost. */
+  const pickerRoles = mergeEventRoles(
+    roleOptions,
+    (event?.assignedStaff ?? []).map((s) => s.role)
+  );
+
+  /** Selected catalog role, or the typed one when "+ Add new role" is active. */
+  const resolvedRole =
+    staffRole === CUSTOM_ROLE_OPTION ? normalizeRoleName(newRole) : staffRole;
+
+  /**
+   * Adds a freshly typed role to the shared catalog. Only admins may write the
+   * settings document, so for everyone else the role still lands on the
+   * assignment — it just isn't saved for reuse.
+   */
+  const persistNewRole = async (role: string) => {
+    if (hasRole(roleOptions, role)) return;
+    const nextOptions = addEventRole(roleOptions, role);
+    setRoleOptions(nextOptions);
+    if (user?.role !== "admin" || !settingsDocId) return;
+    try {
+      await updateDocument("settings", settingsDocId, {
+        eventStaffRoles: nextOptions,
+        updatedAt: Timestamp.now(),
+      });
+    } catch (error) {
+      console.error("Failed to save new event role:", error);
+    }
+  };
+
   const handleAddStaff = async () => {
     if (!event || !selectedStaffId || !user) return;
     const staff = staffList.find((s) => s.id === selectedStaffId);
     if (!staff) return;
+    if (staffRole === CUSTOM_ROLE_OPTION && !resolvedRole) {
+      toast("error", "Enter a role name");
+      return;
+    }
 
     const newAssignment: EventStaffAssignment = {
       staffId: staff.id!,
       staffName: `${staff.firstName} ${staff.lastName}`,
-      role: staffRole || "Team Member",
+      role: resolvedRole || FALLBACK_EVENT_STAFF_ROLE,
     };
 
     const updatedStaff = [...event.assignedStaff, newAssignment];
@@ -190,10 +248,15 @@ export default function EventDetailPage() {
         senderName: `${user.firstName} ${user.lastName}`,
       });
 
+      if (staffRole === CUSTOM_ROLE_OPTION && resolvedRole) {
+        await persistNewRole(resolvedRole);
+      }
+
       toast("success", "Staff member added");
       setShowStaffPicker(false);
       setSelectedStaffId("");
       setStaffRole("");
+      setNewRole("");
       await fetchEvent();
     } catch (error) {
       console.error("Failed to add staff:", error);
@@ -252,6 +315,13 @@ export default function EventDetailPage() {
             {event.eventId} • {event.eventType} • Created by {event.createdByName || "Unknown"}
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.push(`${base}/events/list?edit=${eventId}`)}
+        >
+          <Pencil className="h-3.5 w-3.5" /> Edit
+        </Button>
       </div>
 
       {/* Status Actions */}
@@ -382,13 +452,36 @@ export default function EventDetailPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Role</Label>
-                    <Input
+                    <Select
                       value={staffRole}
-                      onChange={(e) => setStaffRole(e.target.value)}
-                      placeholder="e.g. Photographer"
+                      onChange={(e) => {
+                        setStaffRole(e.target.value);
+                        if (e.target.value !== CUSTOM_ROLE_OPTION) setNewRole("");
+                      }}
+                      placeholder="Select role"
+                      options={[
+                        { value: "", label: "Select role" },
+                        ...pickerRoles.map((r) => ({ value: r, label: r })),
+                        { value: CUSTOM_ROLE_OPTION, label: "+ Add new role" },
+                      ]}
                     />
                   </div>
                 </div>
+                {staffRole === CUSTOM_ROLE_OPTION && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">New Role Name</Label>
+                    <Input
+                      value={newRole}
+                      onChange={(e) => setNewRole(e.target.value)}
+                      placeholder="e.g. Gimbal Shoot"
+                    />
+                    <p className="text-xs text-slate-500">
+                      {user?.role === "admin"
+                        ? "Saved to the role list for future events."
+                        : "Used for this assignment. Ask an admin to add it to the shared list."}
+                    </p>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <Button size="sm" onClick={handleAddStaff} disabled={!selectedStaffId}>
                     Add

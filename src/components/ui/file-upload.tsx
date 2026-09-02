@@ -11,6 +11,7 @@ type UploadFolder =
   | "banners"
   | "notifications"
   | "profiles"
+  | "tool-invoices"
   | "misc";
 
 interface FileUploadProps {

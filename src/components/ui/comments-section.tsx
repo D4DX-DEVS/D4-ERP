@@ -39,6 +39,8 @@ export function CommentsSection({ entityType, entityId, className }: CommentsSec
   }, [entityType, entityId]);
 
   React.useEffect(() => {
+    // Loads from the API; state is set from the response, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchComments();
   }, [fetchComments]);
 
