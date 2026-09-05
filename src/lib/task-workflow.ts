@@ -34,6 +34,32 @@ export function canTransitionTask(
   return allowed.has(to);
 }
 
+/** The ownership fields a delete decision needs (subset of a task document). */
+export interface TaskOwnership {
+  createdBy?: string | null;
+  assignedBy?: string | null;
+  departmentId?: string | null;
+}
+
+/**
+ * Who may delete a task. Admin: any. Department-head: own department's
+ * tasks. Anyone (including staff holding a Task Management grant): tasks
+ * they created or assigned. Being the assignee is not enough. Legacy tasks
+ * without departmentId are deletable only by admin or their creator.
+ * Enforced by /api/db; the UI shows the delete control to everyone.
+ */
+export function canDeleteTask(
+  role: StaffRole,
+  uid: string,
+  departmentId: string | null,
+  task: TaskOwnership
+): boolean {
+  if (role === "admin") return true;
+  if (task.createdBy === uid || task.assignedBy === uid) return true;
+  if (role === "department-head") return !!departmentId && task.departmentId === departmentId;
+  return false;
+}
+
 /** Returning a task from review needs a reason (becomes a TaskComment). */
 export function transitionNeedsRemark(from: TaskStatus, to: TaskStatus): boolean {
   return from === "review" && to === "in-progress";

@@ -127,7 +127,7 @@ export default function CalendarPage() {
     try {
       const [eventData, leaveData, taskData, settings] = await Promise.all([
         getDocuments<CalendarEvent>("calendar_events"),
-        getDocuments<LeaveRequest>("leave_requests", [where("status", "==", "approved")]),
+        getDocuments<LeaveRequest>("leaveRequests", [where("status", "==", "approved")]),
         getDocuments<Task>("tasks"),
         getAppSettings(),
       ]);

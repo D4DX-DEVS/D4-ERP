@@ -38,7 +38,7 @@ export default function ReportsPage() {
           getDocuments<Staff>("staff"),
           getDocuments<Transaction>("transactions"),
           getDocuments<Invoice>("invoices"),
-          getDocuments<LeaveRequest>("leave_requests"),
+          getDocuments<LeaveRequest>("leaveRequests"),
           getDocuments<Attendance>("attendance"),
         ]);
 

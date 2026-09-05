@@ -148,6 +148,7 @@ export default function NewRequestPage() {
     );
   }
 
+  const todayLabel = new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
   const typeOptions = Object.entries(REQUEST_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 
   return (
@@ -168,6 +169,15 @@ export default function NewRequestPage() {
                 onChange={(e) => setForm({ ...form, type: e.target.value as FormType })}
                 options={typeOptions}
               />
+            </div>
+
+            {/* Letter date — auto-generated on submit, not user-editable. */}
+            <div className="space-y-2">
+              <Label>Request Date</Label>
+              <div className="flex h-10 w-full items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
+                {todayLabel}
+                <span className="ml-2 text-xs text-slate-400">(set automatically)</span>
+              </div>
             </div>
 
             {/* Leave-specific fields */}
@@ -232,6 +242,46 @@ export default function NewRequestPage() {
                         ]}
                       />
                     </div>
+                  )}
+                </div>
+
+                {/* Leave dates: the day(s) you'll actually be away. */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>{form.isHalfDay ? "Leave Date *" : "From Date *"}</Label>
+                      <DatePicker
+                        value={form.startDate}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            startDate: e.target.value,
+                            // Half day / backwards range: keep end in sync with start.
+                            endDate:
+                              form.isHalfDay || !form.endDate || form.endDate < e.target.value
+                                ? e.target.value
+                                : form.endDate,
+                          })
+                        }
+                        required
+                      />
+                    </div>
+                    {!form.isHalfDay && (
+                      <div className="space-y-2">
+                        <Label>To Date *</Label>
+                        <DatePicker
+                          value={form.endDate || form.startDate}
+                          min={form.startDate || undefined}
+                          onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                          required
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {requestedDays > 0 && (
+                    <p className="text-xs text-slate-600">
+                      Applying for <b>{requestedDays}</b> day(s).
+                    </p>
                   )}
                 </div>
 

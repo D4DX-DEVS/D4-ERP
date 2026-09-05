@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Asset, AssetEvent, AssetMovement, AssetPerson, StudioBooking } from "@/types";
 import { getDocuments, getDocument, where, Timestamp } from "@/lib/firestore";
 import { itemBusyReason, type AvailabilityContext, type BusyReason } from "@/lib/asset-availability";
+import { movementConditions } from "@/lib/asset-movements";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,7 +17,6 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { ArrowLeft, CheckCircle2, Circle, Package, Search, SendHorizonal, X, AlertTriangle, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
-import { useAuthStore } from "@/store/auth-store";
 import { formatDate } from "@/lib/utils";
 
 type ReturnCondition = "good" | "damaged" | "defective" | "missing";
@@ -50,7 +50,6 @@ export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const base = useWorkspaceBase();
-  const { user } = useAuthStore();
   const { toast } = useToast();
 
   const [event, setEvent] = useState<(AssetEvent & { id: string }) | null>(null);
@@ -155,7 +154,6 @@ export default function EventDetailPage() {
             eventLocation: event.location,
             allocatedPersonId: event.responsiblePersonId,
             allocatedPersonName: event.responsiblePersonName || "",
-            outByName: user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : "System",
             condition: cond.condition,
             damageReason: cond.damageReason || undefined,
             remarks: cond.remarks || undefined,
@@ -192,7 +190,6 @@ export default function EventDetailPage() {
           remarks: row.returnRemarks || undefined,
           returnBy: row.returnBy || undefined,
           verifiedBy: row.returnVerifiedBy || undefined,
-          userName: user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : "System",
         }),
       });
       const data = await res.json();
@@ -207,7 +204,7 @@ export default function EventDetailPage() {
       toast("error", "Return failed");
       setRow(row.asset.id, { saving: false });
     }
-  }, [setRow, fetchAll, toast, user]);
+  }, [setRow, fetchAll, toast]);
 
   // ── Filter ────────────────────────────────────────────────────────────
   const filtered = useMemo(() => {
@@ -477,8 +474,8 @@ export default function EventDetailPage() {
 
                           {/* Condition column */}
                           <div className="flex justify-center">
-                            {isIn && movement?.condition ? (
-                              <Badge variant={conditionBadge[movement.condition as ReturnCondition] || "bg-gray-100 text-gray-800"}>{movement.condition}</Badge>
+                            {isIn && movementConditions(movement).in ? (
+                              <Badge variant={conditionBadge[movementConditions(movement).in as ReturnCondition] || "bg-gray-100 text-gray-800"}>{movementConditions(movement).in}</Badge>
                             ) : isOut ? (
                               <span className="text-xs text-gray-400">Pending</span>
                             ) : (

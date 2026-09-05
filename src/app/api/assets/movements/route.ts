@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getModel } from "@/models";
+import { getAuthUser } from "@/lib/auth";
 import { itemBusyReason, type BookingLike, type MovementLike, type AssetEventLike } from "@/lib/asset-availability";
+import {
+  assetStatusAfterCheckout,
+  assetStatusAfterReturn,
+  authorizeMovementAction,
+  damageTypeFor,
+  reportSlice,
+} from "@/lib/asset-movements";
 import type { StudioBookingStatus } from "@/types";
 
 /** Load + normalize cross-availability inputs (all OUT movements, asset-events, studio bookings). */
@@ -42,12 +50,66 @@ async function loadAvailabilityContext(): Promise<{
   };
 }
 
+/**
+ * Record an asset-status sync that failed after its movement was committed.
+ * The movement is the source of truth; this leaves a trail so the stale
+ * `asset.status` can be reconciled instead of drifting unnoticed.
+ */
+async function logStatusSyncFailure(
+  ActivityLog: ReturnType<typeof getModel>,
+  actorName: string,
+  assetId: string,
+  assetName: unknown,
+  direction: "OUT" | "IN"
+): Promise<void> {
+  try {
+    await ActivityLog.create({
+      userName: actorName,
+      action: "STATUS-SYNC-FAILED",
+      module: "Movements",
+      resourceId: assetId,
+      details: `Asset "${assetName || assetId}" status not updated after ${direction}; movement is authoritative`,
+      createdAt: new Date(),
+    });
+  } catch { /* logging never breaks main flow */ }
+}
+
 export async function POST(req: NextRequest) {
   try {
+    // ── Authentication: every movement request requires a valid session ─────
+    const authUser = getAuthUser(req);
+    if (!authUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { action } = body;
 
     await connectDB();
+
+    // ── Authorization on CURRENT grants (never the JWT claim, which can be
+    // stale for up to the token TTL after an admin edits permissions) ───────
+    const staffDoc = (await getModel("staff")
+      .findById(authUser.uid)
+      .select("role grantedFeatures")
+      .lean()) as { role?: string; grantedFeatures?: unknown } | null;
+    const denied = authorizeMovementAction(
+      {
+        role: staffDoc?.role || authUser.role,
+        grantedFeatures: Array.isArray(staffDoc?.grantedFeatures)
+          ? (staffDoc.grantedFeatures as unknown[]).filter((f): f is string => typeof f === "string")
+          : [],
+      },
+      typeof action === "string" ? action : ""
+    );
+    if (denied) {
+      return NextResponse.json({ error: denied }, { status: denied === "Invalid action" ? 400 : 403 });
+    }
+
+    // Trusted actor identity from the verified token — never the request body,
+    // which any caller could set to someone else's name.
+    const actorName = authUser.name || authUser.email || "Unknown";
+
     const Movement = getModel("asset-movements");
     const Asset = getModel("assets");
     const DamageReport = getModel("asset-damage-reports");
@@ -55,7 +117,7 @@ export async function POST(req: NextRequest) {
 
     // ── CHECKOUT (Issue asset) ──────────────────────────────────────────
     if (action === "checkout") {
-      const { assetId, assetName, assetCategory, eventId, eventName, eventLocation, allocatedPersonId, allocatedPersonName, outByName, condition, damageReason, remarks } = body;
+      const { assetId, assetName, assetCategory, eventId, eventName, eventLocation, allocatedPersonId, allocatedPersonName, condition, damageReason, remarks } = body;
 
       if (!assetId || !eventId || !allocatedPersonId) {
         return NextResponse.json({ error: "Missing required fields: assetId, eventId, allocatedPersonId" }, { status: 400 });
@@ -97,6 +159,7 @@ export async function POST(req: NextRequest) {
       }
 
       const now = new Date();
+      const outCondition = condition || "good";
       const movement = await Movement.create({
         assetId,
         assetName: assetName || "",
@@ -106,28 +169,45 @@ export async function POST(req: NextRequest) {
         eventLocation: eventLocation || "",
         allocatedPersonId,
         allocatedPersonName: allocatedPersonName || "",
-        outByName: outByName || "",
+        outByName: actorName,
         outDate: now,
         status: "OUT",
-        condition: condition || "good",
+        // `condition` mirrors the latest known condition for legacy readers;
+        // outCondition/inCondition are the durable record.
+        outCondition,
+        condition: outCondition,
         damageReason: damageReason || "",
         remarks: remarks || "",
         createdAt: now,
         updatedAt: now,
       });
 
+      // The asset is no longer in the store — keep its status truthful. The
+      // movement is already committed, so a failed sync must not fail the
+      // request; it is recorded instead, and the movement stays the authority.
+      try {
+        await Asset.findByIdAndUpdate(assetId, {
+          $set: {
+            status: assetStatusAfterCheckout((asset as Record<string, unknown>).status as string | undefined),
+            updatedAt: now,
+          },
+        });
+      } catch {
+        await logStatusSyncFailure(ActivityLog, actorName, assetId, assetName, "OUT");
+      }
+
       // Auto-create damage report if condition is not good
-      if (condition && condition !== "good") {
-        const typeMap: Record<string, string> = { damaged: "damage", defective: "defect", missing: "missing" };
+      const outDamageType = damageTypeFor(outCondition);
+      if (outDamageType) {
         await DamageReport.create({
           movementId: movement._id.toString(),
           assetId,
           assetName: assetName || "",
           eventId,
           eventName: eventName || "",
-          type: typeMap[condition] || "damage",
+          type: outDamageType,
           reason: damageReason || "No reason provided",
-          reportedByName: outByName || "",
+          reportedByName: actorName,
           isResolved: false,
           createdAt: now,
           updatedAt: now,
@@ -137,7 +217,7 @@ export async function POST(req: NextRequest) {
       // Log activity
       try {
         await ActivityLog.create({
-          userName: outByName || "System",
+          userName: actorName,
           action: "OUT",
           module: "Movements",
           resourceId: movement._id.toString(),
@@ -153,51 +233,72 @@ export async function POST(req: NextRequest) {
 
     // ── RETURN (Check-in asset) ─────────────────────────────────────────
     if (action === "return") {
-      const { movementId, returnBy, verifiedBy, condition, damageReason, remarks, userName } = body;
+      const { movementId, returnBy, verifiedBy, condition, damageReason, remarks } = body;
 
       if (!movementId) {
         return NextResponse.json({ error: "Missing movementId" }, { status: 400 });
       }
 
-      const movement = await Movement.findById(movementId).lean() as Record<string, unknown> | null;
-      if (!movement) {
-        return NextResponse.json({ error: "Movement not found" }, { status: 404 });
-      }
-
       const now = new Date();
+      const inCondition = condition || "good";
       const updateFields: Record<string, unknown> = {
         status: "IN",
         inDate: now,
         updatedAt: now,
+        // The issue condition is preserved; only the return condition is new.
+        inCondition,
+        condition: inCondition,
       };
       if (returnBy) updateFields.returnBy = returnBy;
       if (verifiedBy) updateFields.verifiedBy = verifiedBy;
-      if (condition) updateFields.condition = condition;
       if (damageReason) updateFields.damageReason = damageReason;
       if (remarks) updateFields.remarks = remarks;
 
-      const updated = await Movement.findByIdAndUpdate(
-        movementId,
+      // One atomic guarded write: two concurrent returns cannot both win, so a
+      // double-click never files two damage reports for the same handover.
+      const updated = await Movement.findOneAndUpdate(
+        { _id: movementId, status: { $ne: "IN" } },
         { $set: updateFields },
         { new: true, lean: true }
       ) as Record<string, unknown> | null;
 
       if (!updated) {
-        return NextResponse.json({ error: "Update failed" }, { status: 500 });
+        const exists = await Movement.exists({ _id: movementId });
+        return exists
+          ? NextResponse.json({ error: "This asset has already been returned" }, { status: 409 })
+          : NextResponse.json({ error: "Movement not found" }, { status: 404 });
+      }
+      const movement = updated;
+
+      // The asset is back (or accounted for) — keep its status truthful.
+      const returnedAsset = (await Asset.findById(movement.assetId).select("status").lean()) as
+        | Record<string, unknown>
+        | null;
+      if (returnedAsset) {
+        try {
+          await Asset.findByIdAndUpdate(movement.assetId, {
+            $set: {
+              status: assetStatusAfterReturn(returnedAsset.status as string | undefined, inCondition),
+              updatedAt: now,
+            },
+          });
+        } catch {
+          await logStatusSyncFailure(ActivityLog, actorName, String(movement.assetId), movement.assetName, "IN");
+        }
       }
 
       // Auto-create damage report if condition is not good
-      if (condition && condition !== "good") {
-        const typeMap: Record<string, string> = { damaged: "damage", defective: "defect", missing: "missing" };
+      const inDamageType = damageTypeFor(inCondition);
+      if (inDamageType) {
         await DamageReport.create({
           movementId: movementId,
           assetId: movement.assetId,
           assetName: movement.assetName || "",
           eventId: movement.eventId,
           eventName: movement.eventName || "",
-          type: typeMap[condition] || "damage",
+          type: inDamageType,
           reason: damageReason || "No reason provided",
-          reportedByName: userName || "",
+          reportedByName: actorName,
           isResolved: false,
           createdAt: now,
           updatedAt: now,
@@ -207,11 +308,11 @@ export async function POST(req: NextRequest) {
       // Log activity
       try {
         await ActivityLog.create({
-          userName: userName || "System",
+          userName: actorName,
           action: "IN",
           module: "Movements",
           resourceId: movementId,
-          details: `Asset "${movement.assetName}" returned. Condition: ${condition || "good"}`,
+          details: `Asset "${movement.assetName}" returned. Condition: ${inCondition}`,
           createdAt: now,
         });
       } catch { /* logging never breaks main flow */ }
@@ -335,8 +436,25 @@ export async function POST(req: NextRequest) {
 
     // ── GET REPORTS ─────────────────────────────────────────────────────
     if (action === "get-reports") {
-      const { reportType, from, to, assetName, status, searchTerm, page = 1, limit = 10 } = body;
-      const skip = ((page as number) - 1) * (limit as number);
+      const { reportType, from, to, assetName, status, searchTerm, page = 1, limit = 10, all } = body;
+      // `all` is the export path: the whole filtered set (capped), not the page
+      // the table happens to be showing.
+      const slice = reportSlice({ page, limit, all: all === true });
+      const { skip } = slice;
+      const pageSize = slice.limit;
+
+      // Pulling the whole filtered set is an export — record who took it.
+      if (all === true) {
+        try {
+          await ActivityLog.create({
+            userName: actorName,
+            action: "EXPORT",
+            module: "Reports",
+            details: `Exported ${reportType} report${from || to ? ` (${from || "start"} → ${to || "today"})` : ""}`,
+            createdAt: new Date(),
+          });
+        } catch { /* logging never breaks main flow */ }
+      }
 
       if (reportType === "movement") {
         const filter: Record<string, unknown> = {};
@@ -348,11 +466,11 @@ export async function POST(req: NextRequest) {
           if (to) (filter.createdAt as Record<string, unknown>).$lte = new Date(to + "T23:59:59.999Z");
         }
         const [data, total] = await Promise.all([
-          Movement.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit as number).lean(),
+          Movement.find(filter).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
           Movement.countDocuments(filter),
         ]);
         const mapped = (data as Record<string, unknown>[]).map((d) => ({ ...d, id: (d._id as { toString(): string }).toString() }));
-        return NextResponse.json({ success: true, data: mapped, pagination: { total, totalPages: Math.ceil(total / (limit as number)), page, limit } });
+        return NextResponse.json({ success: true, data: mapped, pagination: { total, totalPages: Math.ceil(total / pageSize), page, limit: pageSize } });
       }
 
       if (reportType === "damage") {
@@ -366,11 +484,11 @@ export async function POST(req: NextRequest) {
           if (to) (filter.createdAt as Record<string, unknown>).$lte = new Date(to + "T23:59:59.999Z");
         }
         const [data, total] = await Promise.all([
-          DamageReport.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit as number).lean(),
+          DamageReport.find(filter).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
           DamageReport.countDocuments(filter),
         ]);
         const mapped = (data as Record<string, unknown>[]).map((d) => ({ ...d, id: (d._id as { toString(): string }).toString() }));
-        return NextResponse.json({ success: true, data: mapped, pagination: { total, totalPages: Math.ceil(total / (limit as number)), page, limit } });
+        return NextResponse.json({ success: true, data: mapped, pagination: { total, totalPages: Math.ceil(total / pageSize), page, limit: pageSize } });
       }
 
       if (reportType === "activity") {
@@ -385,11 +503,11 @@ export async function POST(req: NextRequest) {
           if (to) (filter.createdAt as Record<string, unknown>).$lte = new Date(to + "T23:59:59.999Z");
         }
         const [data, total] = await Promise.all([
-          ActivityLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit as number).lean(),
+          ActivityLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(pageSize).lean(),
           ActivityLog.countDocuments(filter),
         ]);
         const mapped = (data as Record<string, unknown>[]).map((d) => ({ ...d, id: (d._id as { toString(): string }).toString() }));
-        return NextResponse.json({ success: true, data: mapped, pagination: { total, totalPages: Math.ceil(total / (limit as number)), page, limit } });
+        return NextResponse.json({ success: true, data: mapped, pagination: { total, totalPages: Math.ceil(total / pageSize), page, limit: pageSize } });
       }
 
       return NextResponse.json({ error: "Invalid reportType" }, { status: 400 });
@@ -397,7 +515,7 @@ export async function POST(req: NextRequest) {
 
     // ── UPDATE DAMAGE REPORT ────────────────────────────────────────────
     if (action === "update-damage-report") {
-      const { reportId, type, reason, notes, isResolved, userName } = body;
+      const { reportId, type, reason, notes, isResolved } = body;
       if (!reportId) return NextResponse.json({ error: "Missing reportId" }, { status: 400 });
 
       const now = new Date();
@@ -409,7 +527,7 @@ export async function POST(req: NextRequest) {
         updateFields.isResolved = isResolved;
         if (isResolved) {
           updateFields.resolvedAt = now;
-          updateFields.resolvedByName = userName || "";
+          updateFields.resolvedByName = actorName;
         } else {
           updateFields.resolvedAt = null;
           updateFields.resolvedByName = null;
@@ -423,6 +541,17 @@ export async function POST(req: NextRequest) {
       ) as Record<string, unknown> | null;
 
       if (!updated) return NextResponse.json({ error: "Report not found" }, { status: 404 });
+
+      try {
+        await ActivityLog.create({
+          userName: actorName,
+          action: isResolved === undefined ? "UPDATE" : isResolved ? "RESOLVE" : "REOPEN",
+          module: "Damage Reports",
+          resourceId: reportId,
+          details: `Damage report for "${updated.assetName || "asset"}" updated`,
+          createdAt: now,
+        });
+      } catch { /* logging never breaks main flow */ }
 
       return NextResponse.json({ success: true, data: { ...updated, id: (updated._id as { toString(): string }).toString() } });
     }

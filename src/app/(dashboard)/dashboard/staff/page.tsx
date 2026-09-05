@@ -19,8 +19,9 @@ import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { Pagination } from "@/components/ui/pagination";
 import { getStatusColor, formatCurrency, generateEmployeeCode } from "@/lib/utils";
 import { CONTRACT_DURATIONS, computeContractEndDate, getContractStatus, getDaysRemaining } from "@/lib/contract-utils";
-import { FEATURES, roleHasFeature } from "@/lib/permissions";
-import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search, Shield } from "lucide-react";
+import { sanitizeForRole } from "@/lib/access-editor";
+import { AccessEditor } from "@/components/staff/access-editor";
+import { Users, Plus, Pencil, Trash2, Loader2, Eye, Search } from "lucide-react";
 import { usePagination } from "@/hooks/use-pagination";
 import { useRoleGuard } from "@/hooks/use-role-guard";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -171,15 +172,6 @@ export default function StaffPage() {
       employmentType: type,
       contractType: defaultDuration,
       contractEndDate: computed ? computed.toISOString().split("T")[0] : "",
-    }));
-  };
-
-  const toggleGrantedFeature = (key: string) => {
-    setForm((f) => ({
-      ...f,
-      grantedFeatures: f.grantedFeatures.includes(key)
-        ? f.grantedFeatures.filter((k) => k !== key)
-        : [...f.grantedFeatures, key],
     }));
   };
 
@@ -580,7 +572,11 @@ export default function StaffPage() {
                   <Label>Role *</Label>
                   <Select
                     value={form.role}
-                    onChange={(e) => setForm({ ...form, role: e.target.value as Staff["role"] })}
+                    onChange={(e) => {
+                      const role = e.target.value as Staff["role"];
+                      // Grants the new role already has, or cannot use, would be dead ticks.
+                      setForm({ ...form, role, grantedFeatures: sanitizeForRole(role, form.grantedFeatures) });
+                    }}
                     options={[
                       { value: "staff", label: "Staff" },
                       { value: "department-head", label: "Department Head" },
@@ -769,58 +765,14 @@ export default function StaffPage() {
           {/* Step 3: Permissions */}
           {formStep === 3 && (
             <div className="space-y-4">
-              <p className="text-sm text-gray-500">
-                Features granted by the <span className="font-semibold">{form.role}</span> role are enabled automatically. Grant extra features below.
-              </p>
-              {form.role === "admin" ? (
-                <div className="text-center py-8">
-                  <Shield className="h-8 w-8 text-indigo-400 mx-auto mb-2" />
-                  <p className="text-sm text-gray-600 font-medium">Admins have access to all features</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto">
-                  {FEATURES.map((f) => {
-                    const auto = roleHasFeature(form.role, f.key);
-                    const granted = form.grantedFeatures.includes(f.key);
-                    // Features without a portal module are department-management
-                    // tools: no defined extra-grant behavior outside their
-                    // default roles, so don't let admins tick a dead checkbox.
-                    const unsupported = !auto && !f.portal;
-                    return (
-                      <label
-                        key={f.key}
-                        className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
-                          auto ? "bg-indigo-50/50 border-indigo-200" : granted ? "border-indigo-500 bg-indigo-50/30" : unsupported ? "opacity-60" : "cursor-pointer hover:bg-gray-50"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={auto || granted}
-                          disabled={auto || unsupported}
-                          onChange={() => toggleGrantedFeature(f.key)}
-                          className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <div>
-                          <p className="text-sm font-medium">
-                            {f.label}
-                            {auto && (
-                              <span className="ml-2 text-[10px] uppercase tracking-wider text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded">
-                                Role default
-                              </span>
-                            )}
-                            {unsupported && (
-                              <span className="ml-2 text-[10px] uppercase tracking-wider text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                                Dept-management role only
-                              </span>
-                            )}
-                          </p>
-                          <p className="text-xs text-gray-500">{f.description}</p>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
+              <div className="max-h-[420px] overflow-y-auto pr-1">
+                <AccessEditor
+                  role={form.role}
+                  value={form.grantedFeatures}
+                  onChange={(next) => setForm((f) => ({ ...f, grantedFeatures: next }))}
+                  subjectName={`${form.firstName} ${form.lastName}`.trim() || "This staff member"}
+                />
+              </div>
 
               <div className="flex justify-between pt-4 border-t">
                 <Button type="button" variant="outline" onClick={() => setFormStep(2)}>

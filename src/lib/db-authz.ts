@@ -52,13 +52,16 @@ export const FEATURE_WRITE: Record<string, FeatureKey> = {
   payroll: "payroll",
   transactions: "accounting",
   items: "items",
-  invoice_payments: "invoices",
+  invoicePayments:"invoices",
   events: "events",
   clients: "clients",
   assets: "asset-management",
   "asset-categories": "asset-management",
   "asset-persons": "asset-management",
   "asset-events": "asset-management",
+  "asset-movements": "asset-management",
+  "asset-damage-reports": "asset-management",
+  "asset-activity-logs": "asset-management",
   company_tools: "tools-vault",
   // tasks intentionally absent: staff must update their own assigned tasks;
   // the task-workflow guard (role/assignee/status) is the write authority.
@@ -72,8 +75,13 @@ export const FEATURE_READ: Record<string, FeatureKey[]> = {
   transactions: ["accounting", "reports"],
   categories: ["accounting", "reports"],
   invoices: ["invoices", "quotations", "reports"],
-  invoice_payments: ["invoices", "quotations", "reports"],
+  invoicePayments:["invoices", "quotations", "reports"],
   items: ["items", "invoices", "quotations"],
+  // Movement history is asset-module data, but the studio booking screen reads
+  // open OUT movements to work out what is free — so either grant may read it.
+  "asset-movements": ["asset-management", "studio-booking"],
+  "asset-damage-reports": ["asset-management"],
+  "asset-activity-logs": ["asset-management"],
   // Holds sealed credentials — never readable on an open collection default.
   company_tools: ["tools-vault"],
 };
@@ -223,6 +231,19 @@ export const OWN_SCOPED_FOR_STAFF: Record<string, string> = {
   employee_documents: "staffId",
 };
 
+/**
+ * Grants that lift own-record scoping for a `staff` role user. A payroll
+ * processor needs everyone's payroll rows plus the attendance and leave
+ * inputs the payroll run reads; without this the grant is unusable (it could
+ * create rows it can never read back). Writes stay governed by
+ * FEATURE_WRITE / WRITE_ROLES.
+ */
+export const FEATURE_UNSCOPES: Record<string, FeatureKey[]> = {
+  payroll: ["payroll"],
+  attendance: ["payroll"],
+  leaveRequests: ["payroll"],
+};
+
 export function isReadAction(action: string): boolean {
   return action === "find" || action === "count" || action === "paginate" || action === "sum";
 }
@@ -233,7 +254,7 @@ export function isReadAction(action: string): boolean {
  * collections (pass the department's staff ids).
  */
 export function scopeFilter(
-  user: TokenPayload,
+  user: TokenPayload & { grantedFeatures?: string[] | null },
   collectionName: string,
   departmentId: string | null,
   deptStaffIds: string[] | null
@@ -258,7 +279,10 @@ export function scopeFilter(
   }
   if (user.role === "staff") {
     const field = OWN_SCOPED_FOR_STAFF[collectionName];
-    if (field) return { [field]: user.uid };
+    if (!field) return null;
+    const lifts = FEATURE_UNSCOPES[collectionName];
+    if (lifts?.some((f) => hasFeature(user, f))) return null;
+    return { [field]: user.uid };
   }
   return null;
 }

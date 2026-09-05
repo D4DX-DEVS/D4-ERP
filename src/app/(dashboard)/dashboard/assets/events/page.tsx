@@ -20,6 +20,7 @@ import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { logAssetActivity } from "@/lib/asset-activity-logger";
+import { movementConditions } from "@/lib/asset-movements";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/asset-export-utils";
 import { useAuthStore } from "@/store/auth-store";
 import { formatDate } from "@/lib/utils";
@@ -287,7 +288,6 @@ export default function AssetEventsPage() {
           condition: returnForm.condition,
           damageReason: returnForm.damageReason || undefined,
           remarks: returnForm.remarks || undefined,
-          userName: user?.firstName ? `${user.firstName} ${user.lastName || ""}`.trim() : "System",
         }),
       });
       const result = await res.json();
@@ -328,7 +328,8 @@ export default function AssetEventsPage() {
         "Status": m.status === "OUT" ? "Issued (Not Returned)" : "Returned",
         "Issued On": m.outDate ? formatDate(new Date(m.outDate as string)) : "",
         "Returned On": m.inDate ? formatDate(new Date(m.inDate as string)) : "—",
-        "Condition": m.inDate ? (m.condition ?? "good") : "—",
+        "Out Condition": movementConditions(m as Parameters<typeof movementConditions>[0]).out ?? "unknown",
+        "In Condition": movementConditions(m as Parameters<typeof movementConditions>[0]).in ?? "—",
         "Returned By": (m.returnBy as string) ?? "—",
         "Verified By": (m.verifiedBy as string) ?? "—",
         "Remarks": (m.remarks as string) ?? "—",

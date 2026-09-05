@@ -14,10 +14,16 @@ import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { formatDate } from "@/lib/utils";
 import { Timestamp } from "@/lib/firestore";
+import { movementConditions } from "@/lib/asset-movements";
 
 const statusColors: Record<string, string> = {
   OUT: "bg-orange-100 text-orange-800",
   IN: "bg-green-100 text-green-800",
+};
+
+const statusLabels: Record<string, string> = {
+  OUT: "Issued",
+  IN: "Returned",
 };
 
 const conditionColors: Record<string, string> = {
@@ -26,6 +32,12 @@ const conditionColors: Record<string, string> = {
   defective: "bg-orange-100 text-orange-800",
   missing: "bg-red-100 text-red-800",
 };
+
+/** A condition badge, or a dash when that half of the movement has no record. */
+function conditionCell(condition: string | null) {
+  if (!condition) return <span className="text-gray-300">—</span>;
+  return <Badge variant={conditionColors[condition] || "bg-gray-100 text-gray-800"}>{condition}</Badge>;
+}
 
 export default function AssetMovementsPage() {
   const [search, setSearch] = useState("");
@@ -69,7 +81,7 @@ export default function AssetMovementsPage() {
           <Input placeholder="Search by asset, event, person..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
         </div>
         <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-          options={[{ value: "", label: "All Statuses" }, { value: "OUT", label: "OUT" }, { value: "IN", label: "IN" }]} className="w-[150px]" />
+          options={[{ value: "", label: "All Statuses" }, { value: "OUT", label: "Issued" }, { value: "IN", label: "Returned" }]} className="w-[150px]" />
       </div>
 
       {totalCount === 0 ? (
@@ -85,7 +97,8 @@ export default function AssetMovementsPage() {
                 <TableHead>Out Date</TableHead>
                 <TableHead>In Date</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Condition</TableHead>
+                <TableHead>Out cond.</TableHead>
+                <TableHead>In cond.</TableHead>
                 <TableHead>Issued By</TableHead>
               </TableRow>
             </TableHeader>
@@ -108,11 +121,10 @@ export default function AssetMovementsPage() {
                   <TableCell>{tsToDateStr(m.outDate)}</TableCell>
                   <TableCell>{tsToDateStr(m.inDate)}</TableCell>
                   <TableCell>
-                    <Badge variant={statusColors[m.status] || "bg-gray-100 text-gray-800"}>{m.status}</Badge>
+                    <Badge variant={statusColors[m.status] || "bg-gray-100 text-gray-800"}>{statusLabels[m.status] || m.status}</Badge>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant={conditionColors[m.condition] || "bg-gray-100 text-gray-800"}>{m.condition}</Badge>
-                  </TableCell>
+                  <TableCell>{conditionCell(movementConditions(m).out)}</TableCell>
+                  <TableCell>{conditionCell(movementConditions(m).in)}</TableCell>
                   <TableCell>{m.outByName || "—"}</TableCell>
                 </TableRow>
               ))}

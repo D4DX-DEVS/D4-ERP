@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { getStatusColor, formatCurrency, formatDate, getInitials } from "@/lib/utils";
-import { FEATURES, roleHasFeature } from "@/lib/permissions";
+import { AccessTab } from "@/components/staff/access-tab";
 import { getContractStatus, getDaysRemaining, computeContractEndDate, CONTRACT_DURATIONS, type ContractStatus } from "@/lib/contract-utils";
 import { useAuthStore } from "@/store/auth-store";
 import { useRoleGuard } from "@/hooks/use-role-guard";
@@ -70,8 +70,6 @@ export default function StaffProfilePage() {
   const { user: currentUser } = useAuthStore();
   // Staff records are admin-only — department heads manage work, not personnel files.
   const { authorized, isLoading: authLoading } = useRoleGuard(["admin"]);
-  const [grantedFeatures, setGrantedFeatures] = useState<string[]>([]);
-  const [savingFeatures, setSavingFeatures] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [assets, setAssets] = useState<(Asset & { id: string })[]>([]);
 
@@ -112,9 +110,6 @@ export default function StaffProfilePage() {
         return;
       }
       setStaff(staffData);
-      setGrantedFeatures(
-        Array.isArray(staffData.grantedFeatures) ? staffData.grantedFeatures : []
-      );
 
       const [dept, comp, salHist, statHist, conHist, assetList] = await Promise.all([
         staffData.departmentId ? getDocument<Department>("departments", staffData.departmentId) : null,
@@ -268,28 +263,6 @@ export default function StaffProfilePage() {
     }
   };
 
-  const toggleFeature = (key: string) => {
-    setGrantedFeatures((prev) =>
-      prev.includes(key) ? prev.filter((f) => f !== key) : [...prev, key]
-    );
-  };
-
-  const handleSaveFeatures = async () => {
-    setSavingFeatures(true);
-    try {
-      await updateDocument("staff", staffId, { grantedFeatures });
-      // Re-read before declaring success so the checkboxes reflect what the
-      // server actually stored, not the optimistic local state.
-      await fetchData();
-      toast("success", "Access updated");
-    } catch (error) {
-      console.error("Error:", error);
-      toast("error", "Failed to update access");
-    } finally {
-      setSavingFeatures(false);
-    }
-  };
-
   if (authLoading || !authorized) return <PageLoader />;
   if (loading) return <PageLoader />;
   if (!staff) return null;
@@ -318,12 +291,12 @@ export default function StaffProfilePage() {
   return (
     <div className="space-y-6">
       {/* Header with profile summary */}
-      <div className="flex items-start gap-4">
+      <div className="flex flex-wrap items-start gap-4">
         <Button variant="ghost" size="icon" className="mt-1" onClick={() => router.back()}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
 
-        <div className="flex-1 flex items-center gap-4">
+        <div className="flex-1 min-w-0 flex items-center gap-4">
           {/* Avatar */}
           <div className="h-16 w-16 rounded-full overflow-hidden bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0">
             {staff.profileImage ? (
@@ -363,7 +336,7 @@ export default function StaffProfilePage() {
           </div>
         </div>
 
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap gap-2 basis-full lg:basis-auto lg:ml-auto lg:shrink-0">
           <Button variant="outline" size="sm" onClick={() => {
             setIncrementForm({ ...incrementForm, newSalary: staff.currentSalary });
             setIncrementOpen(true);
@@ -397,12 +370,12 @@ export default function StaffProfilePage() {
 
       {/* Tab navigation */}
       <div className="border-b">
-        <nav className="flex gap-1">
+        <nav className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-4 py-2.5 min-h-11 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.key
                   ? "border-indigo-600 text-indigo-700"
                   : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -643,68 +616,7 @@ export default function StaffProfilePage() {
 
       {/* ───── Tab: Access & Features ───── */}
       {activeTab === "access" && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base">Access &amp; Features</CardTitle>
-              <p className="text-sm text-gray-500 mt-1">
-                Features granted by the <span className="font-semibold">{staff.role}</span> role are enabled automatically. Grant extra features below.
-              </p>
-            </div>
-            {canEditFeatures && staff.role !== "admin" && (
-              <Button onClick={handleSaveFeatures} disabled={savingFeatures} size="sm">
-                {savingFeatures ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                Save Access
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            {staff.role === "admin" ? (
-              <div className="text-center py-8">
-                <Shield className="h-8 w-8 text-indigo-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-600 font-medium">Admins have access to all features</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {FEATURES.map((f) => {
-                  const auto = roleHasFeature(staff.role as Parameters<typeof roleHasFeature>[0], f.key);
-                  const granted = grantedFeatures.includes(f.key);
-                  return (
-                    <label
-                      key={f.key}
-                      className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                        auto
-                          ? "bg-indigo-50/50 border-indigo-200"
-                          : granted
-                          ? "border-indigo-500 bg-indigo-50/30"
-                          : "hover:bg-gray-50"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={auto || granted}
-                        disabled={auto || !canEditFeatures}
-                        onChange={() => toggleFeature(f.key)}
-                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <div>
-                        <p className="text-sm font-medium">
-                          {f.label}
-                          {auto && (
-                            <span className="ml-2 text-[10px] uppercase tracking-wider text-indigo-600 bg-indigo-100 px-1.5 py-0.5 rounded">
-                              Role default
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-xs text-gray-500">{f.description}</p>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <AccessTab staffId={staffId} staff={staff} canEdit={canEditFeatures} onSaved={fetchData} />
       )}
 
       {/* ───── Tab: Documents ───── */}

@@ -24,13 +24,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
-import { hasFeature, FEATURES, type FeatureKey, type PortalSection } from "@/lib/permissions";
+import { hasFeature, type FeatureKey, type PortalSection } from "@/lib/permissions";
+import { PORTAL_MODULES, resolvePortalRoute, dashboardPathFor } from "@/lib/portal-nav";
 import { useAuthRefresh } from "@/hooks/use-auth-refresh";
 import { Receipt, Wallet, Package, Box, Clapperboard, Users, BarChart3 } from "lucide-react";
 
 // Granted modules render inside the portal shell (routes re-export the
-// dashboard pages). Nav derives from the feature registry: a link shows only
-// when the feature is granted; empty sections disappear.
+// dashboard pages). Nav derives from the feature registry via portal-nav.ts:
+// a module hub and its sub-page links show only when the feature is granted;
+// empty sections disappear.
 const MODULE_ICONS: Partial<Record<FeatureKey, typeof Wallet>> = {
   "studio-booking": Clapperboard,
   events: CalendarDays,
@@ -48,16 +50,7 @@ const MODULE_ICONS: Partial<Record<FeatureKey, typeof Wallet>> = {
 
 const SECTION_ORDER: PortalSection[] = ["Operations", "Work", "Finance", "Insights"];
 
-const portalModules = FEATURES.filter((f) => f.portal).map((f) => ({
-  feature: f.key,
-  section: f.portal!.section,
-  href: f.portal!.href,
-  label: f.portal!.label ?? f.label,
-  icon: MODULE_ICONS[f.key] ?? Wallet,
-}));
-
-// Longest prefix first so /staff-portal/tasks/work-logs resolves to work-logs, not tasks.
-const guardOrder = [...portalModules].sort((a, b) => b.href.length - a.href.length);
+const portalModules = PORTAL_MODULES.map((m) => ({ ...m, icon: MODULE_ICONS[m.feature] ?? Wallet }));
 
 const navItems = [
   // Ordered by daily usage: attendance/tasks/work-log first, occasional items last.
@@ -107,11 +100,14 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
     section,
     modules: grantedModules.filter((m) => m.section === section),
   })).filter((s) => s.modules.length > 0);
-  // Longest matching prefix wins so /tasks/work-logs doesn't also light up /tasks.
-  const activeModuleHref = guardOrder.find((m) => pathname?.startsWith(m.href))?.href;
+  // Most specific owner of the current path: an exact sub-page link, else its
+  // module hub (so /tasks/work-logs doesn't also light up /tasks).
+  const activeRoute = resolvePortalRoute(pathname);
+  const activeLinkHref = activeRoute?.linkHref;
+  const activeModuleHref = activeLinkHref ? undefined : activeRoute?.moduleHref;
   const currentItem =
     navItems.find((item) => pathname === item.href) ??
-    guardOrder.filter((m) => hasFeature(user, m.feature)).find((m) => pathname?.startsWith(m.href)) ??
+    (activeRoute && hasFeature(user, activeRoute.feature) ? { label: activeRoute.label } : null) ??
     navItems[0];
 
   useEffect(() => {
@@ -119,16 +115,18 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
       router.push("/staff-login");
     } else if (!isLoading && user?.role === "admin") {
       // Admins have no self-service session — they manage attendance/leave
-      // from the dashboard, not request them.
-      router.push("/dashboard");
+      // from the dashboard, not request them. A module deep link (e.g. an
+      // event notification) is forwarded to the same page in the admin shell
+      // instead of being dropped on the dashboard home.
+      router.push(dashboardPathFor(pathname) ?? "/dashboard");
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, pathname, router]);
 
-  // Feature guard: portal module routes need the matching grant.
+  // Feature guard: portal module routes (hub and sub-pages) need the matching grant.
   useEffect(() => {
     if (isLoading || !user) return;
-    const mod = guardOrder.find((m) => pathname?.startsWith(m.href));
-    if (mod && !hasFeature(user, mod.feature)) router.replace("/staff-portal");
+    const route = resolvePortalRoute(pathname);
+    if (route && !hasFeature(user, route.feature)) router.replace("/staff-portal");
   }, [user, isLoading, pathname, router]);
 
   useEffect(() => {
@@ -215,25 +213,48 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
               {modules.map((item) => {
                 const isActive = item.href === activeModuleHref;
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "group flex items-center gap-3 rounded-[20px] px-3.5 py-2.5 text-sm font-medium transition-all",
-                      isActive
-                        ? "bg-slate-950 text-white shadow-[0_16px_36px_rgba(15,23,42,0.18)]"
-                        : "text-slate-600 hover:bg-white/70 hover:text-slate-950"
+                  <div key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        "group flex items-center gap-3 rounded-[20px] px-3.5 py-2.5 text-sm font-medium transition-all",
+                        isActive
+                          ? "bg-slate-950 text-white shadow-[0_16px_36px_rgba(15,23,42,0.18)]"
+                          : "text-slate-600 hover:bg-white/70 hover:text-slate-950"
+                      )}
+                    >
+                      <span className={cn(
+                        "flex h-9 w-9 items-center justify-center rounded-2xl transition-colors",
+                        isActive ? "bg-white/10 text-white" : "bg-white/80 text-slate-500 group-hover:text-slate-950"
+                      )}>
+                        <item.icon className="h-4.5 w-4.5" />
+                      </span>
+                      <span className="flex-1">{item.label}</span>
+                      <ArrowUpRight className={cn("h-4 w-4", isActive ? "text-white/70" : "text-slate-300 group-hover:text-slate-500")} />
+                    </Link>
+                    {/* Sub-pages the admin sidebar exposes for this feature */}
+                    {item.links.length > 0 && (
+                      <div className="ml-8 mt-0.5 space-y-0.5 border-l border-slate-200/80 pl-3">
+                        {item.links.map((link) => {
+                          const isLinkActive = link.href === activeLinkHref;
+                          return (
+                            <Link
+                              key={link.href}
+                              href={link.href}
+                              className={cn(
+                                "flex items-center rounded-xl px-3 py-1.5 text-[13px] font-medium transition-colors",
+                                isLinkActive
+                                  ? "bg-slate-950 text-white"
+                                  : "text-slate-500 hover:bg-white/70 hover:text-slate-950"
+                              )}
+                            >
+                              {link.label}
+                            </Link>
+                          );
+                        })}
+                      </div>
                     )}
-                  >
-                    <span className={cn(
-                      "flex h-9 w-9 items-center justify-center rounded-2xl transition-colors",
-                      isActive ? "bg-white/10 text-white" : "bg-white/80 text-slate-500 group-hover:text-slate-950"
-                    )}>
-                      <item.icon className="h-4.5 w-4.5" />
-                    </span>
-                    <span className="flex-1">{item.label}</span>
-                    <ArrowUpRight className={cn("h-4 w-4", isActive ? "text-white/70" : "text-slate-300 group-hover:text-slate-500")} />
-                  </Link>
+                  </div>
                 );
               })}
             </div>
@@ -316,7 +337,7 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
         <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMoreOpen(false)}>
           <div className="absolute inset-0 bg-slate-950/40" />
           <div
-            className="absolute inset-x-0 bottom-0 rounded-t-[28px] bg-white px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 shadow-[0_-16px_40px_rgba(15,23,42,0.18)]"
+            className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-[28px] bg-white px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 shadow-[0_-16px_40px_rgba(15,23,42,0.18)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200" />
@@ -324,22 +345,35 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
               <div key={section}>
                 <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{section}</p>
                 <div className="mb-3 grid grid-cols-3 gap-2">
-                  {modules.map((item) => {
-                    const isActive = item.href === activeModuleHref;
-                    return (
+                  {modules
+                    .flatMap((item) => [
+                      { href: item.href, label: item.label, caption: null, icon: item.icon, isActive: item.href === activeModuleHref },
+                      // Sub-page tiles carry the module name as a caption so two
+                      // "Reports" tiles (events vs assets) stay distinguishable.
+                      ...item.links.map((link) => ({
+                        href: link.href,
+                        label: link.label,
+                        caption: item.label,
+                        icon: item.icon,
+                        isActive: link.href === activeLinkHref,
+                      })),
+                    ])
+                    .map((tile) => (
                       <Link
-                        key={item.href}
-                        href={item.href}
+                        key={tile.href}
+                        href={tile.href}
                         className={cn(
-                          "flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3 text-xs font-medium",
-                          isActive ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-600"
+                          "flex flex-col items-center gap-1.5 rounded-2xl px-2 py-3 text-center text-xs font-medium leading-tight",
+                          tile.isActive ? "bg-slate-950 text-white" : "bg-slate-50 text-slate-600"
                         )}
                       >
-                        <item.icon className="h-5 w-5" />
-                        <span className="whitespace-nowrap">{item.label}</span>
+                        <tile.icon className="h-5 w-5" />
+                        <span>{tile.label}</span>
+                        {tile.caption && (
+                          <span className={cn("text-[10px]", tile.isActive ? "text-white/60" : "text-slate-400")}>{tile.caption}</span>
+                        )}
                       </Link>
-                    );
-                  })}
+                    ))}
                 </div>
               </div>
             ))}
