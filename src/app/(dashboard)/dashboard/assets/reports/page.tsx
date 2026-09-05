@@ -16,6 +16,7 @@ import { BarChart3, Download, ArrowLeftRight, AlertTriangle, History, Search, X,
 import { useToast } from "@/components/ui/toast";
 import { formatDate } from "@/lib/utils";
 import { exportToCSV, exportToExcel, exportToPDF } from "@/lib/asset-export-utils";
+import { movementConditions } from "@/lib/asset-movements";
 
 type ReportType = "movement" | "damage" | "activity";
 
@@ -31,6 +32,8 @@ interface MovementRow {
   outDate: string;
   inDate?: string;
   condition: string;
+  outCondition?: string;
+  inCondition?: string;
   returnBy?: string;
   verifiedBy?: string;
 }
@@ -123,22 +126,45 @@ export default function AssetReportsPage() {
   const hasFilters = fromDate || toDate || assetName || statusFilter || searchTerm;
 
   // ── Export helpers ─────────────────────────────────────────────────────
-  function getExportRows() {
+  /** The whole filtered set, not just the page on screen. */
+  async function fetchAllRows(): Promise<{ rows: MovementRow[] | DamageRow[] | ActivityRow[]; total: number }> {
+    const res = await fetch("/api/assets/movements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "get-reports",
+        reportType,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        assetName: assetName.trim() || undefined,
+        status: statusFilter || undefined,
+        searchTerm: searchTerm.trim() || undefined,
+        all: true,
+      }),
+    });
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error || "Export failed");
+    return { rows: result.data, total: result.pagination?.total ?? result.data.length };
+  }
+
+  function getExportRows(rows: MovementRow[] | DamageRow[] | ActivityRow[]) {
     if (reportType === "movement") {
-      return (data as MovementRow[]).map(m => ({
+      return (rows as MovementRow[]).map(m => ({
         Asset: m.assetName, Category: m.assetCategory, Event: m.eventName, Location: m.eventLocation,
         Person: m.allocatedPersonName, "Out By": m.outByName, "Out Date": m.outDate ? formatDate(new Date(m.outDate)) : "",
-        "In Date": m.inDate ? formatDate(new Date(m.inDate)) : "", Status: m.status, Condition: m.condition,
+        "In Date": m.inDate ? formatDate(new Date(m.inDate)) : "", Status: m.status,
+        "Out Condition": movementConditions(m).out ?? "unknown",
+        "In Condition": movementConditions(m).in ?? "—",
       }));
     }
     if (reportType === "damage") {
-      return (data as DamageRow[]).map(d => ({
+      return (rows as DamageRow[]).map(d => ({
         Asset: d.assetName, Event: d.eventName, Type: d.type, Reason: d.reason,
         "Reported By": d.reportedByName, Status: d.isResolved ? "Resolved" : "Open",
         Date: d.createdAt ? formatDate(new Date(d.createdAt)) : "",
       }));
     }
-    return (data as ActivityRow[]).map(a => ({
+    return (rows as ActivityRow[]).map(a => ({
       User: a.userName, Action: a.action, Module: a.module, Details: a.details ?? "",
       Date: a.createdAt ? formatDate(new Date(a.createdAt)) : "",
     }));
@@ -146,14 +172,26 @@ export default function AssetReportsPage() {
 
   async function handleExport(format: "csv" | "excel" | "pdf") {
     setExporting(true);
-    const rows = getExportRows();
     const name = `asset-${reportType}-report`;
     const title = `Asset ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report`;
     try {
+      const { rows: allRows, total } = await fetchAllRows();
+      const rows = getExportRows(allRows);
+      if (rows.length === 0) {
+        toast("error", "Nothing to export for these filters");
+        setExporting(false);
+        return;
+      }
       if (format === "csv") exportToCSV(rows, name);
       else if (format === "excel") await exportToExcel(rows, name);
       else await exportToPDF(rows, title, name);
-      toast("success", `Exported as ${format.toUpperCase()}`);
+      // The server caps a single export; say so rather than hand over a
+      // silently short file.
+      if (rows.length < total) {
+        toast("error", `Exported the first ${rows.length} of ${total} rows — narrow the filters to get the rest`);
+      } else {
+        toast("success", `Exported ${rows.length} rows as ${format.toUpperCase()}`);
+      }
     } catch {
       toast("error", "Export failed");
     }
@@ -316,7 +354,8 @@ export default function AssetReportsPage() {
                   <TableHead>Out Date</TableHead>
                   <TableHead>In Date</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Condition</TableHead>
+                  <TableHead>Out cond.</TableHead>
+                  <TableHead>In cond.</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -328,7 +367,8 @@ export default function AssetReportsPage() {
                     <TableCell>{m.outDate ? formatDate(new Date(m.outDate)) : "—"}</TableCell>
                     <TableCell>{m.inDate ? formatDate(new Date(m.inDate)) : "—"}</TableCell>
                     <TableCell><Badge variant={m.status === "OUT" ? "bg-orange-100 text-orange-800" : "bg-green-100 text-green-800"}>{m.status}</Badge></TableCell>
-                    <TableCell><Badge>{m.condition}</Badge></TableCell>
+                    <TableCell><Badge>{movementConditions(m).out ?? "unknown"}</Badge></TableCell>
+                    <TableCell>{movementConditions(m).in ? <Badge>{movementConditions(m).in}</Badge> : <span className="text-gray-300">—</span>}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -188,7 +188,7 @@ export const navigationModules: NavModule[] = [
     icon: PartyPopper,
     roles: ["admin", "department-head"],
     items: [
-      { label: "Booking Calendar", href: "/dashboard/events/calendar", icon: Calendar, roles: ["admin", "department-head"] },
+      { label: "Booking Calendar", href: "/dashboard/events/calendar", icon: Calendar, roles: ["admin", "department-head"], feature: "events" },
     ],
     subGroups: [
       {

@@ -16,7 +16,7 @@ import {
   type AuthzUser,
 } from "@/lib/db-authz";
 import type { TokenPayload } from "@/lib/auth";
-import { canTransitionTask, transitionNeedsRemark } from "@/lib/task-workflow";
+import { canDeleteTask, canTransitionTask, transitionNeedsRemark, type TaskOwnership } from "@/lib/task-workflow";
 import { decryptDocFields, encryptDocFields, redactEncryptedFields } from "@/lib/vault";
 import type { StaffRole, TaskStatus } from "@/types";
 
@@ -441,6 +441,21 @@ export async function POST(req: NextRequest) {
       // ── DELETE ──────────────────────────────────────────────────────────
       case "delete": {
         const { id } = body;
+        if (collectionName === "tasks") {
+          // Tasks have no write-role gate (assignees must update their own),
+          // so deletion needs its own rule or any session could delete any task.
+          const task = (await Model.findById(id).lean()) as TaskOwnership | null;
+          if (task) {
+            const deptId =
+              authzUser.role === "department-head" ? await callerDepartmentId(authzUser) : null;
+            if (!canDeleteTask(authzUser.role as StaffRole, user.uid, deptId, task)) {
+              return NextResponse.json(
+                { error: "You may only delete tasks you created or that belong to your department." },
+                { status: 403 }
+              );
+            }
+          }
+        }
         if (collectionName === "staff") {
           const target = (await Model.findById(id).select("email").lean()) as { email?: string } | null;
           // Demo login accounts are protected — reseed via scripts/seed-demo.mjs.

@@ -671,6 +671,14 @@ export interface AssetMovement extends BaseDocument {
   inDate?: Timestamp;
   returnBy?: string;
   verifiedBy?: string;
+  /** Condition recorded when the asset was issued out. */
+  outCondition?: AssetCondition;
+  /** Condition recorded when it came back. Absent while still OUT. */
+  inCondition?: AssetCondition;
+  /**
+   * Latest known condition. Kept in sync with out/inCondition for legacy
+   * readers; new code should read the split fields via movementConditions().
+   */
   condition: AssetCondition;
   damageReason?: string;
   remarks?: string;

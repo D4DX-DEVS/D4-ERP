@@ -5,6 +5,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getDocuments, orderBy } from "@/lib/firestore";
+import { useAuthStore } from "@/store/auth-store";
+import { hasFeature } from "@/lib/permissions";
 import { ListingHeader } from "@/components/ui/listing";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -33,6 +35,11 @@ function getFirstDayOfMonth(year: number, month: number) {
 export default function EventCalendarPage() {
   const router = useRouter();
   const base = useWorkspaceBase();
+  const { user } = useAuthStore();
+  // Studio bookings are a separate grant: show them on the calendar for
+  // context, but only link into the studio module when the user can open it
+  // (otherwise the portal guard would bounce them back to the portal home).
+  const canOpenStudio = hasFeature(user, "studio-booking");
   const [events, setEvents] = useState<ManagedEvent[]>([]);
   const [studioBookings, setStudioBookings] = useState<StudioBooking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,9 +176,11 @@ export default function EventCalendarPage() {
                     {dayStudio.slice(0, 2).map((b) => (
                       <button
                         key={b.id}
+                        type="button"
+                        disabled={!canOpenStudio}
                         onClick={() => router.push(`${base}/studio/bookings`)}
-                        className="w-full text-left rounded-md px-1 py-0.5 text-[10px] truncate hover:bg-white flex items-center gap-1 text-orange-700"
-                        title={`${b.startTime}–${b.endTime} ${b.studioName ? `${b.studioName} — ` : ""}${b.purpose}`}
+                        className="w-full text-left rounded-md px-1 py-0.5 text-[10px] truncate hover:bg-white flex items-center gap-1 text-orange-700 disabled:cursor-default disabled:hover:bg-transparent"
+                        title={`${b.startTime}–${b.endTime} ${b.studioName ? `${b.studioName} — ` : ""}${b.purpose}${canOpenStudio ? "" : " (Studio Booking access needed to open)"}`}
                       >
                         <span className="inline-block h-1.5 w-1.5 rounded-full shrink-0 bg-orange-500" />
                         {b.startTime} {b.studioName || b.purpose}

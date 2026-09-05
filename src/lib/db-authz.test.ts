@@ -151,7 +151,7 @@ describe("role authorization (/api/db permissions)", () => {
     const reportsOnly = user("staff", ["reports"]);
 
     it("blocks every finance operation for zero-grant staff", () => {
-      for (const col of ["transactions", "invoices", "invoice_payments", "items", "categories"]) {
+      for (const col of ["transactions", "invoices", "invoicePayments", "items", "categories"]) {
         expect(authorize(noGrants, "find", col)).toMatch(/permission/i);
         expect(authorize(noGrants, "findOne", col)).toMatch(/permission/i);
         expect(authorize(noGrants, "create", col)).toMatch(/permission/i);
@@ -220,7 +220,7 @@ describe("role authorization (/api/db permissions)", () => {
         expect(authorize(u, "create", "invoices", "quotation")).toBeNull();
         expect(authorize(u, "create", "items")).toBeNull();
         expect(authorize(u, "create", "categories")).toBeNull();
-        expect(authorizeRead(u, "invoice_payments")).toBeNull();
+        expect(authorizeRead(u, "invoicePayments")).toBeNull();
       }
     });
 
@@ -239,11 +239,27 @@ describe("role authorization (/api/db permissions)", () => {
     const plainStaff = user("staff");
 
     it("blocks zero-grant staff from ops writes", () => {
-      for (const col of ["events", "clients", "assets", "asset-categories", "asset-persons", "asset-events"]) {
+      for (const col of ["events", "clients", "assets", "asset-categories", "asset-persons", "asset-events",
+                         "asset-movements", "asset-damage-reports", "asset-activity-logs"]) {
         expect(authorize(plainStaff, "create", col)).toMatch(/permission/i);
         expect(authorize(plainStaff, "update", col)).toMatch(/permission/i);
         expect(authorize(plainStaff, "delete", col)).toMatch(/permission/i);
       }
+    });
+
+    it("gates movement reads on asset-management, with studio-booking co-access", () => {
+      for (const action of ["find", "paginate", "count", "findOne"]) {
+        expect(authorize(plainStaff, action, "asset-movements")).toMatch(/permission/i);
+      }
+      expect(authorize(plainStaff, "find", "asset-damage-reports")).toMatch(/permission/i);
+      expect(authorize(plainStaff, "find", "asset-activity-logs")).toMatch(/permission/i);
+
+      expect(authorize(user("staff", ["asset-management"]), "paginate", "asset-movements")).toBeNull();
+      // The studio booking screen needs open OUT movements to compute availability.
+      expect(authorize(user("staff", ["studio-booking"]), "find", "asset-movements")).toBeNull();
+      expect(authorize(user("staff", ["studio-booking"]), "find", "asset-damage-reports")).toMatch(/permission/i);
+      expect(authorize(deptHead, "find", "asset-movements")).toBeNull();
+      expect(authorize(admin, "find", "asset-activity-logs")).toBeNull();
     });
 
     it("granted staff can write only the granted module", () => {
@@ -255,6 +271,8 @@ describe("role authorization (/api/db permissions)", () => {
       const assetsStaff = user("staff", ["asset-management"]);
       expect(authorize(assetsStaff, "create", "assets")).toBeNull();
       expect(authorize(assetsStaff, "update", "asset-events")).toBeNull();
+      expect(authorize(assetsStaff, "create", "asset-movements")).toBeNull();
+      expect(authorize(assetsStaff, "update", "asset-damage-reports")).toBeNull();
       expect(authorize(assetsStaff, "create", "events")).toMatch(/permission/i);
 
       expect(authorize(user("staff", ["clients"]), "create", "clients")).toBeNull();
@@ -419,5 +437,38 @@ describe("scopeFilter (server-side dept/own-record isolation)", () => {
     expect(scopeFilter(deptHead, "tasks", "d1", null)).toEqual({
       $or: [{ departmentId: "d1" }, { assignedBy: "u1" }, { createdBy: "u1" }],
     });
+  });
+});
+
+// ── P0 fixes (2026-09-05) ─────────────────────────────────────────────────────
+
+describe("payments gate is keyed on the collection name the pages actually use", () => {
+  it("denies zero-grant staff and allows an invoices grant on invoicePayments", () => {
+    expect(authorize(user("staff"), "find", "invoicePayments")).toMatch(/permission/i);
+    expect(authorize(user("staff"), "create", "invoicePayments")).toMatch(/permission/i);
+    expect(authorize(user("staff", ["invoices"]), "create", "invoicePayments")).toBeNull();
+    expect(authorizeRead(user("staff", ["reports"]), "invoicePayments")).toBeNull();
+  });
+});
+
+describe("payroll grant lifts own-record scoping on payroll inputs", () => {
+  const payrollStaff = user("staff", ["payroll"]);
+
+  it("without the grant, staff still read only their own rows", () => {
+    for (const col of ["payroll", "attendance", "leaveRequests"]) {
+      expect(scopeFilter(user("staff"), col, null, null)).toEqual({ staffId: "u1" });
+    }
+  });
+
+  it("with the grant, payroll, attendance and leave reads are company-wide", () => {
+    for (const col of ["payroll", "attendance", "leaveRequests"]) {
+      expect(scopeFilter(payrollStaff, col, null, null)).toBeNull();
+    }
+  });
+
+  it("the grant does not touch unrelated own-scoped collections", () => {
+    for (const col of ["attendance_corrections", "employee_documents"]) {
+      expect(scopeFilter(payrollStaff, col, null, null)).toEqual({ staffId: "u1" });
+    }
   });
 });
