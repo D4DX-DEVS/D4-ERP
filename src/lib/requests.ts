@@ -9,6 +9,8 @@ import {
   Timestamp,
 } from "@/lib/firestore";
 import { createNotification, createBulkNotifications } from "@/lib/notifications";
+import { loadStaffLedger } from "@/lib/leave-adjustments";
+import type { LeaveLedger } from "@/lib/leave-ledger";
 import type {
   ApprovalStep,
   AuthUser,
@@ -231,113 +233,6 @@ async function overtimeEventExists(requestId: string): Promise<boolean> {
   return existing.length > 0;
 }
 
-/** Comp-off days earned by one approved overtime request. 8h OT = 1 day, floored to 0.5 steps. */
-export function overtimeCompOffDays(req: Pick<StaffRequest, "startTime" | "endTime">): number {
-  if (!req.startTime || !req.endTime) return 0;
-  const [sh, sm] = req.startTime.split(":").map(Number);
-  const [eh, em] = req.endTime.split(":").map(Number);
-  if ([sh, sm, eh, em].some(Number.isNaN)) return 0;
-  let mins = eh * 60 + em - (sh * 60 + sm);
-  if (mins <= 0) mins += 24 * 60; // overnight OT
-  return Math.floor((mins / 60 / 8) * 2) / 2;
-}
-
-export interface CompOffBalance {
-  earned: number;
-  used: number;
-  available: number;
-}
-
-/**
- * Comp-off balance derived on the fly from approved requests:
- * earned by approved overtime, spent by approved CO leaves.
- */
-export async function getCompOffBalance(staffId: string): Promise<CompOffBalance> {
-  const approved = await getDocuments<StaffRequest>(COLLECTION, [
-    where("staffId", "==", staffId),
-    where("status", "==", "approved"),
-  ]);
-  let earned = 0;
-  let used = 0;
-  for (const r of approved) {
-    if (r.type === "overtime") earned += overtimeCompOffDays(r);
-    if ((r.type === "leave" || r.type === "long-leave") && r.leaveType === "CO") {
-      used += r.isHalfDay
-        ? 0.5
-        : Math.max(1, Math.round(((r.endDate?.seconds ?? 0) - (r.startDate?.seconds ?? 0)) / 86400) + 1);
-    }
-  }
-  return { earned, used, available: Math.max(0, earned - used) };
-}
-
-/** Whole days covered by a leave request (0.5 for half-day). */
-export function requestLeaveDays(r: Pick<StaffRequest, "isHalfDay" | "startDate" | "endDate">): number {
-  return r.isHalfDay
-    ? 0.5
-    : Math.max(1, Math.round(((r.endDate?.seconds ?? 0) - (r.startDate?.seconds ?? 0)) / 86400) + 1);
-}
-
-export interface StaffLeaveBalances {
-  year: number;
-  cl: { used: number; total: number };
-  /** Stored as leaveType "SL"; shown as Medical Leave (ML). */
-  ml: { used: number; total: number };
-  el: { used: number; total: number };
-  /** Flexible Leave — earned from approved overtime, spent by CO-type leaves. */
-  fl: CompOffBalance;
-  hd: number;
-  lop: number;
-}
-
-/** Pure balance rollup from one staff member's approved requests for a year. */
-export function computeLeaveBalances(
-  approved: StaffRequest[],
-  policy: { casualLeave: number; sickLeave: number; earnedLeave: number },
-  year: number
-): StaffLeaveBalances {
-  const bal: StaffLeaveBalances = {
-    year,
-    cl: { used: 0, total: policy.casualLeave },
-    ml: { used: 0, total: policy.sickLeave },
-    el: { used: 0, total: policy.earnedLeave },
-    fl: { earned: 0, used: 0, available: 0 },
-    hd: 0,
-    lop: 0,
-  };
-  for (const r of approved) {
-    if (new Date((r.startDate?.seconds ?? 0) * 1000).getFullYear() !== year) continue;
-    if (r.type === "overtime") {
-      bal.fl.earned += overtimeCompOffDays(r);
-      continue;
-    }
-    if (r.type !== "leave" && r.type !== "long-leave") continue;
-    const days = requestLeaveDays(r);
-    switch (r.leaveType) {
-      case "CL": bal.cl.used += days; break;
-      case "SL": bal.ml.used += days; break;
-      case "EL": bal.el.used += days; break;
-      case "CO": bal.fl.used += days; break;
-      case "HD": bal.hd += days; break;
-      case "LOP": bal.lop += days; break;
-    }
-  }
-  bal.fl.available = Math.max(0, bal.fl.earned - bal.fl.used);
-  return bal;
-}
-
-/** Current-year balances for one staff member, derived on the fly. */
-export async function getStaffLeaveBalances(staffId: string): Promise<StaffLeaveBalances> {
-  const { getAppSettings } = await import("@/lib/settings");
-  const [settings, approved] = await Promise.all([
-    getAppSettings(),
-    getDocuments<StaffRequest>(COLLECTION, [
-      where("staffId", "==", staffId),
-      where("status", "==", "approved"),
-    ]),
-  ]);
-  return computeLeaveBalances(approved, settings.leavePolicy, new Date().getFullYear());
-}
-
 /** Staff cancels their own still-pending request. */
 export async function cancelRequest(request: StaffRequest): Promise<void> {
   if (request.status !== "pending") throw new Error("Request already finalised");
@@ -371,4 +266,22 @@ async function createOvertimeCalendarEvent(request: StaffRequest, approver: Auth
     // ponytail: calendar event is a courtesy artifact — approval must not fail on it
     console.error("Failed to create overtime calendar event:", error);
   }
+}
+
+// The day/overtime arithmetic and the balance rollup live in leave-ledger.ts so
+// the admin matrix, the staff profile tab and the staff portal cannot drift
+// apart. Re-exported here because callers have always imported them from this
+// module.
+export { overtimeCompOffDays, requestLeaveDays } from "@/lib/leave-ledger";
+export type { LeaveLedger } from "@/lib/leave-ledger";
+
+/**
+ * Current-year leave ledger for one staff member: quota, days used, remaining
+ * balance, flexible leave earned from week-off duty, and every admin
+ * adjustment. The same function backs the admin views, so what an admin edits
+ * is what the employee sees.
+ */
+export async function getStaffLeaveLedger(staffId: string, year?: number): Promise<LeaveLedger> {
+  const { ledger } = await loadStaffLedger(staffId, year ?? new Date().getFullYear());
+  return ledger;
 }

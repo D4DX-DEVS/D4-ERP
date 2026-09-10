@@ -16,6 +16,7 @@ import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { getStatusColor, formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import { AccessTab } from "@/components/staff/access-tab";
+import { LeaveBalancePanel } from "@/components/leaves/leave-balance-panel";
 import { getContractStatus, getDaysRemaining, computeContractEndDate, CONTRACT_DURATIONS, type ContractStatus } from "@/lib/contract-utils";
 import { useAuthStore } from "@/store/auth-store";
 import { useRoleGuard } from "@/hooks/use-role-guard";
@@ -38,13 +39,14 @@ import {
   History,
   User,
   CalendarClock,
+  CalendarDays,
   Package,
   DollarSign,
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 
-type TabKey = "overview" | "salary" | "access" | "documents" | "assets";
+type TabKey = "overview" | "salary" | "leave" | "access" | "documents" | "assets";
 
 // Imported assets carry their sheet provenance in `notes`. On a staff page the
 // custodian is already the person you are looking at, and the import row number
@@ -71,6 +73,7 @@ export default function StaffProfilePage() {
   // Staff records are admin-only — department heads manage work, not personnel files.
   const { authorized, isLoading: authLoading } = useRoleGuard(["admin"]);
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [leaveYear, setLeaveYear] = useState(new Date().getFullYear());
   const [assets, setAssets] = useState<(Asset & { id: string })[]>([]);
 
   // Modals
@@ -283,6 +286,7 @@ export default function StaffProfilePage() {
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: "overview", label: "Overview", icon: <User className="h-4 w-4" /> },
     { key: "salary", label: "Salary & Status", icon: <History className="h-4 w-4" /> },
+    { key: "leave", label: "Leave", icon: <CalendarDays className="h-4 w-4" /> },
     { key: "access", label: "Access & Features", icon: <Shield className="h-4 w-4" /> },
     { key: "documents", label: "Documents", icon: <FileText className="h-4 w-4" /> },
     { key: "assets", label: "Assets", icon: <Package className="h-4 w-4" /> },
@@ -612,6 +616,21 @@ export default function StaffProfilePage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* ───── Tab: Leave ───── */}
+      {activeTab === "leave" && (
+        <Card>
+          <CardContent className="p-4 sm:p-6">
+            <LeaveBalancePanel
+              staff={staff}
+              year={leaveYear}
+              canEdit={currentUser?.role === "admin"}
+              user={currentUser}
+              onYearChange={setLeaveYear}
+            />
+          </CardContent>
+        </Card>
       )}
 
       {/* ───── Tab: Access & Features ───── */}

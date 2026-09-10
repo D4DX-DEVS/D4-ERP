@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     const Staff = getModel("staff");
-    const staff = (await Staff.findOne({ email, isActive: true }).lean()) as Record<
+    const staff = (await Staff.findOne({ email, isActive: true, isDeleted: { $ne: true } }).lean()) as Record<
       string,
       unknown
     > | null;

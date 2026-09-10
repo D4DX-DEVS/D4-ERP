@@ -150,11 +150,26 @@ async function apiCall(body: Record<string, unknown>) {
 
 // ── Generic CRUD (same signatures as before) ──────────────────────────────────
 
+export interface ReadOptions {
+  /**
+   * Include soft-deleted rows (removed staff). Off by default so every listing
+   * shows the live roster; history views (attendance, reports, payroll) turn it
+   * on so a removed employee's past records still resolve to a name.
+   */
+  includeDeleted?: boolean;
+}
+
 export async function getDocuments<T>(
   collectionName: string,
-  constraints: QueryConstraint[] = []
+  constraints: QueryConstraint[] = [],
+  options: ReadOptions = {}
 ): Promise<(T & { id: string })[]> {
-  return apiCall({ action: "find", collection: collectionName, constraints });
+  return apiCall({
+    action: "find",
+    collection: collectionName,
+    constraints,
+    includeDeleted: options.includeDeleted === true,
+  });
 }
 
 export async function getDocumentsPaginated<T>(

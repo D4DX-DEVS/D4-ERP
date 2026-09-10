@@ -17,6 +17,7 @@ import {
 } from "@/lib/db-authz";
 import type { TokenPayload } from "@/lib/auth";
 import { canDeleteTask, canTransitionTask, transitionNeedsRemark, type TaskOwnership } from "@/lib/task-workflow";
+import { isSoftDeleteCollection, softDeletePatch, withoutDeleted } from "@/lib/soft-delete";
 import { decryptDocFields, encryptDocFields, redactEncryptedFields } from "@/lib/vault";
 import type { StaffRole, TaskStatus } from "@/types";
 
@@ -204,11 +205,15 @@ async function deptStaffIds(departmentId: string): Promise<string[]> {
   return docs.map((d) => d._id.toString());
 }
 
-/** AND role scope + feature type-restrictions into a read filter. */
+/**
+ * AND role scope + feature type-restrictions + the soft-delete guard into a read
+ * filter. `includeDeleted` is the opt-in history views use to keep removed staff.
+ */
 async function applyReadScope(
   user: TokenPayload & AuthzUser,
   collectionName: string,
-  filter: Record<string, unknown>
+  filter: Record<string, unknown>,
+  includeDeleted = false
 ): Promise<Record<string, unknown>> {
   const needsDept =
     user.role === "department-head" &&
@@ -222,9 +227,13 @@ async function applyReadScope(
     scopeFilter(user, collectionName, deptId, staffIds),
     featureReadFilter(user, collectionName),
   ].filter((c): c is Record<string, unknown> => !!c);
-  if (!clauses.length) return filter;
-  const all = Object.keys(filter).length ? [filter, ...clauses] : clauses;
-  return all.length === 1 ? all[0] : { $and: all };
+  const scoped = clauses.length
+    ? (() => {
+        const all = Object.keys(filter).length ? [filter, ...clauses] : clauses;
+        return all.length === 1 ? all[0] : { $and: all };
+      })()
+    : filter;
+  return withoutDeleted(collectionName, scoped, includeDeleted);
 }
 
 /**
@@ -337,8 +346,13 @@ export async function POST(req: NextRequest) {
     // stale for up to the token TTL after an admin edits permissions) ────────
     const staffDoc = (await getModel("staff")
       .findById(user.uid)
-      .select("role grantedFeatures")
-      .lean()) as { role?: string; grantedFeatures?: unknown } | null;
+      .select("role grantedFeatures isDeleted")
+      .lean()) as { role?: string; grantedFeatures?: unknown; isDeleted?: boolean } | null;
+    // Soft-deleted staff keep their row for history but lose access immediately,
+    // even while their session cookie is still inside its window.
+    if (staffDoc?.isDeleted) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const authzUser: TokenPayload & AuthzUser = {
       ...user,
       role: staffDoc?.role || user.role,
@@ -377,7 +391,7 @@ export async function POST(req: NextRequest) {
       case "find": {
         const { constraints = [] } = body;
         const { filter: rawFilter, sort, limit: lim } = buildQuery(constraints);
-        const filter = await applyReadScope(authzUser, collectionName, rawFilter);
+        const filter = await applyReadScope(authzUser, collectionName, rawFilter, body.includeDeleted === true);
         let q = Model.find(filter);
         if (Object.keys(sort).length) q = q.sort(sort);
         q = q.limit(Math.min(lim || MAX_QUERY_LIMIT, MAX_QUERY_LIMIT));
@@ -466,7 +480,14 @@ export async function POST(req: NextRequest) {
             );
           }
         }
-        const removed = await Model.findByIdAndDelete(id).lean();
+        // Staff deletes are soft: attendance, payroll and leave rows point at
+        // this _id, and a hard delete orphaned that history (the monthly grid
+        // then re-invented every missing day as "Absent"). Flag the row instead
+        // — it drops out of every listing via withoutDeleted(), and history
+        // views read it back with includeDeleted.
+        const removed = isSoftDeleteCollection(collectionName)
+          ? await Model.findByIdAndUpdate(id, { $set: softDeletePatch() }, { new: true }).lean()
+          : await Model.findByIdAndDelete(id).lean();
         // A no-op delete used to return success, so the row silently came back
         // on refresh. Say so instead.
         if (!removed) {
@@ -550,7 +571,7 @@ export async function POST(req: NextRequest) {
       case "count": {
         const { constraints = [] } = body;
         const { filter: rawFilter } = buildQuery(constraints);
-        const filter = await applyReadScope(authzUser, collectionName, rawFilter);
+        const filter = await applyReadScope(authzUser, collectionName, rawFilter, body.includeDeleted === true);
         const total = await Model.countDocuments(filter);
         return NextResponse.json({ total });
       }
@@ -562,7 +583,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "A valid field name is required" }, { status: 400 });
         }
         const { filter: rawFilter } = buildQuery(constraints);
-        const filter = await applyReadScope(authzUser, collectionName, rawFilter);
+        const filter = await applyReadScope(authzUser, collectionName, rawFilter, body.includeDeleted === true);
         const rows = await Model.aggregate([
           { $match: filter },
           { $group: { _id: null, total: { $sum: `$${field}` } } },
@@ -574,7 +595,7 @@ export async function POST(req: NextRequest) {
       case "paginate": {
         const { constraints = [], pageSize = 25, page = 0 } = body;
         const { filter: rawFilter, sort } = buildQuery(constraints);
-        const filter = await applyReadScope(authzUser, collectionName, rawFilter);
+        const filter = await applyReadScope(authzUser, collectionName, rawFilter, body.includeDeleted === true);
         const total = await Model.countDocuments(filter);
         let q = Model.find(filter);
         if (Object.keys(sort).length) q = q.sort(sort);

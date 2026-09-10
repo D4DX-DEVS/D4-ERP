@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     const staff = (await Staff.findOne({
       employeeCode: employeeCode.toUpperCase(),
       isActive: true,
+      isDeleted: { $ne: true },
     }).lean()) as Record<string, unknown> | null;
 
     if (!staff) {

@@ -22,9 +22,12 @@ export async function GET(req: NextRequest) {
   await connectDB();
   const staff = (await getModel("staff")
     .findById(user.uid)
-    .select("role grantedFeatures status")
-    .lean()) as { role?: string; grantedFeatures?: unknown; status?: string } | null;
-  if (!staff) {
+    .select("role grantedFeatures status isDeleted")
+    .lean()) as { role?: string; grantedFeatures?: unknown; status?: string; isDeleted?: boolean } | null;
+  // Deleting staff is a soft delete (history is kept), so "row still exists" is
+  // no longer proof of employment — a removed employee's live session ends here
+  // instead of riding out the remaining cookie window.
+  if (!staff || staff.isDeleted) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const grantedFeatures = Array.isArray(staff.grantedFeatures)

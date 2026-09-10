@@ -86,6 +86,14 @@ export interface Staff extends BaseDocument {
   profileImage?: string;
   role: StaffRole;
   isActive: boolean;
+  /**
+   * Removed from the roster. Deleting a staff member is a soft delete so their
+   * attendance / payroll / leave history stays readable — see lib/soft-delete.ts.
+   * Removed staff are filtered out of every normal listing server-side.
+   */
+  isDeleted?: boolean;
+  /** When the removal happened; nothing is inferred about days after it. */
+  deletedAt?: Timestamp | null;
   shiftId?: string;
   /** Employee code on the biometric device (ESSL etc.), used to match imported attendance. */
   biometricId?: string;
@@ -95,6 +103,11 @@ export interface Staff extends BaseDocument {
   contractEndDate?: Timestamp | null;
   /** Extra feature keys granted to this employee beyond their role defaults. */
   grantedFeatures?: string[];
+  /**
+   * Per-employee leave quota override. Each bucket resolves independently, so
+   * setting only `casualLeave` leaves ML and EL on the category default.
+   */
+  leaveQuota?: Partial<LeaveQuota>;
   bankDetails?: {
     bankName: string;
     accountNo: string;
@@ -164,6 +177,85 @@ export type StaffRequestType =
   | "on-duty"
   | "other";
 export type LeaveType = "CL" | "SL" | "EL" | "CO" | "HD" | "LOP";
+
+/**
+ * Balance-carrying buckets. Distinct from the stored `LeaveType` codes, which
+ * are legacy: "SL" holds Medical Leave and "CO" holds Flexible Leave.
+ */
+export type LeaveBucket = "CL" | "ML" | "EL" | "FL";
+
+/** Annual day allowance per bucket. FL has none — it is earned, not granted. */
+export interface LeaveQuota {
+  casualLeave: number;
+  sickLeave: number;
+  earnedLeave: number;
+}
+
+/**
+ * Why a ledger row exists. Purely descriptive — the arithmetic reads the signed
+ * `days` field, so a kind is never load-bearing for a balance.
+ */
+export type LeaveAdjustmentKind =
+  | "opening"
+  | "grant"
+  | "sunday-credit"
+  | "correction"
+  | "deduction";
+
+/**
+ * One manual (or conversion-generated) movement on a staff member's leave
+ * balance, in the `leave_adjustments` collection. Rows are never edited in
+ * place — a wrong row is deleted or offset by its negation, so the history
+ * always explains the current number.
+ */
+export interface LeaveAdjustment extends BaseDocument {
+  staffId: string;
+  staffName?: string;
+  departmentId?: string;
+  year: number;
+  bucket: LeaveBucket;
+  kind: LeaveAdjustmentKind;
+  /** Signed days. Positive credits entitlement, negative consumes it. */
+  days: number;
+  /** Effective date — drives which month column the debit lands in. */
+  date: Timestamp;
+  reason: string;
+  /** Set when this row was produced by converting a week-off duty. */
+  sundayDutyId?: string;
+  createdBy?: string;
+  createdByName?: string;
+}
+
+export type SundayDutyStatus = "pending" | "converted" | "rejected";
+
+/**
+ * A weekly-off day (typically a Sunday) the staff member actually worked,
+ * in the `sunday_duties` collection. Detected from attendance, then converted
+ * by an admin into flexible leave.
+ */
+export interface SundayDuty extends BaseDocument {
+  staffId: string;
+  staffName?: string;
+  departmentId?: string;
+  /** The non-working day that was worked, normalized to local midnight. */
+  date: Timestamp;
+  year: number;
+  /** How the record was raised. */
+  source: "attendance" | "manual";
+  /** Attendance status that triggered detection, e.g. "present". */
+  attendanceStatus?: string;
+  workingHours?: number;
+  attendanceId?: string;
+  status: SundayDutyStatus;
+  /** Flexible-leave days granted on conversion (1 full day, 0.5 for a half day). */
+  creditDays?: number;
+  /** The `leave_adjustments` row this conversion created. */
+  adjustmentId?: string;
+  remarks?: string;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  reviewedAt?: Timestamp;
+}
 export type HalfDaySession = "first-half" | "second-half";
 export type RequestStatus = "pending" | "approved" | "rejected" | "cancelled";
 

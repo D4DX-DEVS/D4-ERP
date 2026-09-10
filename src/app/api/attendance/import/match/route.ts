@@ -15,7 +15,9 @@ export async function POST(req: NextRequest) {
   }
 
   const Staff = getModel("staff");
-  const staffDocs = (await Staff.find({}, { biometricId: 1, employeeCode: 1 }).lean()) as unknown as {
+  // Removed staff never take new punches — their device code shows as unmapped
+  // so the admin decides, instead of silently writing rows against a dead row.
+  const staffDocs = (await Staff.find({ isDeleted: { $ne: true } }, { biometricId: 1, employeeCode: 1 }).lean()) as unknown as {
     _id: unknown;
     biometricId?: string;
     employeeCode?: string;

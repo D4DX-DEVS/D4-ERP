@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocument, Timestamp } from "@/lib/firestore";
-import { createStaffRequest, getStaffLeaveBalances, LEAVE_TYPE_LABELS, REQUEST_TYPE_LABELS, type StaffLeaveBalances } from "@/lib/requests";
+import { createStaffRequest, getStaffLeaveLedger, LEAVE_TYPE_LABELS, REQUEST_TYPE_LABELS } from "@/lib/requests";
+import { ledgerBucket, type LeaveLedger } from "@/lib/leave-ledger";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -41,12 +42,13 @@ export default function NewRequestPage() {
   const [submitted, setSubmitted] = useState(false);
   // Earned Leave is a permanent-staff benefit; contract staff and interns don't accrue it.
   const [isPermanent, setIsPermanent] = useState(false);
-  // Current-year balances: CL/ML/EL quotas + FL earned from approved overtime.
-  const [balances, setBalances] = useState<StaffLeaveBalances | null>(null);
+  // Current-year ledger: CL/ML/EL quota and days left, plus FL earned from
+  // week-off duty and approved overtime — including any admin adjustment.
+  const [balances, setBalances] = useState<LeaveLedger | null>(null);
 
   useEffect(() => {
     if (!user?.staffId) return;
-    getStaffLeaveBalances(user.staffId).then(setBalances).catch(() => {});
+    getStaffLeaveLedger(user.staffId).then(setBalances).catch(() => {});
   }, [user?.staffId]);
 
   useEffect(() => {
@@ -82,7 +84,7 @@ export default function NewRequestPage() {
   })();
   const exceedsClCap = form.leaveType === "CL" && requestedDays > CL_MAX_WITHOUT_APPROVAL;
   const isCoLeave = (form.type === "leave" || form.type === "long-leave") && form.leaveType === "CO";
-  const exceedsCoBalance = isCoLeave && balances !== null && requestedDays > balances.fl.available;
+  const exceedsCoBalance = isCoLeave && balances !== null && requestedDays > balances.fl.balance;
 
   const handleAddAttachment = (url: string, meta?: { name: string; size: number }) => {
     if (!url) return;
@@ -103,7 +105,7 @@ export default function NewRequestPage() {
       return;
     }
     if (exceedsCoBalance) {
-      toast("error", `Not enough flexible leave balance (available: ${balances?.fl.available ?? 0} day(s)).`);
+      toast("error", `Not enough flexible leave balance (available: ${balances?.fl.balance ?? 0} day(s)).`);
       return;
     }
 
@@ -199,16 +201,16 @@ export default function NewRequestPage() {
                   />
                   {isCoLeave && balances !== null && (
                     <p className={`text-xs ${exceedsCoBalance ? "text-rose-600" : "text-slate-600"}`}>
-                      Flexible leave available: <b>{balances.fl.available}</b> day(s) (earned {balances.fl.earned} from approved
-                      overtime — e.g. Sunday work, used {balances.fl.used}).
+                      Flexible leave available: <b>{balances.fl.balance}</b> day(s) (earned {balances.fl.entitled} from
+                      week-off duty and approved overtime, used {balances.fl.used}).
                       {exceedsCoBalance && " Not enough balance for this request."}
                     </p>
                   )}
                   {balances !== null && (form.leaveType === "CL" || form.leaveType === "SL" || form.leaveType === "EL") && (() => {
-                    const b = form.leaveType === "CL" ? balances.cl : form.leaveType === "SL" ? balances.ml : balances.el;
+                    const b = ledgerBucket(balances, form.leaveType === "CL" ? "CL" : form.leaveType === "SL" ? "ML" : "EL");
                     return (
-                      <p className="text-xs text-slate-600">
-                        Balance: <b>{Math.max(0, b.total - b.used)}</b> of {b.total} day(s) left this year (used {b.used}).
+                      <p className={`text-xs ${b.balance < 0 ? "text-rose-600" : "text-slate-600"}`}>
+                        Balance: <b>{b.balance}</b> of {b.entitled} day(s) left this year (used {b.used}).
                       </p>
                     );
                   })()}

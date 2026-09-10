@@ -71,7 +71,9 @@ export async function POST(req: NextRequest) {
     settings = normalizeSettings(null);
   }
 
-  const staffDocs = (await Staff.find({}, { biometricId: 1, employeeCode: 1, companyId: 1 }).lean()) as unknown as {
+  // Removed staff (soft-deleted) are excluded — their rows stay for history but
+  // they take no new punches; the device code lands in unmappedCount instead.
+  const staffDocs = (await Staff.find({ isDeleted: { $ne: true } }, { biometricId: 1, employeeCode: 1, companyId: 1 }).lean()) as unknown as {
     _id: unknown;
     biometricId?: string;
     employeeCode?: string;

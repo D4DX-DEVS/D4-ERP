@@ -36,6 +36,10 @@ export const WRITE_ROLES: Record<string, string[]> = {
   department_reports: ["admin", "department-head"],
   custom_kpis: ["admin", "department-head"],
   attendance_imports: ["admin", "department-head"],
+  // Leave ledger corrections move a real entitlement — admin only, never the
+  // department head who also approves the requests those balances come from.
+  leave_adjustments: ["admin"],
+  sunday_duties: ["admin"],
   // Category management is an admin/accounts capability, not part of the
   // accounting feature grant (granted staff can add transactions only).
   categories: ["admin", "accounts"],
@@ -220,11 +224,19 @@ export const DEPT_SCOPED_BY_FIELD: Record<string, string> = {
  * Collections scoped for dept heads via membership (doc.staffId must belong
  * to a staff member of their department) because the docs carry no departmentId.
  */
-export const DEPT_SCOPED_BY_STAFF = new Set(["attendance", "payroll", "attendance_corrections"]);
+export const DEPT_SCOPED_BY_STAFF = new Set([
+  "attendance",
+  "payroll",
+  "attendance_corrections",
+  "leave_adjustments",
+  "sunday_duties",
+]);
 
 /** Collections where a `staff` role user may only read their own records. */
 export const OWN_SCOPED_FOR_STAFF: Record<string, string> = {
   leaveRequests: "staffId",
+  leave_adjustments: "staffId",
+  sunday_duties: "staffId",
   attendance: "staffId",
   attendance_corrections: "staffId",
   payroll: "staffId",
@@ -242,6 +254,10 @@ export const FEATURE_UNSCOPES: Record<string, FeatureKey[]> = {
   payroll: ["payroll"],
   attendance: ["payroll"],
   leaveRequests: ["payroll"],
+  // A payroll run prices leave against the ledger, so it needs everyone's
+  // adjustments and week-off credits, not just the processor's own.
+  leave_adjustments: ["payroll"],
+  sunday_duties: ["payroll"],
 };
 
 export function isReadAction(action: string): boolean {

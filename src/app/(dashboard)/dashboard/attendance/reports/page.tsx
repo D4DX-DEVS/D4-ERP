@@ -68,7 +68,9 @@ export default function AttendanceReportsPage() {
     (async () => {
       try {
         const [staff, depts] = await Promise.all([
-          getDocuments<Staff>("staff", [orderBy("firstName", "asc")]),
+          // Removed staff are kept for reporting — a month they worked must not
+          // lose its rows because the employee left afterwards.
+          getDocuments<Staff>("staff", [orderBy("firstName", "asc")], { includeDeleted: true }),
           getDocuments<Department>("departments", []),
         ]);
         if (!active) return;
@@ -124,7 +126,9 @@ export default function AttendanceReportsPage() {
   // Staff visible to the current report (department + search scoping).
   // Computed inline (React Compiler memoizes) to avoid manual-memoization bail-out.
   const scopedStaff = (() => {
-    let list = staffList;
+    // Removed staff appear only in months where they actually have records.
+    const staffWithRecords = new Set(records.map((r) => r.staffId));
+    let list = staffList.filter((s) => !s.isDeleted || staffWithRecords.has(s.id));
     if (isDeptHead && user?.departmentId) list = list.filter((s) => s.departmentId === user.departmentId);
     else if (departmentFilter) list = list.filter((s) => s.departmentId === departmentFilter);
     const q = search.trim().toLowerCase();
