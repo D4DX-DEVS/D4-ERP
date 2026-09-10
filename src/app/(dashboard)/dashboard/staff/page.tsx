@@ -344,11 +344,11 @@ export default function StaffPage() {
     setConfirmDialog(null);
     try {
       await deleteDocument("staff", id);
-      toast("success", "Staff member deleted");
+      toast("success", "Staff member removed — their history is kept");
       refresh();
     } catch (error) {
       console.error("Error:", error);
-      toast("error", error instanceof Error ? error.message : "Failed to delete staff member");
+      toast("error", error instanceof Error ? error.message : "Failed to remove staff member");
     }
   };
 
@@ -881,9 +881,9 @@ export default function StaffPage() {
 
       <ConfirmDialog
         open={!!confirmDialog}
-        title="Delete Staff Member"
-        message="Are you sure you want to delete this staff member? This action cannot be undone."
-        confirmLabel="Delete"
+        title="Remove Staff Member"
+        message="Remove this staff member from the roster? They lose access immediately and stop appearing in lists and imports. Their attendance, payroll and leave history is kept."
+        confirmLabel="Remove"
         variant="danger"
         onConfirm={() => confirmDialog && executeDelete(confirmDialog.id)}
         onCancel={() => setConfirmDialog(null)}

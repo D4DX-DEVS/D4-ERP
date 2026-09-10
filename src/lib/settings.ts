@@ -1,5 +1,5 @@
 import { getDocuments } from "@/lib/firestore";
-import type { Shift } from "@/types";
+import type { EmploymentType, LeaveQuota, Shift } from "@/types";
 import { DEFAULT_LETTER_BODIES } from "@/lib/letter-templates";
 import { DEFAULT_EVENT_STAFF_ROLES, mergeEventRoles } from "@/lib/event-roles";
 
@@ -53,10 +53,16 @@ export interface CompanyProfile {
   logoUrl: string;
 }
 
-export interface LeavePolicy {
-  casualLeave: number;
-  sickLeave: number;
-  earnedLeave: number;
+/**
+ * Annual leave allowances. The three flat numbers are the legacy shape and stay
+ * the final fallback; `byEmploymentType` lets permanent staff, contract staff
+ * and interns carry different quotas the way the printed sheet does, and
+ * `negativeEmploymentTypes` names the categories allowed to run a deficit.
+ */
+export interface LeavePolicy extends LeaveQuota {
+  byEmploymentType?: Partial<Record<EmploymentType, Partial<LeaveQuota>>>;
+  allowNegative?: boolean;
+  negativeEmploymentTypes?: EmploymentType[];
 }
 
 /** Branding assets used when generating HR letters / certificates. */
@@ -169,7 +175,20 @@ export const DEFAULT_SETTINGS: AppSettings = {
   financialYearStart: "04",
   timezone: "Asia/Kolkata",
   companyProfile: { address: "", phone: "", email: "", website: "", logoUrl: "" },
-  leavePolicy: { casualLeave: 12, sickLeave: 12, earnedLeave: 15 },
+  leavePolicy: {
+    casualLeave: 12,
+    sickLeave: 12,
+    earnedLeave: 15,
+    // Mirrors the printed sheet: permanent staff accrue Earned Leave and may run
+    // a deficit; contract staff and interns get a flat allowance and cannot.
+    byEmploymentType: {
+      permanent: { casualLeave: 12, sickLeave: 12, earnedLeave: 15 },
+      staff: { casualLeave: 15, sickLeave: 15, earnedLeave: 0 },
+      intern: { casualLeave: 14, sickLeave: 14, earnedLeave: 0 },
+    },
+    allowNegative: false,
+    negativeEmploymentTypes: ["permanent"],
+  },
   letterSettings: {
     signatureUrl: "",
     sealUrl: "",
@@ -251,7 +270,17 @@ export function normalizeSettings(raw?: Partial<AppSettings> | null): AppSetting
     ...DEFAULT_SETTINGS,
     ...raw,
     companyProfile: { ...DEFAULT_SETTINGS.companyProfile, ...(raw.companyProfile ?? {}) },
-    leavePolicy: { ...DEFAULT_SETTINGS.leavePolicy, ...(raw.leavePolicy ?? {}) },
+    leavePolicy: {
+      ...DEFAULT_SETTINGS.leavePolicy,
+      ...(raw.leavePolicy ?? {}),
+      byEmploymentType: {
+        ...DEFAULT_SETTINGS.leavePolicy.byEmploymentType,
+        ...(raw.leavePolicy?.byEmploymentType ?? {}),
+      },
+      negativeEmploymentTypes: Array.isArray(raw.leavePolicy?.negativeEmploymentTypes)
+        ? raw.leavePolicy.negativeEmploymentTypes
+        : DEFAULT_SETTINGS.leavePolicy.negativeEmploymentTypes,
+    },
     letterSettings: { ...DEFAULT_SETTINGS.letterSettings, ...(raw.letterSettings ?? {}) },
     workingHours: { ...DEFAULT_SETTINGS.workingHours, ...(raw.workingHours ?? {}) },
     attendanceRules: { ...DEFAULT_SETTINGS.attendanceRules, ...(raw.attendanceRules ?? {}) },

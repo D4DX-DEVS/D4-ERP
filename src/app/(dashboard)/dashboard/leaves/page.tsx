@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { LeaveRequest, Staff, Department, AttendanceStatus, StaffRequest } from "@/types";
 import { countDocuments, createDocument, getDocuments, updateDocument, where, Timestamp } from "@/lib/firestore";
 import { getAppSettings, isNonWorkingDay } from "@/lib/settings";
-import { decideRequest, REQUEST_TYPE_LABELS, LEAVE_TYPE_LABELS, LEAVE_TYPE_CODES, computeLeaveBalances, type StaffLeaveBalances, isLegacyRequest } from "@/lib/requests";
+import { decideRequest, REQUEST_TYPE_LABELS, LEAVE_TYPE_LABELS, LEAVE_TYPE_CODES, isLegacyRequest } from "@/lib/requests";
+import { loadOrgLedgers, type OrgLedgerRow } from "@/lib/leave-adjustments";
+import { ledgerBucket, LEAVE_BUCKETS } from "@/lib/leave-ledger";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -18,7 +20,8 @@ import { Label } from "@/components/ui/label";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { CommentsSection } from "@/components/ui/comments-section";
 import { getStatusColor, formatDate } from "@/lib/utils";
-import { CalendarDays, Check, X, Search, Filter, FilterX, CheckCheck, XCircle, Clock, CheckCircle2, XCircleIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { CalendarDays, Check, X, Search, Filter, FilterX, CheckCheck, XCircle, Clock, CheckCircle2, XCircleIcon, ChevronDown, ChevronUp, Wallet } from "lucide-react";
+import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
@@ -57,29 +60,17 @@ export default function LeavesPage() {
   // Expanded details
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Per-staff leave balances — derived on the fly from approved requests (current year)
-  const [balances, setBalances] = useState<Record<string, StaffLeaveBalances> | null>(null);
-  const [zeroBalance, setZeroBalance] = useState<StaffLeaveBalances | null>(null);
+  // Per-staff leave ledgers for the current year — quota, days used, remaining
+  // balance and week-off credits, the same numbers the staff member sees.
+  const [balances, setBalances] = useState<Record<string, OrgLedgerRow> | null>(null);
   const [balancesLoading, setBalancesLoading] = useState(false);
 
   const loadBalances = async () => {
     if (balances || balancesLoading) return;
     setBalancesLoading(true);
     try {
-      const [settings, approved] = await Promise.all([
-        getAppSettings(),
-        getDocuments<StaffRequest>("leaveRequests", [where("status", "==", "approved")]),
-      ]);
-      const year = new Date().getFullYear();
-      const byStaff = new Map<string, StaffRequest[]>();
-      for (const r of approved) {
-        if (!byStaff.has(r.staffId)) byStaff.set(r.staffId, []);
-        byStaff.get(r.staffId)!.push(r);
-      }
-      const map: Record<string, StaffLeaveBalances> = {};
-      for (const [sid, reqs] of byStaff) map[sid] = computeLeaveBalances(reqs, settings.leavePolicy, year);
-      setZeroBalance(computeLeaveBalances([], settings.leavePolicy, year));
-      setBalances(map);
+      const active = Object.values(staffMap).filter((s) => s.isActive);
+      setBalances(await loadOrgLedgers(active, new Date().getFullYear()));
     } catch {
       toast("error", "Failed to load leave balances");
     } finally {
@@ -414,6 +405,12 @@ export default function LeavesPage() {
           <h1 className="text-xl font-bold sm:text-2xl text-gray-900">Leave Requests</h1>
           <p className="text-sm text-gray-500 mt-1">Manage leave, WFH, overtime & on-duty requests</p>
         </div>
+        <Link href="/dashboard/leaves/balances">
+          <Button variant="outline" size="sm">
+            <Wallet className="mr-2 h-4 w-4" />
+            Leave balances
+          </Button>
+        </Link>
       </div>
 
       {/* Stats Cards (act as status filters) */}
@@ -469,7 +466,7 @@ export default function LeavesPage() {
             <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
           </summary>
           <CardContent className="pt-0">
-            {balancesLoading || !zeroBalance ? (
+            {balancesLoading || !balances ? (
               <p className="py-6 text-center text-sm text-gray-500">Loading…</p>
             ) : (
               <div className="overflow-x-auto">
@@ -477,10 +474,10 @@ export default function LeavesPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Staff</TableHead>
-                      <TableHead>CL (used/total)</TableHead>
-                      <TableHead>ML (used/total)</TableHead>
-                      <TableHead>EL (used/total)</TableHead>
-                      <TableHead>FL (available)</TableHead>
+                      {LEAVE_BUCKETS.map((code) => (
+                        <TableHead key={code}>{code} (left / used / total)</TableHead>
+                      ))}
+                      <TableHead>Week-offs worked</TableHead>
                       <TableHead>Half Days</TableHead>
                       <TableHead>LOP</TableHead>
                     </TableRow>
@@ -490,19 +487,32 @@ export default function LeavesPage() {
                       .filter((s) => s.isActive)
                       .sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
                       .map((s) => {
-                        const b = balances?.[s.id!] ?? zeroBalance;
+                        const row = balances[s.id!];
+                        if (!row) return null;
                         return (
                           <TableRow key={s.id}>
                             <TableCell className="font-medium">{s.firstName} {s.lastName}</TableCell>
-                            <TableCell>{b.cl.used} / {b.cl.total}</TableCell>
-                            <TableCell>{b.ml.used} / {b.ml.total}</TableCell>
-                            <TableCell>{b.el.used} / {b.el.total}</TableCell>
+                            {LEAVE_BUCKETS.map((code) => {
+                              const bucket = ledgerBucket(row.ledger, code);
+                              return (
+                                <TableCell key={code}>
+                                  <b className={bucket.balance < 0 ? "text-rose-600" : undefined}>
+                                    {bucket.balance}
+                                  </b>
+                                  <span className="text-xs text-slate-500">
+                                    {" "}/ {bucket.used} / {bucket.entitled}
+                                  </span>
+                                </TableCell>
+                              );
+                            })}
                             <TableCell>
-                              <b>{b.fl.available}</b>
-                              <span className="text-xs text-slate-500"> (earned {b.fl.earned}, used {b.fl.used})</span>
+                              {row.ledger.sundays.worked}
+                              <span className="text-xs text-slate-500">
+                                {" "}({row.ledger.sundays.converted} converted)
+                              </span>
                             </TableCell>
-                            <TableCell>{b.hd}</TableCell>
-                            <TableCell>{b.lop}</TableCell>
+                            <TableCell>{row.ledger.hd}</TableCell>
+                            <TableCell>{row.ledger.lop}</TableCell>
                           </TableRow>
                         );
                       })}

@@ -10,11 +10,11 @@ import { getAdminStaffIds, getDeptHeadStaffId } from "@/lib/requests";
 import { createBulkNotifications } from "@/lib/notifications";
 import {
   ATTENDANCE_STATUS_CONFIG,
-  WEEKLY_OFF_META,
   attendanceStatusMeta,
   type ActiveAttendanceStatus,
   type StatusMeta,
 } from "@/lib/attendance-status";
+import { resolveDayCell } from "@/lib/attendance-grid";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -182,16 +182,14 @@ export default function StaffAttendancePage() {
         const rec = recordByDay.get(key);
         const holidayName = holidayMap.get(key) ?? null;
         const isOff = weeklyOff.includes(date.toLocaleDateString("en-IN", { weekday: "long" }));
-        let meta: StatusMeta | null = null;
-        if (rec) {
-          // Imported ESSL PDFs mark punch-less off days "absent" — holiday/weekly-off wins (mirrors admin grid)
-          if ((rec.status === "absent" || rec.status === "week-off") && holidayName) meta = ATTENDANCE_STATUS_CONFIG["public-holiday"];
-          else if (rec.status === "absent" && isOff) meta = WEEKLY_OFF_META;
-          else meta = attendanceStatusMeta(rec.status);
-        } else if (key > todayKey) meta = null;
-        else if (holidayName) meta = ATTENDANCE_STATUS_CONFIG["public-holiday"];
-        else if (isOff) meta = WEEKLY_OFF_META;
-        else meta = ATTENDANCE_STATUS_CONFIG.absent;
+        // Shared rule (lib/attendance-grid.ts): a day with no record is blank,
+        // not "Absent" — staff were seeing red A for days never imported.
+        const meta: StatusMeta | null = resolveDayCell(rec ?? null, {
+          key,
+          isOff,
+          holidayName,
+          isFuture: key > todayKey,
+        });
         cells.push({ day: d, key, weekday: date.toLocaleDateString("en-IN", { weekday: "short" }).slice(0, 2).toUpperCase(), meta, holidayName });
       }
       return cells;

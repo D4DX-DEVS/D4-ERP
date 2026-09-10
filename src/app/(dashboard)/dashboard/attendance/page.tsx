@@ -8,6 +8,7 @@ import { Attendance, AttendanceStatus, Department, Staff } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
 import { ATTENDANCE_STATUS_CONFIG, attendanceStatusMeta, normalizeAttendanceStatus, type ActiveAttendanceStatus } from "@/lib/attendance-status";
 import { pickAttendanceRecord } from "@/lib/attendance-dedupe";
+import { resolveDayCell } from "@/lib/attendance-grid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,8 +53,6 @@ const VIEWS: { id: ViewMode; label: string; icon: typeof Rows3 }[] = [
 
 const STATUS_CONFIG = ATTENDANCE_STATUS_CONFIG;
 
-const OFF_CELL = "bg-slate-100 text-slate-400";
-const HOLIDAY_CELL = "bg-rose-100 text-rose-500";
 
 const PRESENT_STATUSES: AttendanceStatus[] = ["present", "late", "half-day", "wfh", "on-duty"];
 
@@ -86,7 +85,9 @@ export default function AttendanceRegisterPage() {
 
   const now = new Date();
   const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
-  const [view, setView] = useState<ViewMode>("logs");
+  // The monthly grid is the register the org actually works from — it mirrors
+  // the printed attendance sheet — so it opens first, not the raw log stream.
+  const [view, setView] = useState<ViewMode>("grid");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ActiveAttendanceStatus>("all");
 
@@ -111,7 +112,9 @@ export default function AttendanceRegisterPage() {
     (async () => {
       try {
         const [staff, settings, depts] = await Promise.all([
-          getDocuments<Staff>("staff", [orderBy("firstName", "asc")]),
+          // Removed staff come along so their past months still read back with a
+          // name; rowsForGrid drops them unless they have records in the month.
+          getDocuments<Staff>("staff", [orderBy("firstName", "asc")], { includeDeleted: true }),
           getAppSettings(),
           getDocuments<Department>("departments"),
         ]);
@@ -250,14 +253,22 @@ export default function AttendanceRegisterPage() {
     return map;
   }, [staffList]);
 
+  // Rows for the month: the live roster, plus removed staff who actually have
+  // records in this month — their history stays visible where it happened
+  // instead of vanishing with the staff record.
+  const rosterStaff = useMemo(() => {
+    const withRecords = new Set(records.map((r) => r.staffId));
+    return staffList.filter((s) => !s.isDeleted || withRecords.has(s.id));
+  }, [staffList, records]);
+
   // Staff filtered by the search box
   const filteredStaff = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return staffList;
-    return staffList.filter((s) =>
+    if (!q) return rosterStaff;
+    return rosterStaff.filter((s) =>
       `${s.firstName} ${s.lastName} ${s.employeeCode ?? ""} ${s.designation ?? ""}`.toLowerCase().includes(q)
     );
-  }, [staffList, query]);
+  }, [rosterStaff, query]);
 
   const filteredStaffIds = useMemo(() => new Set(filteredStaff.map((s) => s.id)), [filteredStaff]);
 
@@ -275,8 +286,10 @@ export default function AttendanceRegisterPage() {
     const presentDays = records.filter((r) => PRESENT_STATUSES.includes(r.status)).length;
     const leaveDays = records.filter((r) => r.status === "leave").length;
     const lateMarks = records.filter((r) => r.isLate).length;
-    return { staff: staffList.length, presentDays, leaveDays, lateMarks };
-  }, [records, staffList.length]);
+    // Headcount is the live roster — removed staff are history, not employees.
+    const staffCount = staffList.filter((s) => !s.isDeleted).length;
+    return { staff: staffCount, presentDays, leaveDays, lateMarks };
+  }, [records, staffList]);
 
   // ── Log stream events (every check-in / check-out) ───────────────────────────
   const logEvents = useMemo(() => {
@@ -379,23 +392,14 @@ export default function AttendanceRegisterPage() {
   }, [daysInMonth, year, monthNum, weeklyOff, holidays, todayKey]);
 
   function cellFor(staff: Staff & { id: string }, meta: (typeof dayMeta)[number]) {
-    const rec = gridLookup.get(`${staff.id}_${meta.key}`);
-    if (rec) {
-      // Imported ESSL PDFs mark punch-less off days "absent" — holiday/weekly-off wins over an absent record
-      if ((rec.status === "absent" || rec.status === "week-off") && meta.holidayName) {
-        return { code: "H", label: meta.holidayName, cell: HOLIDAY_CELL, badge: HOLIDAY_CELL };
-      }
-      if (rec.status === "absent" && meta.isOff) {
-        return { code: "WO", label: "Weekly Off", cell: OFF_CELL, badge: OFF_CELL };
-      }
-      return attendanceStatusMeta(rec.status);
-    }
     const joinSec = secOf(staff.dateOfJoining);
-    if (joinSec && meta.key < dateKeyFromSec(joinSec)) return null; // before joining
-    if (meta.isFuture) return null;
-    if (meta.holidayName) return { code: "H", label: meta.holidayName, cell: HOLIDAY_CELL, badge: HOLIDAY_CELL };
-    if (meta.isOff) return { code: "WO", label: "Weekly Off", cell: OFF_CELL, badge: OFF_CELL };
-    return STATUS_CONFIG.absent;
+    const removedSec = secOf(staff.deletedAt);
+    // Shared with the staff portal and the profile widget — a day with no record
+    // reads blank, never "Absent". See lib/attendance-grid.ts.
+    return resolveDayCell(gridLookup.get(`${staff.id}_${meta.key}`) ?? null, meta, {
+      joinedKey: joinSec ? dateKeyFromSec(joinSec) : null,
+      removedKey: removedSec ? dateKeyFromSec(removedSec) : null,
+    });
   }
 
   const deptNameById = useMemo(() => new Map(departments.map((d) => [d.id, d.name])), [departments]);
@@ -785,6 +789,11 @@ export default function AttendanceRegisterPage() {
                         >
                           <div className="max-w-[116px] truncate whitespace-nowrap font-medium text-slate-950 sm:max-w-none">
                             {fullName(s)}
+                            {s.isDeleted ? (
+                              <span className="ml-1 rounded bg-slate-100 px-1 py-0.5 align-middle text-[10px] font-semibold uppercase text-slate-500">
+                                Removed
+                              </span>
+                            ) : null}
                           </div>
                           <div className="max-w-[116px] truncate text-xs text-slate-400 sm:max-w-none">
                             {s.employeeCode || s.designation}

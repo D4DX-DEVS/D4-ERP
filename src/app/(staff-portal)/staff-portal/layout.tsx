@@ -60,6 +60,7 @@ const navItems = [
   { href: "/staff-portal/work-log", label: "Work Log", icon: Pencil },
   { href: "/staff-portal/leave", label: "New Request", icon: CalendarDays },
   { href: "/staff-portal/my-leaves", label: "My Requests", icon: FileText },
+  { href: "/staff-portal/my-leave-balance", label: "Leave Balance", icon: Wallet },
   { href: "/staff-portal/calendar", label: "Calendar", icon: CalendarRange },
   { href: "/staff-portal/holidays", label: "Holidays", icon: CalendarOff },
   { href: "/staff-portal/notifications", label: "Alerts", icon: Bell },
