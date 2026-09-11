@@ -23,17 +23,22 @@ import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { exportToCSV } from "@/lib/asset-export-utils";
-import { LEAVE_BUCKETS, MONTH_LABELS, ledgerBucket } from "@/lib/leave-ledger";
+import { LEAVE_BUCKETS, MONTH_LABELS, days, ledgerBucket } from "@/lib/leave-ledger";
 import { detectSundayDuties, loadOrgLedgers, type OrgLedgerRow } from "@/lib/leave-adjustments";
 import { LeaveBalancePanel } from "@/components/leaves/leave-balance-panel";
-import { days } from "@/components/leaves/leave-balance-cards";
+import {
+  LeaveBalanceCardList,
+  LeaveBalanceCardListSkeleton,
+} from "@/components/leaves/leave-balance-cardlist";
 import {
   LeaveBalanceTable,
   LeaveBalanceTableSkeleton,
+  LeaveCodeLegend,
   groupLedgerRows,
 } from "@/components/leaves/leave-balance-table";
 import {
   ArrowLeft,
+  Briefcase,
   CalendarDays,
   CalendarSearch,
   Download,
@@ -83,6 +88,15 @@ export default function LeaveBalancesPage() {
   const [scanning, setScanning] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [openStaffId, setOpenStaffId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+
+  const toggleExpand = useCallback((staffId: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(staffId)) next.add(staffId);
+      return next;
+    });
+  }, []);
 
   const canEdit = user?.role === "admin";
 
@@ -120,7 +134,7 @@ export default function LeaveBalancesPage() {
     getDocuments<Department>("departments").then(setDepartments).catch(() => {});
   }, []);
 
-  // Ledgers follow the current page: four scoped reads per page, not per person.
+  // Ledgers follow the current page: five scoped reads per page, not per person.
   const pageKey = staffPage.map((s) => s.id).join(",");
   const loadLedgers = useCallback(async () => {
     if (staffPage.length === 0) {
@@ -155,6 +169,7 @@ export default function LeaveBalancesPage() {
   const totals = useMemo(
     () => ({
       daysTaken: rows.reduce((sum, r) => sum + r.ledger.totalDays, 0),
+      onDuty: rows.reduce((sum, r) => sum + r.ledger.onDuty.total, 0),
       sundaysWorked: rows.reduce((sum, r) => sum + r.ledger.sundays.worked, 0),
       sundaysPending: rows.reduce((sum, r) => sum + r.ledger.sundays.pending, 0),
     }),
@@ -196,27 +211,30 @@ export default function LeaveBalancesPage() {
       const exportRows = groupLedgerRows(
         matching.map((s) => allLedgers[s.id]).filter((r): r is OrgLedgerRow => Boolean(r))
       ).flatMap((section) =>
+        // Column order follows the printed sheet: identity, then the BALANCE /
+        // CURRENT / USED blocks, then the counters, then every month crossed
+        // with the four buckets and OD.
         section.rows.map((row) => {
           const base: Record<string, string | number> = {
             Group: section.title,
             Code: row.staff.employeeCode ?? "",
             Name: `${row.staff.firstName} ${row.staff.lastName}`,
             Designation: row.staff.designation ?? "",
-            Department: departments.find((d) => d.id === row.staff.departmentId)?.name ?? "",
+            Section: departments.find((d) => d.id === row.staff.departmentId)?.name ?? "",
           };
-          for (const code of LEAVE_BUCKETS) {
-            const b = ledgerBucket(row.ledger, code);
-            base[`${code} Total`] = b.entitled;
-            base[`${code} Used`] = b.used;
-            base[`${code} Balance`] = b.balance;
-          }
+          for (const code of LEAVE_BUCKETS) base[`Balance ${code}`] = ledgerBucket(row.ledger, code).balance;
+          for (const code of LEAVE_BUCKETS) base[`Current ${code}`] = ledgerBucket(row.ledger, code).entitled;
+          for (const code of LEAVE_BUCKETS) base[`Used ${code}`] = ledgerBucket(row.ledger, code).used;
+          base.OD = row.ledger.onDuty.total;
           base["Overtime Hours"] = row.ledger.overtime.hours;
-          base["Sundays Worked"] = row.ledger.sundays.worked;
-          base["Sundays Converted"] = row.ledger.sundays.converted;
+          base["Week-offs Worked"] = row.ledger.sundays.worked;
+          base["Week-offs Converted"] = row.ledger.sundays.converted;
           MONTH_LABELS.forEach((m, i) => {
-            base[m] = row.ledger.monthly[i];
+            for (const code of LEAVE_BUCKETS) base[`${m} ${code}`] = ledgerBucket(row.ledger, code).monthly[i];
+            base[`${m} OD`] = row.ledger.onDuty.monthly[i];
+            base[`${m} Total`] = row.ledger.monthly[i];
           });
-          base.Total = row.ledger.totalDays;
+          base["Total Leave Days"] = row.ledger.totalDays;
           return base;
         })
       );
@@ -303,7 +321,7 @@ export default function LeaveBalancesPage() {
         </div>
       </div>
 
-      <StatGrid cols={4}>
+      <StatGrid cols={5}>
         <StatCard title="Staff" value={totalCount} icon={Users} color="text-indigo-600" bg="bg-indigo-50" />
         <StatCard
           title="Leave days (this page)"
@@ -311,6 +329,13 @@ export default function LeaveBalancesPage() {
           icon={CalendarDays}
           color="text-cyan-600"
           bg="bg-cyan-50"
+        />
+        <StatCard
+          title="On duty (this page)"
+          value={days(totals.onDuty)}
+          icon={Briefcase}
+          color="text-violet-600"
+          bg="bg-violet-50"
         />
         <StatCard
           title="Week-offs worked"
@@ -374,7 +399,12 @@ export default function LeaveBalancesPage() {
       <Card>
         <CardContent className="p-0">
           {busy && rows.length === 0 ? (
-            <LeaveBalanceTableSkeleton rows={Math.min(pageSize, 10)} />
+            <>
+              <LeaveBalanceTableSkeleton rows={Math.min(pageSize, 10)} />
+              <div className="md:hidden">
+                <LeaveBalanceCardListSkeleton rows={Math.min(pageSize, 6)} />
+              </div>
+            </>
           ) : rows.length === 0 ? (
             <EmptyState
               title={hasFilters ? "No staff match these filters" : "No active staff"}
@@ -394,8 +424,22 @@ export default function LeaveBalancesPage() {
           ) : (
             <>
               <div className={busy ? "opacity-60 transition-opacity" : undefined}>
-                <LeaveBalanceTable sections={sections} onOpenStaff={setOpenStaffId} />
+                <LeaveBalanceTable
+                  sections={sections}
+                  onOpenStaff={setOpenStaffId}
+                  expanded={expanded}
+                  onToggleExpand={toggleExpand}
+                />
+                <div className="md:hidden">
+                  <LeaveBalanceCardList
+                    sections={sections}
+                    onOpenStaff={setOpenStaffId}
+                    expanded={expanded}
+                    onToggleExpand={toggleExpand}
+                  />
+                </div>
               </div>
+              <LeaveCodeLegend />
               <Pagination
                 page={page}
                 totalPages={totalPages}

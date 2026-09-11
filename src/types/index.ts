@@ -834,7 +834,7 @@ export interface Attendance extends BaseDocument {
   correctionId?: string;
   shiftId?: string;
   /** Source of the record — manual admin entry, self check-in, leave/holiday sync, biometric import. */
-  source?: "self" | "manual" | "leave" | "holiday" | "correction" | "biometric";
+  source?: "self" | "manual" | "leave" | "holiday" | "correction" | "biometric" | "sheet";
   /** Batch that created/updated this record via biometric import, for rollback. */
   importBatchId?: string;
   isDeleted?: boolean;

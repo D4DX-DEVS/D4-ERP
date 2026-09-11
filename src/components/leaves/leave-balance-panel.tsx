@@ -32,7 +32,7 @@ import {
   days,
 } from "@/components/leaves/leave-balance-cards";
 import { CalendarPlus, CalendarSearch, Loader2, Pencil, RotateCcw, Trash2, X, Check } from "lucide-react";
-import type { AuthUser, LeaveAdjustment, Staff, SundayDuty } from "@/types";
+import type { AuthUser, LeaveAdjustment, LeaveBucket, Staff, SundayDuty } from "@/types";
 
 interface LeaveBalancePanelProps {
   staff: Staff;
@@ -59,6 +59,12 @@ export function LeaveBalancePanel({ staff, year, canEdit, user, onYearChange }: 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [dialog, setDialog] = useState<LeaveEditMode | null>(null);
+  /** Which month cell the admin clicked, so the adjust form opens pointed at it. */
+  const [cellEdit, setCellEdit] = useState<{
+    bucket: LeaveBucket;
+    month: number;
+    current: number;
+  } | null>(null);
 
   const staffId = staff.id;
 
@@ -216,7 +222,17 @@ export function LeaveBalancePanel({ staff, year, canEdit, user, onYearChange }: 
         </p>
       )}
 
-      <LeaveMonthlyStrip ledger={ledger} />
+      <LeaveMonthlyStrip
+        ledger={ledger}
+        onEditCell={
+          canEdit
+            ? (bucket, month, current) => {
+                setCellEdit({ bucket, month, current });
+                setDialog("adjust");
+              }
+            : undefined
+        }
+      />
 
       {/* ───── Week-off duty ───── */}
       <Card>
@@ -363,10 +379,15 @@ export function LeaveBalancePanel({ staff, year, canEdit, user, onYearChange }: 
         <LeaveAdjustDialog
           open
           mode={dialog}
-          onOpenChange={(open) => !open && setDialog(null)}
+          onOpenChange={(open) => {
+            if (open) return;
+            setDialog(null);
+            setCellEdit(null);
+          }}
           staff={staff}
           year={year}
           quota={quota}
+          prefill={dialog === "adjust" ? cellEdit ?? undefined : undefined}
           user={user}
           onSaved={() => void load()}
         />

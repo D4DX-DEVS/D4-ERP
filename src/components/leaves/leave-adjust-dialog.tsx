@@ -20,7 +20,12 @@ import {
   createLeaveAdjustment,
   saveLeaveQuotaOverride,
 } from "@/lib/leave-adjustments";
-import { LEAVE_BUCKETS, LEAVE_BUCKET_LABELS } from "@/lib/leave-ledger";
+import {
+  LEAVE_BUCKETS,
+  LEAVE_BUCKET_LABELS,
+  MONTH_LABELS,
+  monthStartDateKey,
+} from "@/lib/leave-ledger";
 import type { AuthUser, LeaveAdjustmentKind, LeaveBucket, LeaveQuota, Staff } from "@/types";
 
 export type LeaveEditMode = "quota" | "adjust";
@@ -33,6 +38,12 @@ interface LeaveAdjustDialogProps {
   year: number;
   /** Quota currently in force, shown as the starting values. */
   quota: LeaveQuota;
+  /**
+   * Opens the adjust form already pointed at one bucket and month, for the
+   * month-wise grid. The balance itself is never set directly — a month's
+   * number is approved requests plus adjustments, so only a delta is posted.
+   */
+  prefill?: { bucket: LeaveBucket; month: number; current: number };
   user: AuthUser | null;
   onSaved: () => void;
 }
@@ -62,6 +73,7 @@ export function LeaveAdjustDialog({
   staff,
   year,
   quota,
+  prefill,
   user,
   onSaved,
 }: LeaveAdjustDialogProps) {
@@ -75,10 +87,12 @@ export function LeaveAdjustDialog({
   });
 
   const [adjustForm, setAdjustForm] = useState({
-    bucket: "CL" as LeaveBucket,
-    kind: "grant" as LeaveAdjustmentKind,
+    bucket: prefill?.bucket ?? ("CL" as LeaveBucket),
+    // A click on a month cell is almost always "they took a day I have not
+    // logged", so that path opens on a deduction rather than a grant.
+    kind: (prefill ? "deduction" : "grant") as LeaveAdjustmentKind,
     days: "1",
-    date: todayKey(),
+    date: prefill ? monthStartDateKey(year, prefill.month) : todayKey(),
     reason: "",
   });
 
@@ -154,7 +168,9 @@ export function LeaveAdjustDialog({
         <DialogDescription>
           {mode === "quota"
             ? `Annual allowance for ${staff.firstName} ${staff.lastName}. Overrides the quota their employment category gets.`
-            : `Posts a dated entry on ${staff.firstName} ${staff.lastName}'s ${year} ledger. The employee sees the new balance immediately.`}
+            : prefill
+              ? `${MONTH_LABELS[prefill.month]} ${year} currently shows ${prefill.current} ${prefill.bucket} day(s). This posts a correction against that month — it adds to or subtracts from the figure rather than replacing it, because part of it may come from an approved leave request.`
+              : `Posts a dated entry on ${staff.firstName} ${staff.lastName}'s ${year} ledger. The employee sees the new balance immediately.`}
         </DialogDescription>
       </DialogHeader>
 

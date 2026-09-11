@@ -1,8 +1,9 @@
 "use client";
 
 // ==================== Leave ledger data access ====================
-// Loads the three inputs the pure ledger needs (approved requests, manual
-// adjustments, week-off duty) and writes the two collections an admin edits.
+// Loads the four inputs the pure ledger needs (approved requests, manual
+// adjustments, week-off duty, on-duty attendance) and writes the two
+// collections an admin edits.
 // Every mutation is audited; the arithmetic itself lives in leave-ledger.ts.
 
 import {
@@ -20,6 +21,7 @@ import {
   allowsNegativeBalance,
   computeLeaveLedger,
   countsAsWeekOffDuty,
+  onDutyMonthsFromAttendance,
   resolveQuota,
   weekOffDutyKey,
   type LeaveLedger,
@@ -65,6 +67,30 @@ function yearRange(year: number): { start: Timestamp; end: Timestamp } {
 
 // ==================== Reads ====================
 
+/**
+ * On-duty attendance for a year, scoped to the staff asked for. Filtering on
+ * the status server-side keeps this to the OD rows alone — a year of every
+ * attendance record for a page of staff would be thousands of documents for a
+ * column that only ever shows a count.
+ */
+async function getOnDutyAttendance(
+  year: number,
+  scope: { staffId?: string; staffIds?: string[] }
+): Promise<Attendance[]> {
+  const { start, end } = yearRange(year);
+  const constraints = [
+    where("status", "==", "on-duty"),
+    where("date", ">=", start),
+    where("date", "<=", end),
+  ];
+  if (scope.staffId) constraints.push(where("staffId", "==", scope.staffId));
+  else if (scope.staffIds) {
+    if (scope.staffIds.length === 0) return [];
+    constraints.push(where("staffId", "in", scope.staffIds));
+  }
+  return getDocuments<Attendance>("attendance", constraints);
+}
+
 export async function getLeaveAdjustments(staffId: string, year: number): Promise<LeaveAdjustment[]> {
   return getDocuments<LeaveAdjustment>(ADJUSTMENTS_COLLECTION, [
     where("staffId", "==", staffId),
@@ -96,7 +122,7 @@ export async function loadStaffLedger(
   year: number,
   opts?: { staff?: Staff | null; settings?: AppSettings }
 ): Promise<StaffLedgerBundle> {
-  const [settings, staff, requests, adjustments, sundayDuties] = await Promise.all([
+  const [settings, staff, requests, adjustments, sundayDuties, onDutyRecords] = await Promise.all([
     opts?.settings ? Promise.resolve(opts.settings) : getAppSettings(),
     opts?.staff !== undefined ? Promise.resolve(opts.staff) : getDocument<Staff>("staff", staffId),
     getDocuments<StaffRequest>(REQUESTS_COLLECTION, [
@@ -105,6 +131,7 @@ export async function loadStaffLedger(
     ]),
     getLeaveAdjustments(staffId, year),
     getSundayDuties(staffId, year),
+    getOnDutyAttendance(year, { staffId }),
   ]);
 
   const policy = settings.leavePolicy as LeavePolicyConfig;
@@ -113,6 +140,7 @@ export async function loadStaffLedger(
     requests,
     adjustments,
     sundayDuties,
+    onDutyDays: onDutyMonthsFromAttendance(onDutyRecords, year),
     quota,
     year,
     allowNegative: allowsNegativeBalance(staff, policy),
@@ -127,8 +155,8 @@ export interface OrgLedgerRow {
 }
 
 /**
- * Ledgers for many staff in one pass — four collection reads total rather than
- * four per person. The reads are scoped to the ids passed in, so a paginated
+ * Ledgers for many staff in one pass — five collection reads total rather than
+ * five per person. The reads are scoped to the ids passed in, so a paginated
  * page of 20 staff never drags the whole org's request history over the wire.
  */
 export async function loadOrgLedgers(staffList: Staff[], year: number): Promise<Record<string, OrgLedgerRow>> {
@@ -136,7 +164,7 @@ export async function loadOrgLedgers(staffList: Staff[], year: number): Promise<
   if (ids.length === 0) return {};
   const forThesePeople = [where("staffId", "in", ids)];
 
-  const [settings, requests, adjustments, duties] = await Promise.all([
+  const [settings, requests, adjustments, duties, onDutyRecords] = await Promise.all([
     getAppSettings(),
     getDocuments<StaffRequest>(REQUESTS_COLLECTION, [
       ...forThesePeople,
@@ -150,6 +178,7 @@ export async function loadOrgLedgers(staffList: Staff[], year: number): Promise<
       ...forThesePeople,
       where("year", "==", year),
     ]),
+    getOnDutyAttendance(year, { staffIds: ids }),
   ]);
 
   const byStaff = <T extends { staffId: string }>(rows: T[]): Map<string, T[]> => {
@@ -165,6 +194,7 @@ export async function loadOrgLedgers(staffList: Staff[], year: number): Promise<
   const reqMap = byStaff(requests);
   const adjMap = byStaff(adjustments);
   const dutyMap = byStaff(duties);
+  const odMap = byStaff(onDutyRecords);
   const policy = settings.leavePolicy as LeavePolicyConfig;
 
   const out: Record<string, OrgLedgerRow> = {};
@@ -179,6 +209,7 @@ export async function loadOrgLedgers(staffList: Staff[], year: number): Promise<
         requests: reqMap.get(id) ?? [],
         adjustments: adjMap.get(id) ?? [],
         sundayDuties: dutyMap.get(id) ?? [],
+        onDutyDays: onDutyMonthsFromAttendance(odMap.get(id) ?? [], year),
         quota,
         year,
         allowNegative: allowsNegativeBalance(staff, policy),
