@@ -53,9 +53,15 @@ export function leaveMonthRows(ledger: LeaveLedger): MonthRow[] {
 
 interface LeaveMonthGridProps {
   ledger: LeaveLedger;
+  /**
+   * When given, every leave cell becomes a button that opens an adjustment for
+   * that bucket and month. On duty stays read-only: it is counted from
+   * attendance, so it is corrected there, not here.
+   */
+  onEditCell?: (bucket: LeaveBucket, month: number, current: number) => void;
 }
 
-export function LeaveMonthGrid({ ledger }: LeaveMonthGridProps) {
+export function LeaveMonthGrid({ ledger, onEditCell }: LeaveMonthGridProps) {
   const rows = leaveMonthRows(ledger);
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
@@ -82,16 +88,31 @@ export function LeaveMonthGrid({ ledger }: LeaveMonthGridProps) {
                 {row.label}
                 <span className="ml-1.5 font-normal text-slate-400">{row.hint}</span>
               </th>
-              {row.monthly.map((value, i) => (
-                <td
-                  key={MONTH_LABELS[i]}
-                  className={`px-2 py-2 text-center tabular-nums ${
-                    value > 0 ? `font-semibold ${row.tone}` : "text-slate-300"
-                  }`}
-                >
-                  {value > 0 ? days(value) : "·"}
-                </td>
-              ))}
+              {row.monthly.map((value, i) => {
+                const editable = Boolean(onEditCell) && row.key !== "OD";
+                const shown = value > 0 ? days(value) : "·";
+                return (
+                  <td
+                    key={MONTH_LABELS[i]}
+                    className={`p-0 text-center tabular-nums ${
+                      value > 0 ? `font-semibold ${row.tone}` : "text-slate-300"
+                    }`}
+                  >
+                    {editable ? (
+                      <button
+                        type="button"
+                        onClick={() => onEditCell?.(row.key as LeaveBucket, i, value)}
+                        title={`Adjust ${row.hint} for ${MONTH_LABELS[i]}`}
+                        className="min-h-9 w-full px-2 py-2 hover:bg-slate-100 hover:text-slate-900"
+                      >
+                        {shown}
+                      </button>
+                    ) : (
+                      <span className="block px-2 py-2">{shown}</span>
+                    )}
+                  </td>
+                );
+              })}
               <td
                 className={`border-l border-slate-300 px-3 py-2 text-center font-bold tabular-nums ${
                   row.total > 0 ? row.tone : "text-slate-300"

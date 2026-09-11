@@ -623,6 +623,19 @@ export function ledgerBucket(ledger: LeaveLedger, bucket: LeaveBucket): BucketLe
   }
 }
 
+/**
+ * The "YYYY-MM-01" key that files an adjustment against `month` (0 = January).
+ *
+ * This is the hinge of the month-wise edit: the grid hands back a zero-based
+ * column index, createLeaveAdjustment parses the key as a local date, and the
+ * ledger reads the month back off that date. All three have to agree or an
+ * edit lands in the wrong column, so the round trip is tested rather than
+ * assumed.
+ */
+export function monthStartDateKey(year: number, month: number): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}-01`;
+}
+
 /** Trims the trailing ".0" that half-day arithmetic leaves behind. */
 export function days(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);

@@ -60,7 +60,13 @@ export function LeaveBalanceCards({ ledger }: { ledger: LeaveLedger }) {
  * The month-wise block from the printed sheet: every month crossed with the
  * four buckets and the OD row, rather than one aggregate number per month.
  */
-export function LeaveMonthlyStrip({ ledger }: { ledger: LeaveLedger }) {
+export function LeaveMonthlyStrip({
+  ledger,
+  onEditCell,
+}: {
+  ledger: LeaveLedger;
+  onEditCell?: (bucket: LeaveBucket, month: number, current: number) => void;
+}) {
   return (
     <Card>
       <CardContent className="p-4">
@@ -70,7 +76,13 @@ export function LeaveMonthlyStrip({ ledger }: { ledger: LeaveLedger }) {
             {days(ledger.totalDays)} leave day(s) · {days(ledger.onDuty.total)} OD in {ledger.year}
           </span>
         </div>
-        <LeaveMonthGrid ledger={ledger} />
+        <LeaveMonthGrid ledger={ledger} onEditCell={onEditCell} />
+        {onEditCell && (
+          <p className="mt-2 text-xs text-slate-500">
+            Click any leave cell to post an adjustment for that month. On duty is counted from
+            attendance and is corrected there.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
