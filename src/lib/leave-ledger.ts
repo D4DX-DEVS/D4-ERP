@@ -15,6 +15,7 @@
 
 import { normalizeAttendanceStatus } from "@/lib/attendance-status";
 import type {
+  Attendance,
   AttendanceStatus,
   EmploymentType,
   LeaveAdjustment,
@@ -26,8 +27,11 @@ import type {
   SundayDuty,
 } from "@/types";
 
-/** Buckets that carry a balance. HD and LOP are counters, not buckets. */
-export const LEAVE_BUCKETS: LeaveBucket[] = ["CL", "ML", "EL", "FL"];
+/**
+ * Buckets that carry a balance, in the printed sheet's column order. HD and LOP
+ * are counters, not buckets.
+ */
+export const LEAVE_BUCKETS: LeaveBucket[] = ["CL", "EL", "ML", "FL"];
 
 export const LEAVE_BUCKET_LABELS: Record<LeaveBucket, string> = {
   CL: "Casual Leave",
@@ -115,6 +119,36 @@ export function countsAsWeekOffDuty(
   return WORKED_ATTENDANCE_STATUSES.has(normalizeAttendanceStatus(record.status));
 }
 
+// ==================== On duty ====================
+
+/**
+ * Jan..Dec on-duty days for one staff member, from their attendance records.
+ * Counted per calendar day, not per record, so a day imported twice by the
+ * biometric sync is still one OD — the same rule the printed sheet follows,
+ * where a day carries one mark. Legacy statuses fold first; none of them mean
+ * on duty, so only a real OD record counts.
+ */
+export function onDutyMonthsFromAttendance(
+  records: Pick<Attendance, "date" | "status" | "isDeleted">[] | null | undefined,
+  year: number
+): number[] {
+  const months = new Array(12).fill(0);
+  const seen = new Set<string>();
+  for (const r of records ?? []) {
+    if (!r || r.isDeleted || !r.status) continue;
+    if (normalizeAttendanceStatus(r.status) !== "on-duty") continue;
+    const seconds = r.date?.seconds;
+    if (!Number.isFinite(seconds) || !seconds) continue;
+    const day = new Date(seconds * 1000);
+    if (day.getFullYear() !== year) continue;
+    const key = `${day.getMonth()}-${day.getDate()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    months[day.getMonth()] += 1;
+  }
+  return months;
+}
+
 /** Dedup key for a week-off duty row: one per staff member per calendar day. */
 export function weekOffDutyKey(staffId: string, dayKey: string): string {
   return `${staffId}|${dayKey}`;
@@ -179,28 +213,37 @@ export function resolveQuota(
   };
 }
 
-/** The two groups the printed sheet splits staff into. */
-export type EmploymentGroup = "PERMANENT" | "CONTRACT";
+/** The three groups the printed sheet splits staff into. */
+export type EmploymentGroup = "PERMANENT" | "CONTRACT" | "INTERNS";
 
 export interface EmploymentGroupSection<T> {
   title: EmploymentGroup;
   rows: T[];
 }
 
+/** Which sheet heading an employment type sits under. */
+const GROUP_FOR_TYPE: Record<EmploymentType, EmploymentGroup> = {
+  permanent: "PERMANENT",
+  staff: "CONTRACT",
+  intern: "INTERNS",
+};
+
+const GROUP_ORDER: EmploymentGroup[] = ["PERMANENT", "CONTRACT", "INTERNS"];
+
 /**
- * Splits rows into the sheet's PERMANENT and CONTRACT groups. The group is
- * derived from the staff record, never a stored flag, so a legacy row with no
- * employment type still lands where employmentTypeOf() says it belongs. Empty
- * groups are dropped so a page of only interns shows one heading, not two.
+ * Splits rows into the sheet's PERMANENT, CONTRACT and INTERNS groups. The
+ * group is derived from the staff record, never a stored flag, so a legacy row
+ * with no employment type still lands where employmentTypeOf() says it belongs.
+ * Empty groups are dropped so a page of only interns shows one heading, not three.
  */
 export function groupByEmployment<T extends { staff: QuotaStaff }>(
   rows: T[]
 ): EmploymentGroupSection<T>[] {
-  const permanent = rows.filter((r) => employmentTypeOf(r.staff) === "permanent");
-  const contract = rows.filter((r) => employmentTypeOf(r.staff) !== "permanent");
   const out: EmploymentGroupSection<T>[] = [];
-  if (permanent.length) out.push({ title: "PERMANENT", rows: permanent });
-  if (contract.length) out.push({ title: "CONTRACT", rows: contract });
+  for (const title of GROUP_ORDER) {
+    const group = rows.filter((r) => GROUP_FOR_TYPE[employmentTypeOf(r.staff)] === title);
+    if (group.length) out.push({ title, rows: group });
+  }
   return out;
 }
 
@@ -265,6 +308,17 @@ export interface FlexibleLeaveSources {
   manual: number;
 }
 
+/**
+ * On-duty days, the sheet's OD marks. Not a leave bucket — the person worked,
+ * just off-site — so it is counted alongside the balances and never inside them.
+ */
+export interface OnDutySummary {
+  /** OD days in the year. */
+  total: number;
+  /** Jan..Dec OD days, for the month-wise sheet columns. */
+  monthly: number[];
+}
+
 export interface SundaySummary {
   /** Week-off days worked that are not rejected. */
   worked: number;
@@ -287,6 +341,8 @@ export interface LeaveLedger {
   /** Loss-of-pay days (a counter, not a bucket). */
   lop: number;
   sundays: SundaySummary;
+  /** On-duty days taken from attendance, shown alongside the balances. */
+  onDuty: OnDutySummary;
   /** Approved overtime for the year, shown alongside the balances. */
   overtime: OvertimeSummary;
   /** Breakdown of the flexible-leave entitlement by where it was earned. */
@@ -317,6 +373,10 @@ function zeroSundays(): SundaySummary {
 
 function zeroOvertime(): OvertimeSummary {
   return { count: 0, hours: 0, daysEarned: 0 };
+}
+
+function zeroOnDuty(): OnDutySummary {
+  return { total: 0, monthly: new Array(12).fill(0) };
 }
 
 /** Rounds to 0.5-day precision so float sums never surface as 2.9999999. */
@@ -378,6 +438,10 @@ export interface LedgerInput {
   requests: StaffRequest[];
   adjustments: LeaveAdjustment[];
   sundayDuties: SundayDuty[];
+  /** Jan..Dec on-duty days, from onDutyMonthsFromAttendance(). Optional: a
+   *  caller that has not loaded attendance gets an empty OD summary, never a
+   *  wrong one. */
+  onDutyDays?: number[];
   quota: LeaveQuota;
   year: number;
   allowNegative?: boolean;
@@ -391,6 +455,7 @@ export function computeLeaveLedger({
   requests,
   adjustments,
   sundayDuties,
+  onDutyDays,
   quota,
   year,
   allowNegative = false,
@@ -501,6 +566,14 @@ export function computeLeaveLedger({
   flSources.weekOff = round(flSources.weekOff);
   flSources.manual = round(flSources.manual);
 
+  // ── On duty ──────────────────────────────────────────────────────────
+  const onDuty = zeroOnDuty();
+  for (let m = 0; m < 12; m++) {
+    const v = onDutyDays?.[m];
+    onDuty.monthly[m] = typeof v === "number" && Number.isFinite(v) ? round(v) : 0;
+  }
+  onDuty.total = round(onDuty.monthly.reduce((a, b) => a + b, 0));
+
   const monthly = new Array(12).fill(0);
   for (const key of LEAVE_BUCKETS) {
     for (let m = 0; m < 12; m++) monthly[m] = round(monthly[m] + buckets[key].monthly[m]);
@@ -515,6 +588,7 @@ export function computeLeaveLedger({
     hd: round(hd),
     lop: round(lop),
     sundays,
+    onDuty,
     overtime,
     flSources,
     monthly,
@@ -547,6 +621,11 @@ export function ledgerBucket(ledger: LeaveLedger, bucket: LeaveBucket): BucketLe
     case "FL":
       return ledger.fl;
   }
+}
+
+/** Trims the trailing ".0" that half-day arithmetic leaves behind. */
+export function days(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
 export const MONTH_LABELS = [

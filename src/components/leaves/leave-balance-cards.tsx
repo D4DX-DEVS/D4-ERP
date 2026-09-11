@@ -5,9 +5,12 @@
 // and the employee's own view are literally the same component.
 
 import { Card, CardContent } from "@/components/ui/card";
-import { LEAVE_BUCKETS, LEAVE_BUCKET_LABELS, MONTH_LABELS, ledgerBucket } from "@/lib/leave-ledger";
+import { LEAVE_BUCKETS, LEAVE_BUCKET_LABELS, days, ledgerBucket } from "@/lib/leave-ledger";
+import { LeaveMonthGrid } from "@/components/leaves/leave-month-grid";
 import type { LeaveLedger } from "@/lib/leave-ledger";
 import type { LeaveBucket } from "@/types";
+
+export { days };
 
 const BUCKET_TONES: Record<LeaveBucket, { ring: string; value: string; chip: string }> = {
   CL: { ring: "border-cyan-200 bg-cyan-50/60", value: "text-cyan-700", chip: "bg-cyan-100 text-cyan-700" },
@@ -19,11 +22,6 @@ const BUCKET_TONES: Record<LeaveBucket, { ring: string; value: string; chip: str
     chip: "bg-orange-100 text-orange-700",
   },
 };
-
-/** Trims the trailing ".0" that half-day arithmetic leaves behind. */
-export function days(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
-}
 
 export function LeaveBalanceCards({ ledger }: { ledger: LeaveLedger }) {
   return (
@@ -58,39 +56,21 @@ export function LeaveBalanceCards({ ledger }: { ledger: LeaveLedger }) {
   );
 }
 
+/**
+ * The month-wise block from the printed sheet: every month crossed with the
+ * four buckets and the OD row, rather than one aggregate number per month.
+ */
 export function LeaveMonthlyStrip({ ledger }: { ledger: LeaveLedger }) {
   return (
     <Card>
       <CardContent className="p-4">
         <div className="mb-3 flex items-baseline justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-900">Month by month</h3>
-          <span className="text-xs text-slate-500">{days(ledger.totalDays)} day(s) in {ledger.year}</span>
+          <span className="text-xs text-slate-500">
+            {days(ledger.totalDays)} leave day(s) · {days(ledger.onDuty.total)} OD in {ledger.year}
+          </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse text-center text-xs">
-            <thead>
-              <tr>
-                {MONTH_LABELS.map((m) => (
-                  <th key={m} className="border-b border-slate-200 pb-2 font-medium text-slate-500">
-                    {m}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                {ledger.monthly.map((value, i) => (
-                  <td
-                    key={MONTH_LABELS[i]}
-                    className={`pt-2 font-semibold ${value > 0 ? "text-slate-900" : "text-slate-300"}`}
-                  >
-                    {value > 0 ? days(value) : "—"}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <LeaveMonthGrid ledger={ledger} />
       </CardContent>
     </Card>
   );
@@ -125,13 +105,14 @@ export function LeaveSummaryLine({ ledger }: { ledger: LeaveLedger }) {
   const { overtime, flSources, sundays } = ledger;
   const items = [
     { label: "Leave taken", value: `${days(ledger.totalDays)} day(s)` },
+    { label: "On duty", value: `${days(ledger.onDuty.total)} day(s)` },
     { label: "Overtime", value: `${overtime.count} approved · ${days(overtime.hours)}h` },
     { label: "Earned as flexible leave", value: `${days(overtime.daysEarned)} day(s)` },
     { label: "Week-offs worked", value: `${sundays.worked} (${sundays.converted} converted)` },
   ];
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {items.map((item) => (
           <div key={item.label}>
             <p className="text-xs text-slate-500">{item.label}</p>

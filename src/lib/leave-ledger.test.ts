@@ -9,6 +9,7 @@ import {
   employmentTypeOf,
   groupByEmployment,
   ledgerBucket,
+  onDutyMonthsFromAttendance,
   overtimeCompOffDays,
   overtimeHours,
   quotaForBucket,
@@ -18,7 +19,7 @@ import {
   type LeavePolicyConfig,
 } from "@/lib/leave-ledger";
 import { Timestamp } from "@/lib/firestore";
-import type { LeaveAdjustment, StaffRequest, SundayDuty } from "@/types";
+import type { Attendance, LeaveAdjustment, StaffRequest, SundayDuty } from "@/types";
 
 const YEAR = 2026;
 
@@ -92,12 +93,14 @@ function ledgerOf(input: {
   requests?: StaffRequest[];
   adjustments?: LeaveAdjustment[];
   sundayDuties?: SundayDuty[];
+  onDutyDays?: number[];
   allowNegative?: boolean;
 }) {
   return computeLeaveLedger({
     requests: input.requests ?? [],
     adjustments: input.adjustments ?? [],
     sundayDuties: input.sundayDuties ?? [],
+    onDutyDays: input.onDutyDays,
     quota: { casualLeave: 12, sickLeave: 12, earnedLeave: 15 },
     year: YEAR,
     allowNegative: input.allowNegative ?? false,
@@ -531,18 +534,19 @@ describe("computeLeaveLedger — where flexible leave came from", () => {
   });
 });
 
-describe("groupByEmployment (the sheet's two groups)", () => {
+describe("groupByEmployment (the sheet's three groups)", () => {
   const row = (id: string, staff: Record<string, unknown>) => ({ id, staff });
 
-  it("splits permanent from contract staff and interns", () => {
+  it("splits permanent, contract and interns the way the printed sheet does", () => {
     const sections = groupByEmployment([
       row("a", { employmentType: "permanent" }),
       row("b", { employmentType: "staff" }),
       row("c", { employmentType: "intern" }),
     ]);
-    expect(sections.map((s) => s.title)).toEqual(["PERMANENT", "CONTRACT"]);
+    expect(sections.map((s) => s.title)).toEqual(["PERMANENT", "CONTRACT", "INTERNS"]);
     expect(sections[0].rows.map((r) => r.id)).toEqual(["a"]);
-    expect(sections[1].rows.map((r) => r.id)).toEqual(["b", "c"]);
+    expect(sections[1].rows.map((r) => r.id)).toEqual(["b"]);
+    expect(sections[2].rows.map((r) => r.id)).toEqual(["c"]);
   });
 
   it("puts a legacy row with no employment type under PERMANENT", () => {
@@ -558,7 +562,7 @@ describe("groupByEmployment (the sheet's two groups)", () => {
 
   it("drops a group that has no rows", () => {
     expect(groupByEmployment([row("a", { employmentType: "intern" })]).map((s) => s.title)).toEqual([
-      "CONTRACT",
+      "INTERNS",
     ]);
   });
 
@@ -572,5 +576,78 @@ describe("groupByEmployment (the sheet's two groups)", () => {
       row("a", { employmentType: "permanent" }),
     ]);
     expect(sections[0].rows.map((r) => r.id)).toEqual(["b", "a"]);
+  });
+});
+
+// ==================== On duty ====================
+
+function attendance(date: string, status: Attendance["status"], extra: Partial<Attendance> = {}): Attendance {
+  return { staffId: "s1", date: ts(date), status, isLate: false, isEarlyDeparture: false, ...extra } as Attendance;
+}
+
+describe("onDutyMonthsFromAttendance (the sheet's OD marks)", () => {
+  it("counts one day per on-duty record, bucketed by month", () => {
+    const months = onDutyMonthsFromAttendance(
+      [attendance("2026-01-05", "on-duty"), attendance("2026-01-09", "on-duty"), attendance("2026-03-02", "on-duty")],
+      YEAR
+    );
+    expect(months[0]).toBe(2);
+    expect(months[2]).toBe(1);
+    expect(months.reduce((a, b) => a + b, 0)).toBe(3);
+  });
+
+  it("ignores every status that is not on duty", () => {
+    const months = onDutyMonthsFromAttendance(
+      [attendance("2026-01-05", "present"), attendance("2026-01-06", "absent"), attendance("2026-01-07", "week-off")],
+      YEAR
+    );
+    expect(months.reduce((a, b) => a + b, 0)).toBe(0);
+  });
+
+  it("ignores soft-deleted records", () => {
+    const months = onDutyMonthsFromAttendance([attendance("2026-01-05", "on-duty", { isDeleted: true })], YEAR);
+    expect(months[0]).toBe(0);
+  });
+
+  it("drops records from another year", () => {
+    const months = onDutyMonthsFromAttendance([attendance("2025-01-05", "on-duty")], YEAR);
+    expect(months.reduce((a, b) => a + b, 0)).toBe(0);
+  });
+
+  it("counts one day per calendar day even if the day was imported twice", () => {
+    const months = onDutyMonthsFromAttendance(
+      [attendance("2026-02-10", "on-duty"), attendance("2026-02-10", "on-duty")],
+      YEAR
+    );
+    expect(months[1]).toBe(1);
+  });
+
+  it("returns twelve zeroes for no records", () => {
+    expect(onDutyMonthsFromAttendance([], YEAR)).toEqual(new Array(12).fill(0));
+  });
+});
+
+describe("computeLeaveLedger — on-duty summary", () => {
+  it("carries the month-wise on-duty days and their total", () => {
+    const onDutyDays = new Array(12).fill(0);
+    onDutyDays[0] = 3;
+    onDutyDays[6] = 2;
+    const ledger = ledgerOf({ onDutyDays });
+    expect(ledger.onDuty.monthly[0]).toBe(3);
+    expect(ledger.onDuty.monthly[6]).toBe(2);
+    expect(ledger.onDuty.total).toBe(5);
+  });
+
+  it("defaults to an empty on-duty summary when attendance was not loaded", () => {
+    const ledger = ledgerOf({});
+    expect(ledger.onDuty).toEqual({ total: 0, monthly: new Array(12).fill(0) });
+  });
+
+  it("never lets on-duty days leak into the leave totals", () => {
+    const onDutyDays = new Array(12).fill(0);
+    onDutyDays[0] = 4;
+    const ledger = ledgerOf({ onDutyDays });
+    expect(ledger.totalDays).toBe(0);
+    expect(ledger.monthly[0]).toBe(0);
   });
 });
