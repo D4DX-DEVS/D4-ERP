@@ -44,13 +44,6 @@ const DETAILS = process.argv.includes("--details");
 const log = (...a) => console.log(...a);
 const dayKey = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-const BUCKET_FOR_STATUS = {
-  "casual-leave": "CL",
-  "earned-leave": "EL",
-  "medical-leave": "ML",
-  "full-leave": "FL",
-};
-
 async function fetchTab(gid) {
   const res = await fetch(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`);
   if (!res.ok) throw new Error(`Sheet ${gid} returned ${res.status}`);
