@@ -24,6 +24,7 @@ import type {
   LeaveType,
   Staff,
   StaffRequest,
+  StaffRequestType,
   SundayDuty,
 } from "@/types";
 
@@ -39,6 +40,17 @@ export const LEAVE_BUCKET_LABELS: Record<LeaveBucket, string> = {
   EL: "Earned Leave",
   FL: "Flexible Leave",
 };
+
+/**
+ * Request types that draw down a leave balance. Long leave is ordinary leave
+ * over a longer range — it consumes the same buckets and follows the same
+ * dept-head then admin approval. Anything reading "days of leave" off a request
+ * must ask here, so the ledger, the request form and the staff dashboard cannot
+ * disagree about whether a long leave counts.
+ */
+export function consumesLeaveBalance(type?: StaffRequestType | string | null): boolean {
+  return type === "leave" || type === "long-leave";
+}
 
 /**
  * Stored leave-type codes are legacy: "SL" holds Medical Leave and "CO" holds
@@ -328,6 +340,8 @@ export interface SundaySummary {
   pending: number;
   /** Flexible-leave days credited by those conversions. */
   creditedDays: number;
+  /** Jan..Dec days worked, so a month-scoped view can count them. */
+  monthlyWorked: number[];
 }
 
 export interface LeaveLedger {
@@ -368,7 +382,7 @@ function emptyBucket(quota = 0): BucketLedger {
 }
 
 function zeroSundays(): SundaySummary {
-  return { worked: 0, converted: 0, pending: 0, creditedDays: 0 };
+  return { worked: 0, converted: 0, pending: 0, creditedDays: 0, monthlyWorked: new Array(12).fill(0) };
 }
 
 function zeroOvertime(): OvertimeSummary {
@@ -392,6 +406,32 @@ function yearOf(seconds?: number): number | null {
 function monthOf(seconds?: number): number | null {
   if (!Number.isFinite(seconds) || !seconds) return null;
   return new Date(seconds * 1000).getMonth();
+}
+
+/** The month of a timestamp, but only when it falls inside `year`. */
+function monthInYear(seconds: number | undefined, year: number): number | null {
+  if (!Number.isFinite(seconds) || !seconds) return null;
+  const date = new Date(seconds * 1000);
+  return date.getFullYear() === year ? date.getMonth() : null;
+}
+
+/**
+ * Which month column a row booked against `year` belongs in.
+ *
+ * Every row that counts toward a yearly total has to land in some month, or
+ * the month-wise split stops adding up to it and a running balance read off
+ * `monthly` never reconciles with the yearly one. So the effective date is
+ * preferred, the recorded date is the fallback, and January is the floor —
+ * a date missing or belonging to another year loses the row a column, never
+ * the whole figure.
+ */
+function monthColumn(
+  row: { date?: { seconds?: number } | null; createdAt?: { seconds?: number } | null },
+  year: number
+): number {
+  return (
+    monthInYear(row.date?.seconds, year) ?? monthInYear(row.createdAt?.seconds, year) ?? 0
+  );
 }
 
 /**
@@ -487,7 +527,7 @@ export function computeLeaveLedger({
       continue;
     }
 
-    if (r.type !== "leave" && r.type !== "long-leave") continue;
+    if (!consumesLeaveBalance(r.type)) continue;
 
     const months = splitRequestDaysByMonth(r, year);
     const daysInYear = months.reduce((a, b) => a + b, 0);
@@ -528,8 +568,7 @@ export function computeLeaveLedger({
     } else {
       const used = -days;
       buckets[bucket].debited += used;
-      const m = monthOf(a.date?.seconds);
-      if (m !== null) buckets[bucket].monthly[m] += used;
+      buckets[bucket].monthly[monthColumn(a, year)] += used;
     }
   }
 
@@ -552,6 +591,7 @@ export function computeLeaveLedger({
     if (d.year !== year) continue;
     if (d.status === "rejected") continue;
     sundays.worked += 1;
+    sundays.monthlyWorked[monthColumn(d, year)] += 1;
     if (d.status === "converted") {
       sundays.converted += 1;
       sundays.creditedDays += typeof d.creditDays === "number" ? d.creditDays : 1;

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocument, Timestamp } from "@/lib/firestore";
 import { createStaffRequest, getStaffLeaveLedger, LEAVE_TYPE_LABELS, REQUEST_TYPE_LABELS } from "@/lib/requests";
-import { ledgerBucket, type LeaveLedger } from "@/lib/leave-ledger";
+import { consumesLeaveBalance, ledgerBucket, type LeaveLedger } from "@/lib/leave-ledger";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -76,14 +76,16 @@ export default function NewRequestPage() {
   });
 
   const requestedDays = (() => {
-    if (form.type !== "leave" || !form.startDate) return 0;
+    if (!consumesLeaveBalance(form.type) || !form.startDate) return 0;
     if (form.isHalfDay) return 0.5;
     const start = new Date(form.startDate);
     const end = new Date(form.endDate || form.startDate);
     return Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1);
   })();
+  // A long leave spans a period, so the half-day option never applies to it.
+  const isLongLeave = form.type === "long-leave";
   const exceedsClCap = form.leaveType === "CL" && requestedDays > CL_MAX_WITHOUT_APPROVAL;
-  const isCoLeave = (form.type === "leave" || form.type === "long-leave") && form.leaveType === "CO";
+  const isCoLeave = consumesLeaveBalance(form.type) && form.leaveType === "CO";
   const exceedsCoBalance = isCoLeave && balances !== null && requestedDays > balances.fl.balance;
 
   const handleAddAttachment = (url: string, meta?: { name: string; size: number }) => {
@@ -117,7 +119,7 @@ export default function NewRequestPage() {
       await createStaffRequest(
         {
           type: form.type,
-          ...(form.type === "leave" || form.type === "long-leave"
+          ...(consumesLeaveBalance(form.type)
             ? { leaveType: form.leaveType as StaffRequest["leaveType"], isHalfDay: form.isHalfDay, session: form.isHalfDay ? form.session : undefined }
             : {}),
           ...(form.type === "overtime" ? { startTime: form.startTime, endTime: form.endTime } : {}),
@@ -168,7 +170,10 @@ export default function NewRequestPage() {
               <Label>Request Type *</Label>
               <Select
                 value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value as FormType })}
+                onChange={(e) => {
+                  const type = e.target.value as FormType;
+                  setForm({ ...form, type, isHalfDay: type === "long-leave" ? false : form.isHalfDay });
+                }}
                 options={typeOptions}
               />
             </div>
@@ -183,7 +188,7 @@ export default function NewRequestPage() {
             </div>
 
             {/* Leave-specific fields */}
-            {(form.type === "leave" || form.type === "long-leave") && (
+            {consumesLeaveBalance(form.type) && (
               <>
                 <div className="space-y-2">
                   <Label>Leave Type *</Label>
@@ -219,33 +224,35 @@ export default function NewRequestPage() {
                   )}
                 </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <label className="relative inline-flex cursor-pointer items-center">
-                      <input
-                        type="checkbox"
-                        className="peer sr-only"
-                        checked={form.isHalfDay}
-                        onChange={(e) => setForm({ ...form, isHalfDay: e.target.checked })}
-                      />
-                      <div className="h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-indigo-600 peer-checked:after:translate-x-full" />
-                    </label>
-                    <Label className="cursor-pointer text-sm">Half Day Leave</Label>
-                  </div>
-                  {form.isHalfDay && (
-                    <div className="space-y-2">
-                      <Label>Session *</Label>
-                      <Select
-                        value={form.session || "first-half"}
-                        onChange={(e) => setForm({ ...form, session: e.target.value as "first-half" | "second-half" })}
-                        options={[
-                          { value: "first-half", label: "First Half (Morning)" },
-                          { value: "second-half", label: "Second Half (Afternoon)" },
-                        ]}
-                      />
+                {!isLongLeave && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <label className="relative inline-flex cursor-pointer items-center">
+                        <input
+                          type="checkbox"
+                          className="peer sr-only"
+                          checked={form.isHalfDay}
+                          onChange={(e) => setForm({ ...form, isHalfDay: e.target.checked })}
+                        />
+                        <div className="h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-all peer-checked:bg-indigo-600 peer-checked:after:translate-x-full" />
+                      </label>
+                      <Label className="cursor-pointer text-sm">Half Day Leave</Label>
                     </div>
-                  )}
-                </div>
+                    {form.isHalfDay && (
+                      <div className="space-y-2">
+                        <Label>Session *</Label>
+                        <Select
+                          value={form.session || "first-half"}
+                          onChange={(e) => setForm({ ...form, session: e.target.value as "first-half" | "second-half" })}
+                          options={[
+                            { value: "first-half", label: "First Half (Morning)" },
+                            { value: "second-half", label: "Second Half (Afternoon)" },
+                          ]}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Leave dates: the day(s) you'll actually be away. */}
                 <div className="space-y-4">

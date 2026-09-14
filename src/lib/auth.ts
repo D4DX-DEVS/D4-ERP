@@ -9,9 +9,56 @@ import type { NextRequest } from "next/server";
 import { AUTH_COOKIE } from "./auth-cookie";
 
 export { AUTH_COOKIE };
-const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days (browser)
-/** Long-lived session for installed PWA — behaves like a native app's one-time login. */
-export const PWA_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 90; // 90 days
+
+const DAY_SECONDS = 60 * 60 * 24;
+const DEFAULT_BROWSER_TTL_DAYS = 7;
+const DEFAULT_PWA_TTL_DAYS = 90;
+/**
+ * Browsers clamp a cookie's lifetime to 400 days (RFC 6265bis), silently. Going
+ * past it would sign a JWT that outlives the cookie carrying it — the session
+ * would look valid on paper and already be gone on the device.
+ */
+const MAX_TTL_DAYS = 400;
+
+/** Read a lifetime in whole days from the environment, falling back on garbage. */
+function ttlDaysFromEnv(name: string, defaultDays: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw === "") return defaultDays * DAY_SECONDS;
+  const days = Number(raw);
+  if (!Number.isFinite(days) || days <= 0) {
+    console.warn(`[auth] ${name}="${raw}" is not a positive number of days — using ${defaultDays}.`);
+    return defaultDays * DAY_SECONDS;
+  }
+  // Floor to whole seconds: a fractional Max-Age is invalid and browsers drop
+  // the cookie outright rather than rounding it.
+  return Math.floor(Math.min(days, MAX_TTL_DAYS) * DAY_SECONDS);
+}
+
+/** Session lifetime for a plain browser tab. Override with SESSION_TTL_DAYS. */
+export function browserTtlSeconds(): number {
+  return ttlDaysFromEnv("SESSION_TTL_DAYS", DEFAULT_BROWSER_TTL_DAYS);
+}
+
+/**
+ * Session lifetime for an installed PWA — behaves like a native app's one-time
+ * login. Override with PWA_SESSION_TTL_DAYS.
+ */
+export function pwaTtlSeconds(): number {
+  return ttlDaysFromEnv("PWA_SESSION_TTL_DAYS", DEFAULT_PWA_TTL_DAYS);
+}
+
+/**
+ * Employment statuses that deny a session — checked by both login routes when
+ * handing one out and by /api/auth/me on every renewal, so an account that is
+ * shut off cannot ride out the remaining cookie window. Deliberately excludes
+ * on-leave / notice-period / relieved: those people still use the app.
+ */
+export const SESSION_DENIED_STATUSES: ReadonlySet<string> = new Set(["terminated", "suspended"]);
+
+/** True when this staff document must not hold a live session. */
+export function isSessionDeniedStatus(status: unknown): boolean {
+  return typeof status === "string" && SESSION_DENIED_STATUSES.has(status);
+}
 
 /** Resolve the JWT secret, failing loudly if it is not configured. */
 function getJwtSecret(): string {
@@ -33,7 +80,7 @@ export interface TokenPayload {
   features?: string[];
 }
 
-export function signToken(payload: TokenPayload, ttlSeconds: number = TOKEN_TTL_SECONDS): string {
+export function signToken(payload: TokenPayload, ttlSeconds: number = browserTtlSeconds()): string {
   return jwt.sign(payload, getJwtSecret(), { expiresIn: ttlSeconds });
 }
 
@@ -61,8 +108,8 @@ export function verifyTokenString(token: string | undefined | null): TokenPayloa
 
 /**
  * Lifetime the given token was originally issued with, or null if it is not a
- * valid session. Lets a renewal keep the issuing context's window (7 days for a
- * browser, 90 for an installed PWA) without stashing that choice anywhere.
+ * valid session. Lets a renewal keep the issuing context's window (the browser
+ * or PWA lifetime it was signed with) without stashing that choice anywhere.
  */
 export function tokenTtlSeconds(token: string | undefined | null): number | null {
   if (!token) return null;
@@ -84,7 +131,8 @@ export function tokenTtlSeconds(token: string | undefined | null): number | null
  */
 export function renewalTtlSeconds(issuedTtl: number | null, isPwa: boolean): number | null {
   if (issuedTtl === null) return null;
-  if (isPwa && issuedTtl < PWA_TOKEN_TTL_SECONDS) return PWA_TOKEN_TTL_SECONDS;
+  const pwaTtl = pwaTtlSeconds();
+  if (isPwa && issuedTtl < pwaTtl) return pwaTtl;
   return issuedTtl;
 }
 
@@ -103,7 +151,7 @@ export function getAuthUser(req: NextRequest): TokenPayload | null {
 }
 
 /** Options for the httpOnly session cookie. */
-export function sessionCookieOptions(maxAge: number = TOKEN_TTL_SECONDS) {
+export function sessionCookieOptions(maxAge: number = browserTtlSeconds()) {
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

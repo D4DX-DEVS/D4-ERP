@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getModel } from "@/models";
 import bcrypt from "bcryptjs";
-import { signToken, sessionCookieOptions, AUTH_COOKIE, PWA_TOKEN_TTL_SECONDS } from "@/lib/auth";
+import {
+  signToken,
+  sessionCookieOptions,
+  AUTH_COOKIE,
+  pwaTtlSeconds,
+  isSessionDeniedStatus,
+} from "@/lib/auth";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
@@ -44,6 +50,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // The staff portal already refuses these, and /api/auth/me now ends a live
+    // session for them — without the same gate here a terminated admin could log
+    // in successfully and be thrown out again on the very next request.
+    if (isSessionDeniedStatus(staff.status)) {
+      return NextResponse.json(
+        {
+          error:
+            staff.status === "terminated"
+              ? "Your account has been terminated"
+              : "Your account is currently suspended",
+        },
+        { status: 403 }
+      );
+    }
+
     const passwordHash = staff.password as string | undefined;
     if (!passwordHash) {
       return NextResponse.json(
@@ -63,7 +84,7 @@ export async function POST(req: NextRequest) {
       : [];
     // Installed PWA gets a long-lived session (one-time login, like a native app).
     const isPwa = body?.pwa === true;
-    const ttl = isPwa ? PWA_TOKEN_TTL_SECONDS : undefined;
+    const ttl = isPwa ? pwaTtlSeconds() : undefined;
     const token = signToken(
       {
         uid,

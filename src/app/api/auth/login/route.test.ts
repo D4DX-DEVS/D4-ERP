@@ -104,6 +104,74 @@ describe("admin login route", () => {
     );
   });
 
+  it("403s a terminated admin before checking the password", async () => {
+    // Previously this route had no status gate at all: a terminated admin could
+    // log in and only be thrown out on the next request.
+    findOne.mockReturnValue(
+      leanResolving({ _id: "1", role: "admin", email: "a@d4.in", password: "$hash", status: "terminated" })
+    );
+    const res = await POST(makeRequest({ email: "a@d4.in", password: "right" }));
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatch(/terminated/i);
+    expect(compare).not.toHaveBeenCalled();
+  });
+
+  it("403s a suspended admin", async () => {
+    findOne.mockReturnValue(
+      leanResolving({ _id: "1", role: "admin", email: "a@d4.in", password: "$hash", status: "suspended" })
+    );
+    const res = await POST(makeRequest({ email: "a@d4.in", password: "right" }));
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatch(/suspended/i);
+  });
+
+  it("lets non-active-but-employed staff sign in", async () => {
+    for (const status of ["active", "on-leave", "notice-period", undefined]) {
+      findOne.mockReturnValue(
+        leanResolving({ _id: "1", role: "admin", email: "a@d4.in", password: "$hash", status })
+      );
+      compare.mockResolvedValue(true);
+      const res = await POST(makeRequest({ email: "a@d4.in", password: "right" }));
+      expect(res.status, String(status)).toBe(200);
+    }
+  });
+
+  it("issues the configured PWA window end to end", async () => {
+    // Proves the .env knob reaches the actual Set-Cookie header, not just the
+    // helper: TTLs are read from process.env at call time, so no reimport needed.
+    process.env.PWA_SESSION_TTL_DAYS = "365";
+    try {
+      findOne.mockReturnValue(
+        leanResolving({ _id: "abc", role: "admin", email: "a@d4.in", password: "$hash" })
+      );
+      compare.mockResolvedValue(true);
+      const res = await POST(makeRequest({ email: "a@d4.in", password: "right", pwa: true }));
+      const setCookie = res.headers.get("set-cookie") || "";
+      expect(setCookie).toContain(`Max-Age=${365 * 60 * 60 * 24}`);
+    } finally {
+      delete process.env.PWA_SESSION_TTL_DAYS;
+    }
+  });
+
+  it("falls back to the 90-day PWA default when nothing is configured", async () => {
+    delete process.env.PWA_SESSION_TTL_DAYS;
+    findOne.mockReturnValue(
+      leanResolving({ _id: "abc", role: "admin", email: "a@d4.in", password: "$hash" })
+    );
+    compare.mockResolvedValue(true);
+    const res = await POST(makeRequest({ email: "a@d4.in", password: "right", pwa: true }));
+    expect(res.headers.get("set-cookie") || "").toContain(`Max-Age=${90 * 60 * 60 * 24}`);
+  });
+
+  it("gives a plain browser login the short window, not the PWA one", async () => {
+    findOne.mockReturnValue(
+      leanResolving({ _id: "abc", role: "admin", email: "a@d4.in", password: "$hash" })
+    );
+    compare.mockResolvedValue(true);
+    const res = await POST(makeRequest({ email: "a@d4.in", password: "right" }));
+    expect(res.headers.get("set-cookie") || "").toContain(`Max-Age=${7 * 60 * 60 * 24}`);
+  });
+
   it("rate-limits repeated attempts from the same IP", async () => {
     findOne.mockReturnValue(leanResolving(null));
     const ip = "9.9.9.9";

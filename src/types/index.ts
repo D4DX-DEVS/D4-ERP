@@ -139,6 +139,14 @@ export interface ContractHistory extends BaseDocument {
   contractType: ContractType;
   reason: string;
   extendedOn: Timestamp;
+  /**
+   * Terms the renewal carried. Optional because rows written before renewals
+   * revised pay and the job description have none of it.
+   */
+  previousSalary?: number;
+  newSalary?: number;
+  previousJobDescription?: string;
+  newJobDescription?: string;
 }
 
 // ==================== Employee Documents ====================

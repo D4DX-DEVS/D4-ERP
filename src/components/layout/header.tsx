@@ -16,6 +16,10 @@ const SECTION_TITLES: Record<string, { title: string; description: string }> = {
   "/dashboard/staff": { title: "Staff directory", description: "Monitor team members, access, and assignments." },
   "/dashboard/clients": { title: "Clients", description: "Keep account relationships and follow-ups organized." },
   "/dashboard/leaves": { title: "Leave requests", description: "Handle approvals and staffing visibility." },
+  "/dashboard/leaves/balances": {
+    title: "Leave balances",
+    description: "Quota, days used and remaining balance for every staff member.",
+  },
   "/dashboard/attendance": { title: "Attendance", description: "Watch punctuality and working-hour trends." },
   "/dashboard/payroll": { title: "Payroll", description: "Review payouts, schedules, and salary records." },
   "/dashboard/tasks": { title: "Task board", description: "Coordinate deliverables across departments." },

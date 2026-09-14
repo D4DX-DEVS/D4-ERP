@@ -6,14 +6,20 @@
 // question people actually open this page with: how many days has this person
 // got left. Everything else is a tap away — the row opens the same ledger
 // drawer the table opens, and the chevron opens the same month-wise grid.
+//
+// Given a `month`, the big number becomes the balance at that month's close and
+// the tile says what was taken during it, so the card and the desktop table
+// answer the same two questions in the same order.
 
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   LEAVE_BUCKETS,
   LEAVE_BUCKET_LABELS,
+  MONTH_LABELS,
   days,
   ledgerBucket,
 } from "@/lib/leave-ledger";
+import { clampMonth, monthViewRow } from "@/lib/leave-month-view";
 import { LeaveMonthGrid } from "@/components/leaves/leave-month-grid";
 import type { LeaveBalanceSection } from "@/components/leaves/leave-balance-table";
 
@@ -22,6 +28,8 @@ interface LeaveBalanceCardListProps {
   onOpenStaff: (staffId: string) => void;
   expanded: ReadonlySet<string>;
   onToggleExpand: (staffId: string) => void;
+  /** A month index to scope the card to, or null for the whole year. */
+  month?: number | null;
 }
 
 export function LeaveBalanceCardList({
@@ -29,7 +37,9 @@ export function LeaveBalanceCardList({
   onOpenStaff,
   expanded,
   onToggleExpand,
+  month = null,
 }: LeaveBalanceCardListProps) {
+  const monthLabel = month === null ? null : MONTH_LABELS[clampMonth(month)];
   return (
     <div className="divide-y divide-slate-100">
       {sections.map((section) => (
@@ -42,6 +52,7 @@ export function LeaveBalanceCardList({
               const staffId = row.staff.id!;
               const isOpen = expanded.has(staffId);
               const name = `${row.staff.firstName} ${row.staff.lastName}`;
+              const view = month === null ? null : monthViewRow(row.ledger, month);
               return (
                 <li key={staffId} className="px-4 py-3">
                   <div className="flex items-start gap-2">
@@ -75,7 +86,9 @@ export function LeaveBalanceCardList({
                   <div className="mt-2 grid grid-cols-4 overflow-hidden rounded-xl border border-slate-200">
                     {LEAVE_BUCKETS.map((code, i) => {
                       const bucket = ledgerBucket(row.ledger, code);
-                      const over = bucket.balance < 0 ? -bucket.balance : 0;
+                      const remaining = view ? view.buckets[code].remaining : bucket.balance;
+                      const taken = view ? view.buckets[code].taken : 0;
+                      const over = remaining < 0 ? -remaining : 0;
                       return (
                         <div
                           key={code}
@@ -93,33 +106,50 @@ export function LeaveBalanceCardList({
                             className={`text-base font-bold tabular-nums ${
                               over
                                 ? "text-rose-600"
-                                : bucket.balance > 0
+                                : remaining > 0
                                   ? "text-slate-900"
                                   : "text-slate-300"
                             }`}
                           >
-                            {days(bucket.balance)}
+                            {days(remaining)}
                           </p>
                           {over > 0 && (
                             <p className="text-[10px] font-semibold uppercase text-rose-500">over</p>
+                          )}
+                          {taken > 0 && (
+                            <p className="text-[10px] font-semibold tabular-nums text-orange-600">
+                              −{days(taken)}
+                            </p>
                           )}
                         </div>
                       );
                     })}
                   </div>
                   <p className="mt-1.5 text-xs text-slate-500">
-                    Remaining · {days(row.ledger.totalDays)} used ·{" "}
-                    <span className="font-medium text-violet-700">
-                      {days(row.ledger.onDuty.total)} on duty
-                    </span>
-                    {row.ledger.sundays.worked > 0
-                      ? ` · ${row.ledger.sundays.worked} week-off worked`
-                      : ""}
+                    {view && monthLabel ? (
+                      <>
+                        Remaining at {monthLabel} end · {days(view.total)} taken in {monthLabel} ·{" "}
+                        <span className="font-medium text-violet-700">
+                          {days(view.onDuty)} on duty
+                        </span>
+                        {view.weekOffWorked > 0 ? ` · ${view.weekOffWorked} week-off worked` : ""}
+                      </>
+                    ) : (
+                      <>
+                        Remaining · {days(row.ledger.totalDays)} used ·{" "}
+                        <span className="font-medium text-violet-700">
+                          {days(row.ledger.onDuty.total)} on duty
+                        </span>
+                        {row.ledger.sundays.worked > 0
+                          ? ` · ${row.ledger.sundays.worked} week-off worked`
+                          : ""}
+                      </>
+                    )}
                   </p>
 
                   {isOpen && (
                     <div className="mt-3">
-                      <LeaveMonthGrid ledger={row.ledger} />
+                      <LeaveMonthGrid ledger={row.ledger} highlightMonth={month} />
                     </div>
                   )}
                 </li>
