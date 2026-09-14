@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState, PageLoader } from "@/components/ui/loading";
 import { Pagination } from "@/components/ui/pagination";
-import { getStatusColor, formatCurrency, generateEmployeeCode } from "@/lib/utils";
+import { getStatusColor, generateEmployeeCode } from "@/lib/utils";
 import { CONTRACT_DURATIONS, computeContractEndDate, getContractStatus, getDaysRemaining } from "@/lib/contract-utils";
 import { sanitizeForRole } from "@/lib/access-editor";
 import { AccessEditor } from "@/components/staff/access-editor";
@@ -435,7 +435,6 @@ export default function StaffPage() {
                   <TableHead className="hidden sm:table-cell">Code</TableHead>
                   <TableHead className="hidden md:table-cell">Department</TableHead>
                   <TableHead className="hidden lg:table-cell">Designation</TableHead>
-                  <TableHead>Salary</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -473,7 +472,6 @@ export default function StaffPage() {
                     <TableCell className="hidden font-mono text-sm sm:table-cell">{staff.employeeCode}</TableCell>
                     <TableCell className="hidden md:table-cell">{getDeptName(staff.departmentId)}</TableCell>
                     <TableCell className="hidden lg:table-cell">{staff.designation || "—"}</TableCell>
-                    <TableCell>{formatCurrency(staff.currentSalary || staff.baseSalary)}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusColor(staff.status)}>
                         {staff.status}

@@ -34,6 +34,7 @@ export default function LeavesPage() {
   const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
   const [stats, setStats] = useState<Record<string, number>>({ pending: 0, approved: 0, rejected: 0, cancelled: 0 });
   const [lookupsLoading, setLookupsLoading] = useState(true);
+  const [pageSize, setPageSize] = useState(20);
 
   // Filters
   const [filterStatus, setFilterStatus] = useState("pending");
@@ -111,7 +112,7 @@ export default function LeavesPage() {
     prevPage,
     refresh,
   } = usePagination<StaffRequest>("leaveRequests", {
-    pageSize: 15,
+    pageSize,
     orderByField: "createdAt",
     orderDirection: "desc",
     constraints,
@@ -890,7 +891,7 @@ export default function LeavesPage() {
               );
             })}
           </div>
-          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={15} />
+          <Pagination page={page} totalPages={totalPages} totalCount={totalCount} hasNext={hasNext} hasPrev={hasPrev} onNext={nextPage} onPrev={prevPage} pageSize={pageSize} onPageSizeChange={setPageSize} />
 
           {/* Remarks Dialog */}
           {remarksRequestId && remarksDecision && (

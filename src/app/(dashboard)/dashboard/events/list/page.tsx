@@ -240,6 +240,17 @@ export default function EventsListPage() {
   // event straight in the edit dialog. The doc is fetched by id so it works
   // even when the event is not on the current page of the list.
   const searchParams = useSearchParams();
+
+  // Deep link "?new=1" (from the events dashboard) opens the create dialog
+  // right away, then strips the param so a refresh does not reopen it.
+  useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    handleOpenCreate();
+    router.replace(`${base}/events/list`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   useEffect(() => {
     const id = searchParams.get("edit");
     if (!id) return;

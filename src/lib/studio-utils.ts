@@ -80,3 +80,22 @@ export function findConflict(
   }
   return null;
 }
+
+/**
+ * Badge classes per booking status. Shared by the bookings table, the booking
+ * detail dialog and the reports status panel so the colours never drift.
+ */
+export const STUDIO_STATUS_BADGE: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-700",
+  approved: "bg-emerald-100 text-emerald-700",
+  confirmed: "bg-blue-100 text-blue-700",
+  "in-progress": "bg-amber-100 text-amber-700",
+  completed: "bg-green-100 text-green-700",
+  rejected: "bg-red-100 text-red-700",
+  cancelled: "bg-slate-100 text-slate-700",
+};
+
+/** Badge classes for a status, falling back to a neutral grey. */
+export function studioStatusBadge(status: string): string {
+  return STUDIO_STATUS_BADGE[status] ?? "bg-slate-100 text-slate-700";
+}

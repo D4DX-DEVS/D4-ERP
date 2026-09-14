@@ -18,7 +18,12 @@ import { getStatusColor, formatCurrency, formatDate, getInitials } from "@/lib/u
 import { AccessTab } from "@/components/staff/access-tab";
 import { LeaveBalancePanel } from "@/components/leaves/leave-balance-panel";
 import { getContractStatus, getDaysRemaining, computeContractEndDate, CONTRACT_DURATIONS, type ContractStatus } from "@/lib/contract-utils";
-import { planContractRenewal, validateContractRenewal } from "@/lib/contract-renewal";
+import {
+  defaultRenewalStart,
+  parseDateInput,
+  planContractRenewal,
+  validateContractRenewal,
+} from "@/lib/contract-renewal";
 import { useAuthStore } from "@/store/auth-store";
 import { useRoleGuard } from "@/hooks/use-role-guard";
 import { LetterGenerator } from "@/components/staff/letter-generator";
@@ -102,6 +107,7 @@ export default function StaffProfilePage() {
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
   const [contractForm, setContractForm] = useState({
     contractType: "permanent" as ContractType,
+    startDate: "",
     customEndDate: "",
     reason: "",
     newSalary: 0,
@@ -243,7 +249,8 @@ export default function StaffProfilePage() {
 
     const renewal = {
       contractType: contractForm.contractType,
-      customEndDate: contractForm.customEndDate ? new Date(contractForm.customEndDate) : null,
+      startDate: parseDateInput(contractForm.startDate),
+      customEndDate: parseDateInput(contractForm.customEndDate),
       reason: contractForm.reason,
       newSalary: contractForm.newSalary,
       jobDescription: contractForm.jobDescription,
@@ -258,6 +265,9 @@ export default function StaffProfilePage() {
     try {
       const plan = planContractRenewal(
         {
+          contractStartDate: staff.contractStartDate
+            ? new Date(staff.contractStartDate.seconds * 1000)
+            : null,
           contractEndDate: staff.contractEndDate ? new Date(staff.contractEndDate.seconds * 1000) : null,
           salary: staff.currentSalary,
           jobDescription: staff.jobDescription || "",
@@ -267,9 +277,13 @@ export default function StaffProfilePage() {
 
       await createSubDocument("staff", staffId, "contractHistory", {
         ...plan.contractEntry,
+        previousStartDate: plan.contractEntry.previousStartDate
+          ? Timestamp.fromDate(plan.contractEntry.previousStartDate)
+          : null,
         previousEndDate: plan.contractEntry.previousEndDate
           ? Timestamp.fromDate(plan.contractEntry.previousEndDate)
           : null,
+        newStartDate: Timestamp.fromDate(plan.contractEntry.newStartDate),
         newEndDate: plan.contractEntry.newEndDate ? Timestamp.fromDate(plan.contractEntry.newEndDate) : null,
         extendedOn: Timestamp.fromDate(plan.contractEntry.extendedOn),
       });
@@ -286,6 +300,7 @@ export default function StaffProfilePage() {
 
       await updateDocument("staff", staffId, {
         ...plan.staffUpdate,
+        contractStartDate: Timestamp.fromDate(plan.staffUpdate.contractStartDate),
         contractEndDate: plan.staffUpdate.contractEndDate
           ? Timestamp.fromDate(plan.staffUpdate.contractEndDate)
           : null,
@@ -308,20 +323,32 @@ export default function StaffProfilePage() {
 
   const canEditFeatures = currentUser?.role === "admin";
 
+  const contractStartDate = staff.contractStartDate
+    ? new Date(staff.contractStartDate.seconds * 1000)
+    : null;
   const contractEndDate = staff.contractEndDate ? new Date(staff.contractEndDate.seconds * 1000) : null;
+  // Staff who have never been renewed carry no stored start — their current term
+  // began the day they joined.
+  const contractPeriodStart =
+    contractStartDate ?? (staff.dateOfJoining ? new Date(staff.dateOfJoining.seconds * 1000) : null);
   const contractStatus = getContractStatus(contractEndDate);
   const contractDaysRemaining = getDaysRemaining(contractEndDate);
   const contractTypeLabel = CONTRACT_DURATIONS.find((d) => d.value === staff.contractType)?.label || "Permanent";
-  // What the dialog's current duration would produce, shown live under the field.
-  const contractPreviewEnd = computeContractEndDate(
-    new Date(),
-    contractForm.contractType,
-    contractForm.customEndDate ? new Date(contractForm.customEndDate) : undefined
-  );
-  // Renewals open on the terms already on file — same duration, same pay, same JD.
+  // The period the dialog's current start + duration would produce, shown live.
+  const contractPreviewStart = parseDateInput(contractForm.startDate);
+  const contractPreviewEnd = contractPreviewStart
+    ? computeContractEndDate(
+        contractPreviewStart,
+        contractForm.contractType,
+        parseDateInput(contractForm.customEndDate) ?? undefined
+      )
+    : null;
+  // Renewals open on the terms already on file — same duration, same pay, same JD —
+  // starting the day the current term runs out so the two periods join up.
   const openContractDialog = () => {
     setContractForm({
       contractType: staff.contractType || "permanent",
+      startDate: defaultRenewalStart(contractEndDate).toLocaleDateString("en-CA"),
       customEndDate: "",
       reason: "",
       newSalary: staff.currentSalary,
@@ -493,6 +520,9 @@ export default function StaffProfilePage() {
               <CardContent className={`pt-6 rounded-b-lg ${CONTRACT_STATUS_COLORS[contractStatus]}`}>
                 <p className="text-xs uppercase tracking-wider opacity-70 mb-1">Contract</p>
                 <p className="text-lg font-bold">{contractTypeLabel}</p>
+                {contractPeriodStart && (
+                  <p className="text-sm mt-1">From {formatDate(contractPeriodStart)}</p>
+                )}
                 {contractEndDate ? (
                   <>
                     <p className="text-sm mt-1">Ends {formatDate(contractEndDate)}</p>
@@ -661,8 +691,13 @@ export default function StaffProfilePage() {
                         </p>
                       </div>
                       <div className="text-right text-xs text-gray-500">
-                        <p>{h.previousEndDate ? formatDate(new Date(h.previousEndDate.seconds * 1000)) : "—"}</p>
-                        <p>→ {h.newEndDate ? formatDate(new Date(h.newEndDate.seconds * 1000)) : "Permanent"}</p>
+                        <p>
+                          {h.newStartDate ? `${formatDate(new Date(h.newStartDate.seconds * 1000))} → ` : "→ "}
+                          {h.newEndDate ? formatDate(new Date(h.newEndDate.seconds * 1000)) : "Permanent"}
+                        </p>
+                        <p className="text-gray-400">
+                          was {h.previousEndDate ? formatDate(new Date(h.previousEndDate.seconds * 1000)) : "—"}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -881,11 +916,20 @@ export default function StaffProfilePage() {
         <form onSubmit={handleExtendContract} className="space-y-4">
           <div className="rounded-lg bg-gray-50 p-3 text-sm">
             <p className="text-gray-500">Current</p>
-            <p className="font-medium">
-              {contractTypeLabel}
-              {contractEndDate ? ` — ends ${formatDate(contractEndDate)}` : ""}
+            <p className="font-medium">{contractTypeLabel}</p>
+            <p className="text-gray-500">
+              {contractPeriodStart ? formatDate(contractPeriodStart) : "—"} →{" "}
+              {contractEndDate ? formatDate(contractEndDate) : "No end date"}
             </p>
             <p className="mt-1 text-gray-500">Salary {formatCurrency(staff.currentSalary)}</p>
+          </div>
+          <div className="space-y-2">
+            <Label>New Contract Starts *</Label>
+            <DatePicker
+              value={contractForm.startDate}
+              onChange={(e) => setContractForm({ ...contractForm, startDate: e.target.value })}
+              required
+            />
           </div>
           <div className="space-y-2">
             <Label>New Contract Duration *</Label>
@@ -901,17 +945,19 @@ export default function StaffProfilePage() {
               <DatePicker
                 value={contractForm.customEndDate}
                 onChange={(e) => setContractForm({ ...contractForm, customEndDate: e.target.value })}
-                min={new Date().toISOString().split("T")[0]}
+                min={contractForm.startDate || new Date().toLocaleDateString("en-CA")}
                 required
               />
             </div>
           )}
           <p className="text-xs text-gray-500">
-            {contractForm.contractType === "custom" && !contractForm.customEndDate
-              ? "Pick an end date above"
-              : contractPreviewEnd
-                ? `Renewing today runs the contract to ${formatDate(contractPreviewEnd)}`
-                : "Permanent — no end date"}
+            {!contractPreviewStart
+              ? "Pick a start date above"
+              : contractForm.contractType === "custom" && !contractPreviewEnd
+                ? "Pick an end date above"
+                : `New term: ${formatDate(contractPreviewStart)} → ${
+                    contractPreviewEnd ? formatDate(contractPreviewEnd) : "no end date (permanent)"
+                  }`}
           </p>
           <div className="space-y-2">
             <Label>New Salary *</Label>

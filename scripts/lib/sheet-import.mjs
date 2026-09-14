@@ -65,6 +65,10 @@ export const CODE_MAP = {
  * alone therefore drops current employees or files their days on a colleague.
  * These are the rows where the name is the reliable key; everyone else still
  * matches on code.
+ *
+ * The two `-EX` codes are the other half of that: where a code was handed on,
+ * the person still working here keeps it and the person who left takes the
+ * suffixed one, so both histories exist and neither lands on the other.
  */
 export const NAME_TO_CODE = {
   "IRFAN KAVANUR": "D4O-104",
@@ -79,25 +83,88 @@ export const NAME_TO_CODE = {
   RAHEEF: "D4P-104",
   "RAHEEF M": "D4P-104",
   "ALI HASSAN": "D4D-102",
+  // Left, and their code went to somebody still here.
+  "BILAL M SHAREEF": "D4A-101-EX",
+  "MUHAMMAD HISHAM": "D4P-104-EX",
+  "MUHAMMED HISHAM": "D4P-104-EX",
 };
 
 /**
- * People who have left. The sheet keeps their rows for the months they worked,
- * and Bilal's code was handed on to Shahid Ameen T, so importing him would file
- * a departed employee's days on a current one. Confirmed with the team rather
- * than inferred from the roster.
+ * Sheet band -> ERP employment category. The bands are the black rows the grids
+ * are grouped under, and the only statement the sheet makes about how somebody
+ * is employed.
  */
-export const RESIGNED = new Set([
-  "BILAL M SHAREEF",
-  "MUHAMMAD HISHAM",
-  "MUHAMMED HISHAM",
-  "JUMAIL P P",
-  "SHAMEER BABU",
-  "ASLAM ALI S",
-  "ADIL FAYAS",
-  "SHAFEEH K",
-  "BADEEU ZAMAN",
-]);
+export function employmentTypeForSection(section) {
+  switch (clean(section).toUpperCase()) {
+    case "PERMANENT":
+      return "permanent";
+    case "INTERNS":
+      return "intern";
+    default:
+      return "staff";
+  }
+}
+
+/** "BILAL M SHAREEF" -> "Bilal M Shareef", the casing the roster is written in. */
+export function titleCase(name) {
+  return clean(name)
+    .toLowerCase()
+    .replace(/(^|[\s.-])([a-z])/g, (_, sep, ch) => sep + ch.toUpperCase());
+}
+
+/** First token is the first name, everything after it the last — as the roster stores it. */
+export function splitName(name) {
+  const parts = titleCase(name).split(" ").filter(Boolean);
+  return { firstName: parts[0] ?? "", lastName: parts.slice(1).join(" ") };
+}
+
+/**
+ * A staff record for somebody the sheet carries but the ERP has never held.
+ *
+ * They are created relieved and soft-deleted: that keeps them out of every
+ * roster, dropdown and payroll listing while their attendance and leave history
+ * stays attached to a real record, which is the whole reason for creating them.
+ * `dateOfJoining` is the first day of the first month they appear on — an
+ * approximation, and reported as one by the importer.
+ */
+export function buildFormerStaffDoc({
+  name,
+  code,
+  section,
+  designation = "",
+  firstMonth,
+  lastDay,
+  departmentId = "",
+  companyId = "",
+  year = YEAR,
+  now = new Date(),
+}) {
+  const { firstName, lastName } = splitName(name);
+  return {
+    employeeCode: code,
+    firstName,
+    lastName,
+    email: "",
+    mobile: "",
+    address: { street: "", city: "", state: "", pincode: "" },
+    gender: "Male",
+    dateOfJoining: midnight(year, firstMonth, 1),
+    departmentId,
+    companyId,
+    designation: designation ? titleCase(designation) : "",
+    baseSalary: 0,
+    currentSalary: 0,
+    role: "staff",
+    status: "relieved",
+    isActive: false,
+    isDeleted: true,
+    deletedAt: lastDay ?? null,
+    employmentType: employmentTypeForSection(section),
+    importTag: IMPORT_TAG,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
 
 export const BUCKETS = ["CL", "EL", "ML", "FL"];
 
@@ -160,12 +227,13 @@ export function isSectionRow(sheetName) {
 /**
  * Which ERP employee code a sheet row belongs to, and why.
  *
- * Returns `{ kind }` of "resigned" (skip, they have left), "alias" (the name is
- * the trustworthy key for this row) or "code" (the ordinary path).
+ * Returns `{ kind }` of "alias" (the name is the trustworthy key for this row)
+ * or "code" (the ordinary path). Nobody is dropped here: a code with no ERP
+ * staff behind it belongs to somebody who has left, and the importer creates
+ * them a relieved record rather than throwing their months away.
  */
 export function resolveSheetRow(code, sheetName) {
   const who = nameKey(sheetName);
-  if (RESIGNED.has(who)) return { kind: "resigned", who };
   const aliased = NAME_TO_CODE[who];
   if (aliased) return { kind: "alias", who, code: aliased };
   const key = codeOf(code);
@@ -201,57 +269,66 @@ export function readBalanceRow(row) {
 }
 
 /**
- * Turns one balance row into the quota override and the ledger adjustments that
- * reproduce it.
+ * Turns one balance row into the entitlement the ERP should start the year with
+ * — and nothing else.
  *
- * The three blocks do not always agree — the sheet is hand-kept, so a month
- * block can fall short of the USED column and a BALANCE can be overridden by
- * hand. USED is trusted over the months, and BALANCE over both, with the
- * shortfall posted so the ERP lands on exactly the number the team reads.
+ * Leave taken is deliberately not read off this row. The balance tab is
+ * hand-kept: its AUG..DEC month cells are empty while the August grid is full,
+ * and for Jan..Jul its USED column falls short of the grids for about half the
+ * roster. The daily grids are the record that gets marked as the month runs, so
+ * they are what the ERP counts usage from, day by day, through the ordinary
+ * attendance reconcile. Posting the USED column here as well would deduct every
+ * one of those days twice.
  *
- * Flexible leave has no quota: it is earned, so it is credited with whatever
- * the sheet says the person ended up entitled to.
+ * What the sheet alone can say is what each person was entitled to: the CURRENT
+ * allocation for CL/EL/ML, and — for flexible leave, which is earned rather than
+ * granted — the days they ended up holding. `HW` marks stop appearing on the
+ * grids after May even though FL keeps being taken, so FL cannot be derived and
+ * is credited as an opening balance.
  */
-export function buildBalanceAdjustments(row, base, year = YEAR) {
-  const { current, used, balance, monthly, total, monthsReconcile } = readBalanceRow(row);
+export function buildEntitlement(row, base, year = YEAR) {
+  const sheet = readBalanceRow(row);
+  const { current, used, balance } = sheet;
   const quota = { casualLeave: current.CL, sickLeave: current.ML, earnedLeave: current.EL };
   const adjustments = [];
-  const add = (bucket, kind, days, date, reason) =>
-    adjustments.push({ ...base, bucket, kind, days: round2(days), date, year, reason });
 
-  for (const bucket of BUCKETS) {
-    if (bucket === "FL") {
-      const earned = round2(used.FL + balance.FL);
-      if (earned > 0) {
-        add("FL", "opening", earned, midnight(year, 1, 1), "Flexible leave earned, migrated from attendance sheet");
-      }
-    }
-
-    // USED is the number the team reads and the one BALANCE is struck from, so
-    // it always wins. The month cells are only used when they agree with it.
-    if (monthsReconcile[bucket]) {
-      for (let m = 0; m < 12; m++) {
-        const v = monthly[bucket][m];
-        if (v <= 0) continue;
-        const monthName = new Date(year, m, 1).toLocaleString("en", { month: "long" });
-        add(bucket, "deduction", -v, midnight(year, m + 1, 1), `${bucket} taken in ${monthName}, migrated from attendance sheet`);
-      }
-    } else if (used[bucket] > 0) {
-      add(
-        bucket,
-        "deduction",
-        -used[bucket],
-        midnight(year, 1, 1),
-        `${bucket} used, month breakdown on the sheet does not add up to it`
-      );
-    }
-
-    const entitled = bucket === "FL" ? round2(used.FL + balance.FL) : current[bucket];
-    const drift = round2(balance[bucket] - (entitled - used[bucket]));
-    if (drift !== 0) {
-      add(bucket, "correction", drift, midnight(year, 1, 1), `Reconciled to the sheet ${bucket} balance of ${balance[bucket]}`);
-    }
+  const earnedFl = round2(used.FL + balance.FL);
+  if (earnedFl > 0) {
+    adjustments.push({
+      ...base,
+      bucket: "FL",
+      kind: "opening",
+      days: earnedFl,
+      date: midnight(year, 1, 1),
+      year,
+      reason: "Flexible leave earned, migrated from attendance sheet",
+    });
   }
 
-  return { quota, adjustments, sheet: { current, used, balance, monthly, total, monthsReconcile } };
+  return { quota, adjustments, sheet };
+}
+
+/**
+ * What the ERP now says against what the sheet says, for one person.
+ *
+ * The two are expected to differ — that is the point of migrating off a
+ * hand-kept tab — so this is what gets printed for the team to read rather than
+ * anything the import acts on. `erpUsed` is the count of leave days the grids
+ * actually carry; `sheet.used` is what the balance tab claims.
+ */
+export function buildVariance(sheet, erpUsed) {
+  return BUCKETS.map((bucket) => {
+    const entitled = bucket === "FL" ? round2(sheet.used.FL + sheet.balance.FL) : sheet.current[bucket];
+    const used = round2(erpUsed[bucket] ?? 0);
+    const erpBalance = round2(entitled - used);
+    return {
+      bucket,
+      entitled,
+      sheetUsed: sheet.used[bucket],
+      erpUsed: used,
+      sheetBalance: sheet.balance[bucket],
+      erpBalance,
+      diff: round2(erpBalance - sheet.balance[bucket]),
+    };
+  });
 }

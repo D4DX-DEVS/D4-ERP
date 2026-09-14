@@ -348,6 +348,19 @@ export async function saveLeaveQuotaOverride(
 
 // ==================== Week-off duty ====================
 
+/**
+ * Week-off duty detection starts here, not at the start of the year.
+ *
+ * January to August 2026 came in from the attendance sheet, and that sheet's
+ * flexible leave was migrated as an opening credit — it had to be, because the
+ * grids stop marking worked holidays (`HW`) after May even though FL keeps being
+ * taken, so the days cannot be counted. Scanning those months would raise a
+ * hundred pending duties for the same period and credit the same FL a second
+ * time the moment an admin converted them. From September the ERP earns FL the
+ * ordinary way, off its own register.
+ */
+export const WEEK_OFF_SCAN_START = new Date(2026, 8, 1);
+
 export interface DetectSundayDutiesInput {
   staffList: Staff[];
   year: number;
@@ -398,6 +411,7 @@ export async function detectSundayDuties(
 
     const day = atMidnight(new Date((record.date?.seconds ?? 0) * 1000));
     if (Number.isNaN(day.getTime()) || day.getFullYear() !== year) continue;
+    if (day < WEEK_OFF_SCAN_START) continue; // migrated months: FL came in as an opening credit
 
     if (!countsAsWeekOffDuty(record, isNonWorkingDay(settings, day, staff.companyId))) continue;
 
