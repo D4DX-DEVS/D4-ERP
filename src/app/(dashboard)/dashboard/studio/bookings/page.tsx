@@ -29,7 +29,10 @@ import { Pagination } from "@/components/ui/pagination";
 import { Dialog, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/loading";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { findConflict, isValidTimeRange } from "@/lib/studio-utils";
+import { findConflict, isValidTimeRange, studioStatusBadge } from "@/lib/studio-utils";
+import { buildCompletionPayload, formatCrewNames, sanitizeCrewMember } from "@/lib/studio-crew";
+import { BookingCompleteDialog } from "@/components/studio/booking-complete-dialog";
+import { BookingViewDialog } from "@/components/studio/booking-view-dialog";
 import {
   itemBusyReason,
   type AvailabilityContext,
@@ -43,12 +46,14 @@ import type {
   StudioBooking,
   Studio,
   Client,
+  Staff,
   StudioBookingStatus,
   StudioBookingType,
   Asset,
   StudioEquipment,
   AssetMovement,
   AssetEvent,
+  BookingCrewMember,
 } from "@/types";
 
 const BOOKING_TYPES: { value: StudioBookingType; label: string }[] = [
@@ -59,16 +64,6 @@ const BOOKING_TYPES: { value: StudioBookingType; label: string }[] = [
   { value: "meeting", label: "Meeting" },
   { value: "other", label: "Other" },
 ];
-
-const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-700",
-  approved: "bg-emerald-100 text-emerald-700",
-  confirmed: "bg-blue-100 text-blue-700",
-  "in-progress": "bg-yellow-100 text-yellow-700",
-  completed: "bg-green-100 text-green-700",
-  rejected: "bg-red-100 text-red-700",
-  cancelled: "bg-slate-100 text-slate-700",
-};
 
 interface BookingForm {
   studioId: string;
@@ -112,7 +107,12 @@ export default function StudioBookingsPage() {
   const [equipment, setEquipment] = useState<(StudioEquipment & { id: string })[]>([]);
   const [outMovements, setOutMovements] = useState<(AssetMovement & { id: string })[]>([]);
   const [assetEvents, setAssetEvents] = useState<(AssetEvent & { id: string })[]>([]);
+  const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Booking being completed (crew dialog) and booking being viewed (detail dialog).
+  const [completeTarget, setCompleteTarget] = useState<(StudioBooking & { id: string }) | null>(null);
+  const [completing, setCompleting] = useState(false);
+  const [viewTarget, setViewTarget] = useState<(StudioBooking & { id: string }) | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<BookingForm>(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -153,13 +153,14 @@ export default function StudioBookingsPage() {
 
   const fetchData = async () => {
     try {
-      const [s, c, a, eq, mv, ev] = await Promise.all([
+      const [s, c, a, eq, mv, ev, st] = await Promise.all([
         getDocuments<Studio>("studios", []),
         getDocuments<Client>("clients", []),
         getDocuments<Asset>("assets", [where("isActive", "!=", false)]),
         getDocuments<StudioEquipment>("studio_equipment", []),
         getDocuments<AssetMovement>("asset-movements", [where("status", "==", "OUT")]),
         getDocuments<AssetEvent>("asset-events", []),
+        getDocuments<Staff>("staff", [where("isActive", "==", true)]),
       ]);
       setStudios(s);
       setClients(c);
@@ -167,6 +168,7 @@ export default function StudioBookingsPage() {
       setEquipment(eq);
       setOutMovements(mv);
       setAssetEvents(ev);
+      setStaffList(st);
     } catch (error) {
       console.error("Failed to fetch data:", error);
     }
@@ -373,7 +375,11 @@ export default function StudioBookingsPage() {
     }
   };
 
-  const handleStatusChange = async (bookingId: string, newStatus: StudioBookingStatus) => {
+  const handleStatusChange = async (
+    bookingId: string,
+    newStatus: StudioBookingStatus,
+    extra: Record<string, unknown> = {}
+  ) => {
     if (!user) return;
     const booking = bookings.find((b) => b.id === bookingId);
     if (!booking) return;
@@ -385,6 +391,7 @@ export default function StudioBookingsPage() {
         ...(newStatus === "approved" || newStatus === "confirmed"
           ? { approvedBy: user.uid, approvedByName: `${user.firstName} ${user.lastName}`, approvalDate: Timestamp.now() }
           : {}),
+        ...extra,
         updatedAt: Timestamp.now(),
       });
       // Notify the booking requestor
@@ -399,10 +406,31 @@ export default function StudioBookingsPage() {
       }
       toast("success", `Booking ${newStatus}`);
       refresh();
+      return true;
     } catch (error) {
       console.error("Status change failed:", error);
       toast("error", "Failed to update status");
+      return false;
     }
+  };
+
+  /**
+   * Completion carries the crew captured in the dialog. Both crew fields are
+   * optional, so an empty submit still completes the booking — it just writes
+   * a `completion` block with only the audit fields.
+   */
+  const handleCompleteConfirm = async (crew: {
+    shooters: BookingCrewMember[];
+    cardHolder: BookingCrewMember | null;
+  }) => {
+    if (!completeTarget || !user) return;
+    setCompleting(true);
+    const ok = await handleStatusChange(completeTarget.id, "completed", {
+      completion: buildCompletionPayload({ shooters: crew.shooters, cardHolder: crew.cardHolder, user }),
+    });
+    setCompleting(false);
+    // Keep the dialog open on failure so the entered crew is not lost.
+    if (ok) setCompleteTarget(null);
   };
 
   const handleOpenEdit = (b: StudioBooking) => {
@@ -485,21 +513,37 @@ export default function StudioBookingsPage() {
           </TableHeader>
           <TableBody>
             {filteredBookings.map((b) => (
-              <TableRow key={b.id}>
-                <TableCell className="font-semibold text-slate-900">{b.studioName || b.studioId}</TableCell>
+              <TableRow
+                key={b.id}
+                className="cursor-pointer"
+                onClick={() => setViewTarget(b as StudioBooking & { id: string })}
+              >
+                <TableCell className="font-semibold text-slate-900">
+                  {studios.find((s) => s.id === b.studioId)?.name || b.studioName || b.studioId}
+                </TableCell>
                 <TableCell>
                   <p className="text-xs">{b.date}</p>
                   <p className="text-xs text-slate-400">{b.startTime} – {b.endTime}</p>
                 </TableCell>
-                <TableCell>{b.purpose}</TableCell>
+                <TableCell>
+                  <p>{b.purpose}</p>
+                  {b.completion && (
+                    <p className="mt-0.5 text-xs text-slate-400">
+                      Shot by {formatCrewNames(b.completion.shooters)}
+                      {sanitizeCrewMember(b.completion.cardHolder)
+                        ? ` · card with ${sanitizeCrewMember(b.completion.cardHolder)!.name}`
+                        : ""}
+                    </p>
+                  )}
+                </TableCell>
                 <TableCell>{b.clientName || "—"}</TableCell>
                 <TableCell>
-                  <Badge variant={STATUS_COLORS[b.status]} className="capitalize">
+                  <Badge variant={studioStatusBadge(b.status)} className="capitalize">
                     {b.status}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-1.5">
+                  <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                     {b.status === "pending" && (
                       <>
                         <Button size="sm" variant="outline" className="h-8 px-3 text-emerald-700 border-emerald-200" onClick={() => handleStatusChange(b.id!, "confirmed")}>
@@ -511,7 +555,12 @@ export default function StudioBookingsPage() {
                       </>
                     )}
                     {b.status === "confirmed" && (
-                      <Button size="sm" variant="outline" className="h-8 px-3 text-green-700 border-green-200" onClick={() => handleStatusChange(b.id!, "completed")}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-3 text-green-700 border-green-200"
+                        onClick={() => setCompleteTarget(b as StudioBooking & { id: string })}
+                      >
                         Complete
                       </Button>
                     )}
@@ -736,6 +785,27 @@ export default function StudioBookingsPage() {
           </Button>
         </div>
       </Dialog>
+
+      <BookingViewDialog
+        booking={viewTarget}
+        onClose={() => setViewTarget(null)}
+        onEdit={(b) => {
+          setViewTarget(null);
+          handleOpenEdit(b);
+        }}
+        onDelete={(id) => {
+          setViewTarget(null);
+          setDeleteId(id);
+        }}
+      />
+
+      <BookingCompleteDialog
+        booking={completeTarget}
+        staff={staffList}
+        saving={completing}
+        onClose={() => setCompleteTarget(null)}
+        onConfirm={handleCompleteConfirm}
+      />
 
       <ConfirmDialog
         open={!!deleteId}

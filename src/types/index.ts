@@ -100,6 +100,8 @@ export interface Staff extends BaseDocument {
   jobDescription?: string;
   employmentType?: EmploymentType;
   contractType?: ContractType;
+  /** First day of the current contract term — written whenever a renewal is recorded. */
+  contractStartDate?: Timestamp | null;
   contractEndDate?: Timestamp | null;
   /** Extra feature keys granted to this employee beyond their role defaults. */
   grantedFeatures?: string[];
@@ -140,9 +142,12 @@ export interface ContractHistory extends BaseDocument {
   reason: string;
   extendedOn: Timestamp;
   /**
-   * Terms the renewal carried. Optional because rows written before renewals
-   * revised pay and the job description have none of it.
+   * The period and terms the renewal carried. Optional because rows written
+   * before renewals spanned a start date, pay and the job description have
+   * none of it.
    */
+  previousStartDate?: Timestamp | null;
+  newStartDate?: Timestamp | null;
   previousSalary?: number;
   newSalary?: number;
   previousJobDescription?: string;
@@ -636,6 +641,29 @@ export interface Studio extends BaseDocument {
   isActive: boolean;
 }
 
+/**
+ * A person credited on a completed studio booking. `staffId` is absent for
+ * externals (freelancers, client-side crew) entered as free text.
+ */
+export interface BookingCrewMember {
+  staffId?: string;
+  name: string;
+}
+
+/**
+ * Crew captured when a booking is marked completed. Every crew field is
+ * optional -- the dialog can be submitted empty.
+ */
+export interface StudioBookingCompletion {
+  /** Who shot the job. */
+  shooters?: BookingCrewMember[];
+  /** Who walked away holding the memory card. */
+  cardHolder?: BookingCrewMember;
+  completedAt: Timestamp;
+  completedBy: string;
+  completedByName?: string;
+}
+
 export interface StudioBooking extends BaseDocument {
   /** Auto-numbered booking ID (STB-001). */
   bookingId?: string;
@@ -680,6 +708,8 @@ export interface StudioBooking extends BaseDocument {
   approvedByName?: string;
   approvalDate?: Timestamp;
   rejectionReason?: string;
+  /** Crew recorded at completion time. Written only by the Complete action. */
+  completion?: StudioBookingCompletion;
 }
 
 // ==================== Asset ====================
