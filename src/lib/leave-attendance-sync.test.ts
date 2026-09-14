@@ -407,3 +407,83 @@ describe("requestDayKeys", () => {
     expect(requestDayKeys(undated)).toEqual([]);
   });
 });
+
+describe("planAttendanceReconcile — more than one row for the same day", () => {
+  // The writers disagree about midnight: the ESSL import stores UTC midnight,
+  // the app stores server-local, so one calendar day can hold two live rows.
+  const utcMidnight = (date: string) => Timestamp.fromDate(new Date(`${date}T00:00:00Z`));
+
+  it("deducts the day once, however many rows stand behind it", () => {
+    const plan = planAttendanceReconcile({
+      rows: [
+        row("a1", "2026-09-07", "casual-leave"),
+        row("a2", "2026-09-07", "casual-leave", { date: utcMidnight("2026-09-07"), source: "sheet" }),
+      ],
+      adjustments: [],
+    });
+    expect(plan.create).toHaveLength(1);
+  });
+
+  it("follows the row the register shows — a correction outranks an import", () => {
+    const plan = planAttendanceReconcile({
+      rows: [
+        row("a1", "2026-09-07", "casual-leave", { source: "biometric" }),
+        row("a2", "2026-09-07", "medical-leave", { date: utcMidnight("2026-09-07"), source: "correction" }),
+      ],
+      adjustments: [],
+    });
+    expect(plan.create).toHaveLength(1);
+    expect(plan.create[0]).toMatchObject({ attendanceId: "a2", bucket: "ML" });
+  });
+
+  it("posts nothing when the row the register shows is not leave at all", () => {
+    const plan = planAttendanceReconcile({
+      rows: [
+        row("a1", "2026-09-07", "casual-leave", { source: "biometric" }),
+        row("a2", "2026-09-07", "present", { date: utcMidnight("2026-09-07"), source: "manual" }),
+      ],
+      adjustments: [],
+    });
+    expect(plan.create).toEqual([]);
+  });
+
+  it("never lets a removed row shadow the live one", () => {
+    const plan = planAttendanceReconcile({
+      rows: [
+        row("a1", "2026-09-07", "casual-leave"),
+        row("a2", "2026-09-07", "present", {
+          date: utcMidnight("2026-09-07"),
+          source: "correction",
+          isDeleted: true,
+        }),
+      ],
+      adjustments: [],
+    });
+    expect(plan.create).toHaveLength(1);
+    expect(plan.create[0].attendanceId).toBe("a1");
+  });
+
+  it("withdraws the debit that belonged to the row the day no longer shows", () => {
+    const plan = planAttendanceReconcile({
+      rows: [
+        row("a1", "2026-09-07", "casual-leave", { source: "biometric" }),
+        row("a2", "2026-09-07", "casual-leave", { date: utcMidnight("2026-09-07"), source: "manual" }),
+      ],
+      adjustments: [adjustment("adj-1", "a1")],
+    });
+    expect(plan.remove).toEqual(["adj-1"]);
+    expect(plan.create.map((e) => e.attendanceId)).toEqual(["a2"]);
+  });
+
+  it("still deducts each day of a run of separate days", () => {
+    const plan = planAttendanceReconcile({
+      rows: [
+        row("a1", "2026-09-07", "casual-leave"),
+        row("a2", "2026-09-08", "casual-leave"),
+        row("a3", "2026-09-09", "casual-leave"),
+      ],
+      adjustments: [],
+    });
+    expect(plan.create).toHaveLength(3);
+  });
+});

@@ -13,6 +13,7 @@
 // every approved leave is deducted twice.
 
 import { normalizeAttendanceStatus } from "@/lib/attendance-status";
+import { pickAttendanceRecord } from "@/lib/attendance-dedupe";
 import { bucketForLeaveType, consumesLeaveBalance } from "@/lib/leave-ledger";
 import type {
   Attendance,
@@ -243,11 +244,38 @@ export interface ReconcilePlan {
 type ReconcileRow = Pick<
   Attendance,
   "staffId" | "date" | "status" | "leaveRequestId" | "isDeleted"
-> & { id?: string };
+> & { id?: string; source?: string; updatedAt?: { seconds: number } | null; createdAt?: { seconds: number } | null };
 
 type ReconcileAdjustment = Pick<LeaveAdjustment, "bucket" | "days" | "sourceAttendanceId"> & {
   id?: string;
 };
+
+/**
+ * One row per staff member per day, chosen the way every view chooses it.
+ *
+ * A staff+day can hold several live rows: the writers disagree about midnight
+ * (the ESSL import stores UTC, the app stores server-local), so an imported day
+ * and a hand-marked one sit side by side rather than overwriting. The register
+ * already collapses them with `pickAttendanceRecord`; the ledger has to collapse
+ * them the same way, or a day showing as one leave day on screen is deducted
+ * once per row behind it.
+ */
+function oneRowPerDay(rows: ReconcileRow[]): ReconcileRow[] {
+  const byDay = new Map<string, ReconcileRow>();
+  const loose: ReconcileRow[] = [];
+  for (const row of rows) {
+    if (row.isDeleted) continue; // a removed row must never shadow the live one
+    const key = attendanceDayKey(row.date?.seconds);
+    if (!key) {
+      loose.push(row);
+      continue;
+    }
+    const dayKey = coveredDayKey(row.staffId, key);
+    const held = byDay.get(dayKey);
+    byDay.set(dayKey, held ? pickAttendanceRecord(held, row) : row);
+  }
+  return [...byDay.values(), ...loose];
+}
 
 /**
  * What the ledger owes the register.
@@ -276,7 +304,7 @@ export function planAttendanceReconcile(input: {
   const covered = input.coveredDays ?? new Set<string>();
 
   const wanted = new Map<string, ReconcileEntry>();
-  for (const row of input.rows) {
+  for (const row of oneRowPerDay(input.rows)) {
     if (!row.id || row.isDeleted) continue;
     if (row.leaveRequestId) continue; // the request already consumed this day
     const bucket = row.status ? bucketForAttendanceStatus(row.status) : null;

@@ -17,12 +17,14 @@
  * them. Staff match by name where the sheet is known to reuse a code for two
  * people, and by employee code everywhere else.
  *
- * Every phase is idempotent. Attendance upserts on staff + day and the sheet
- * wins on any day the ERP already has, but only for what the sheet actually
- * asserts: an existing biometric row keeps its punch times, working hours and
- * lateness flags. Entitlement adjustments carry importTag "sheet-2026" and are
- * rewritten on every run. The reconcile finds its own rows again by the
- * attendance day that caused them, so a second pass writes nothing.
+ * Every phase is idempotent. Attendance folds onto the row the register already
+ * shows for that staff member and *local day* — not the stored instant, because
+ * the writers disagree about midnight — so an existing biometric row keeps its
+ * punch times, working hours and lateness flags and only takes the status the
+ * sheet asserts. A day a person edited by hand in the app is left to them.
+ * Entitlement adjustments carry importTag "sheet-2026" and are rewritten on
+ * every run. The reconcile finds its own rows again by the attendance day that
+ * caused them, so a second pass writes nothing.
  *
  * Run: node scripts/import-attendance-sheet.mjs                  (dry run)
  *      node scripts/import-attendance-sheet.mjs --commit
@@ -310,23 +312,36 @@ async function importAttendance(db, grids, roster) {
   const unknownCodes = new Map();
   const planned = [];
   let inserted = 0;
-  let overwritten = 0;
+  let updated = 0;
+  let kept = 0;
+  let removed = 0;
 
-  // One read of the year's existing staff+day keys, so a dry run can report what
-  // it would overwrite without a round trip per cell.
+  // Every row the year already holds, grouped by staff and *local* day rather
+  // than by the stored instant. The writers disagree about midnight — the ESSL
+  // import stores UTC midnight, this app stores server-local — so matching on
+  // the instant finds nothing and quietly files a second row for a day that is
+  // already there. Grouping by the day is what makes the upsert an upsert.
+  const byDay = new Map();
   const existing = await attendance
     .find(
       { date: { $gte: midnight(YEAR, 1, 1), $lte: midnight(YEAR, 12, 31) } },
-      { projection: { staffId: 1, date: 1 } }
+      { projection: { staffId: 1, date: 1, status: 1, source: 1, importBatchId: 1, updatedAt: 1, createdAt: 1, isDeleted: 1 } }
     )
     .toArray();
-  const existingKeys = new Set(existing.map((a) => `${a.staffId}|${dayKey(new Date(a.date))}`));
+  for (const row of existing) {
+    if (row.isDeleted) continue;
+    const key = `${row.staffId}|${dayKey(new Date(row.date))}`;
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(row);
+  }
 
   for (const grid of grids) {
     const dayNumbers = grid.rows[2].slice(4).map(clean);
     const writes = [];
+    const stale = [];
     let monthInserted = 0;
-    let monthOverwritten = 0;
+    let monthUpdated = 0;
+    let monthKept = 0;
 
     for (const row of grid.rows.slice(3)) {
       if (row.length < 5 || isSectionRow(row[1])) continue;
@@ -348,9 +363,11 @@ async function importAttendance(db, grids, roster) {
         }
 
         const date = midnight(YEAR, grid.month, day);
-        // The sheet knows the day's status and nothing else. Where a biometric
-        // record already exists its punch times, hours and lateness flags stay
-        // put — only what the sheet actually asserts is overwritten.
+        planned.push({ staffId, date, status: mapped.status });
+
+        // The sheet knows the day's status and nothing else. Where a record
+        // already exists its punch times, hours and lateness flags stay put —
+        // only what the sheet actually asserts is overwritten.
         const set = {
           status: mapped.status,
           source: "sheet",
@@ -359,30 +376,73 @@ async function importAttendance(db, grids, roster) {
           updatedAt: new Date(),
           ...(mapped.remarks ? { remarks: mapped.remarks } : {}),
         };
-        const onInsert = { staffId, date, isLate: false, isEarlyDeparture: false, createdAt: new Date() };
 
-        planned.push({ staffId, date, status: mapped.status });
-        if (existingKeys.has(`${staffId}|${dayKey(date)}`)) monthOverwritten++;
-        else monthInserted++;
-        if (COMMIT) {
-          writes.push({
-            updateOne: { filter: { staffId, date }, update: { $set: set, $setOnInsert: onInsert }, upsert: true },
-          });
+        const group = byDay.get(`${staffId}|${dayKey(date)}`) ?? [];
+        if (!group.length) {
+          monthInserted++;
+          if (COMMIT) {
+            writes.push({
+              insertOne: {
+                document: { ...set, staffId, date, isLate: false, isEarlyDeparture: false, createdAt: new Date() },
+              },
+            });
+          }
+          continue;
+        }
+
+        // Fold onto the row the register itself would show, preferring one this
+        // import did not write so its punch times survive.
+        const others = group.filter((r) => r.source !== "sheet");
+        const base = pickRow(others.length ? others : group);
+        if (base.source === "correction" || base.source === "manual") {
+          // A person decided this day in the app. The app's own precedence puts
+          // that above an import, so the sheet does not overrule it.
+          monthKept++;
+        } else {
+          monthUpdated++;
+          if (COMMIT) writes.push({ updateOne: { filter: { _id: base._id }, update: { $set: set } } });
+        }
+
+        // Rows this migration added beside a day that already existed. They are
+        // the bug this grouping fixes, and they are only ever ours to remove.
+        for (const r of group) {
+          if (r === base) continue;
+          if (r.source === "sheet" && r.importBatchId === IMPORT_TAG) stale.push(r._id);
         }
       }
     }
 
     if (COMMIT && writes.length) await attendance.bulkWrite(writes, { ordered: false });
-    log(`  ${grid.name}: ${monthInserted} new, ${monthOverwritten} overwritten`);
+    if (COMMIT && stale.length) await attendance.deleteMany({ _id: { $in: stale } });
+    const healed = stale.length ? `, ${stale.length} duplicate(s) removed` : "";
+    log(`  ${grid.name}: ${monthInserted} new, ${monthUpdated} updated, ${monthKept} left to a hand edit${healed}`);
     inserted += monthInserted;
-    overwritten += monthOverwritten;
+    updated += monthUpdated;
+    kept += monthKept;
+    removed += stale.length;
   }
 
-  log(`  TOTAL: ${inserted} new, ${overwritten} overwritten (sheet wins on overlap)`);
+  log(`  TOTAL: ${inserted} new, ${updated} updated, ${kept} left to a hand edit, ${removed} duplicate(s) removed`);
   if (unknownCodes.size) {
     log(`  !! Unmapped day codes seen: ${[...unknownCodes].map(([c, n]) => `${c}x${n}`).join(" ")}`);
   }
   return planned;
+}
+
+/**
+ * The one row a day should be read from, chosen the way every view chooses it:
+ * a correction beats a hand edit beats an import, and the newest write wins a
+ * tie. Mirrors `pickAttendanceRecord` in src/lib/attendance-dedupe.ts.
+ */
+function pickRow(rows) {
+  const rank = (r) => (r.source === "correction" ? 3 : r.source === "manual" ? 2 : 1);
+  const at = (r) => new Date(r.updatedAt ?? r.createdAt ?? 0).getTime();
+  return rows.reduce((best, r) => {
+    if (rank(r) !== rank(best)) return rank(r) > rank(best) ? r : best;
+    if (at(r) !== at(best)) return at(r) > at(best) ? r : best;
+    if (best.status === "absent" && r.status !== "absent") return r;
+    return best;
+  });
 }
 
 // ==================== Phase: entitlement ====================
@@ -470,43 +530,55 @@ async function reconcileLeaveDays(db, roster, attendancePlan) {
     .collection("attendance")
     .find(
       { date: { $gte: midnight(YEAR, 1, 1), $lte: midnight(YEAR, 12, 31) } },
-      { projection: { staffId: 1, date: 1, status: 1, leaveRequestId: 1, isDeleted: 1 } }
+      {
+        projection: {
+          staffId: 1, date: 1, status: 1, source: 1, leaveRequestId: 1, isDeleted: 1, updatedAt: 1, createdAt: 1,
+        },
+      }
     )
     .toArray();
+
+  // One row per staff member per day, chosen the way the register shows it — a
+  // day can hold several live rows because the writers disagree about midnight,
+  // and a day shown once must be deducted once. This mirrors `oneRowPerDay` in
+  // src/lib/leave-attendance-sync.ts, so pressing Reconcile in the app after
+  // this run finds nothing left to do.
+  const byDay = new Map();
+  for (const r of rows) {
+    if (r.isDeleted) continue;
+    const key = `${r.staffId}|${dayKey(new Date(r.date))}`;
+    const held = byDay.get(key);
+    byDay.set(key, held ? pickRow([held, r]) : r);
+  }
+  const effective = [...byDay.values()].map((r) => ({
+    id: String(r._id),
+    staffId: r.staffId,
+    date: new Date(r.date),
+    status: r.status,
+    source: r.source,
+    leaveRequestId: r.leaveRequestId,
+  }));
 
   // A dry run has written nothing, so the register still holds whatever it held
   // before — including biometric rows on days the sheet marks as leave. Folding
   // the planned days over the top is what makes the preview show the counts a
   // real run would produce; without it every day the import would overwrite is
   // counted at its old status.
-  const byDay = new Map();
-  for (const r of rows) {
-    byDay.set(`${r.staffId}|${dayKey(new Date(r.date))}`, {
-      id: String(r._id),
-      staffId: r.staffId,
-      date: new Date(r.date),
-      status: r.status,
-      leaveRequestId: r.leaveRequestId,
-      isDeleted: r.isDeleted,
-    });
-  }
   if (!COMMIT) {
+    const plannedByDay = new Map(effective.map((r) => [`${r.staffId}|${dayKey(r.date)}`, r]));
     for (const p of attendancePlan) {
       const key = `${p.staffId}|${dayKey(p.date)}`;
-      const existing = byDay.get(key);
-      // The upsert sets the status and clears the soft delete, and touches
-      // nothing else — so the preview keeps the row's id and leave stamp.
-      byDay.set(key, {
-        id: existing?.id ?? `planned:${key}`,
-        staffId: p.staffId,
-        date: p.date,
-        status: p.status,
-        leaveRequestId: existing?.leaveRequestId,
-        isDeleted: false,
-      });
+      const existing = plannedByDay.get(key);
+      if (existing) {
+        // The attendance phase leaves a hand edit alone, so the preview must too.
+        if (existing.source !== "correction" && existing.source !== "manual") existing.status = p.status;
+        continue;
+      }
+      const row = { id: `planned:${key}`, staffId: p.staffId, date: p.date, status: p.status };
+      plannedByDay.set(key, row);
+      effective.push(row);
     }
   }
-  const effective = [...byDay.values()];
 
   const coveredDays = await approvedRequestDays(db);
   const existing = await adjustments.find({ year: YEAR, sourceAttendanceId: { $exists: true } }).toArray();
