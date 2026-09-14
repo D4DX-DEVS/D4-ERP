@@ -19,7 +19,9 @@ import { logAudit } from "@/lib/audit";
 import { getAppSettings, dateKey, isNonWorkingDay, type AppSettings } from "@/lib/settings";
 import {
   allowsNegativeBalance,
+  bucketForLeaveType,
   computeLeaveLedger,
+  consumesLeaveBalance,
   countsAsWeekOffDuty,
   onDutyMonthsFromAttendance,
   resolveQuota,
@@ -27,6 +29,12 @@ import {
   type LeaveLedger,
   type LeavePolicyConfig,
 } from "@/lib/leave-ledger";
+import {
+  coveredDayKey,
+  planAttendanceReconcile,
+  requestDayKeys,
+  type ReconcileEntry,
+} from "@/lib/leave-attendance-sync";
 import type {
   Attendance,
   AuthUser,
@@ -49,6 +57,7 @@ export const ADJUSTMENT_KIND_LABELS: Record<LeaveAdjustmentKind, string> = {
   "sunday-credit": "Week-off duty credit",
   correction: "Correction",
   deduction: "Deduction",
+  attendance: "Marked on attendance",
 };
 
 /** Local midnight for a date, so day keys never drift by a timezone hour. */
@@ -429,6 +438,246 @@ export async function detectSundayDuties(
     );
   }
   return { scanned, created, alreadyKnown };
+}
+
+export interface ReconcileAttendanceLeaveInput {
+  staffList: Staff[];
+  year: number;
+  staffId?: string;
+}
+
+export interface ReconcileAttendanceLeaveResult {
+  /** Leave days found on the register that no request accounts for. */
+  scanned: number;
+  created: number;
+  updated: number;
+  removed: number;
+  /**
+   * Days an approved request covers but which the register marks as a different
+   * bucket. Nothing is posted for them — the request already counted the day —
+   * but the disagreement is real and somebody should look at it.
+   */
+  mismatched: number;
+}
+
+/**
+ * Brings the ledger in line with leave marked straight onto the attendance
+ * register.
+ *
+ * A day marked CL on the grid is a day consumed, but only an approved request
+ * or an adjustment moves a balance — so without this the grid and the balance
+ * sheet drift apart, which is exactly what they had been doing. Each debit is
+ * posted as an ordinary adjustment carrying the id of the day that caused it,
+ * so it shows up in the staff member's history, can be reversed, and is found
+ * again rather than duplicated on the next run.
+ *
+ * Days already stamped with a leaveRequestId are skipped: the request consumed
+ * them once already.
+ */
+export async function reconcileAttendanceLeave(
+  { staffList, year, staffId }: ReconcileAttendanceLeaveInput,
+  user: AuthUser | null
+): Promise<ReconcileAttendanceLeaveResult> {
+  const { start, end } = yearRange(year);
+
+  const attendanceConstraints = [where("date", ">=", start), where("date", "<=", end)];
+  if (staffId) attendanceConstraints.push(where("staffId", "==", staffId));
+
+  const adjustmentConstraints = [where("year", "==", year)];
+  if (staffId) adjustmentConstraints.push(where("staffId", "==", staffId));
+
+  const requestConstraints = [where("status", "==", "approved")];
+  if (staffId) requestConstraints.push(where("staffId", "==", staffId));
+
+  const [attendance, adjustments, approved] = await Promise.all([
+    getDocuments<Attendance>("attendance", attendanceConstraints),
+    getDocuments<LeaveAdjustment>(ADJUSTMENTS_COLLECTION, adjustmentConstraints),
+    getDocuments<StaffRequest>(REQUESTS_COLLECTION, requestConstraints),
+  ]);
+
+  // Every day an approved request already accounts for. The leaveRequestId
+  // stamp only covers days this app wrote, so requests approved before the
+  // writeback existed are matched on staff and date instead — without which
+  // their days read as unaccounted for and get deducted a second time.
+  const coveredDays = new Set<string>();
+  for (const request of approved) {
+    if (!consumesLeaveBalance(request.type)) continue;
+    if (!bucketForLeaveType(request.leaveType)) continue;
+    for (const dayKey of requestDayKeys(request)) {
+      coveredDays.add(coveredDayKey(request.staffId, dayKey));
+    }
+  }
+
+  const staffById = new Map(staffList.filter((st) => st.id).map((st) => [st.id!, st]));
+  const rows = attendance.filter((r) => staffById.has(r.staffId));
+  const plan = planAttendanceReconcile({ rows, adjustments, coveredDays });
+
+  const docFor = (entry: ReconcileEntry): Omit<LeaveAdjustment, "id"> => {
+    const staff = staffById.get(entry.staffId);
+    return {
+      staffId: entry.staffId,
+      staffName: staff ? `${staff.firstName} ${staff.lastName}`.trim() : undefined,
+      departmentId: staff?.departmentId,
+      year: entry.year,
+      bucket: entry.bucket,
+      kind: "attendance",
+      days: entry.days,
+      date: Timestamp.fromDate(atMidnight(new Date(`${entry.dayKey}T00:00:00`))),
+      reason: `${entry.bucket} marked on the attendance register for ${entry.dayKey}`,
+      sourceAttendanceId: entry.attendanceId,
+      createdBy: user?.staffId,
+      createdByName: user ? `${user.firstName} ${user.lastName}` : undefined,
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+  };
+
+  for (const entry of plan.create) {
+    await createDocument(ADJUSTMENTS_COLLECTION, docFor(entry) as unknown as Record<string, unknown>);
+  }
+  for (const { adjustmentId, entry } of plan.update) {
+    await updateDocument(ADJUSTMENTS_COLLECTION, adjustmentId, {
+      bucket: entry.bucket,
+      days: entry.days,
+      reason: `${entry.bucket} marked on the attendance register for ${entry.dayKey}`,
+      updatedAt: Timestamp.now(),
+    });
+  }
+  for (const adjustmentId of plan.remove) {
+    await deleteDocument(ADJUSTMENTS_COLLECTION, adjustmentId);
+  }
+
+  const touched = plan.create.length + plan.update.length + plan.remove.length;
+  if (touched > 0) {
+    await logAudit(
+      "update",
+      "leaves",
+      "leave_adjustment",
+      `${year}`,
+      `Reconciled attendance leave for ${year}: ${plan.create.length} posted, ${plan.update.length} corrected, ${plan.remove.length} withdrawn`,
+      user ? { uid: user.staffId, firstName: user.firstName, lastName: user.lastName } : null
+    );
+  }
+
+  return {
+    scanned: plan.create.length + plan.update.length,
+    created: plan.create.length,
+    updated: plan.update.length,
+    removed: plan.remove.length,
+    mismatched: plan.mismatches.length,
+  };
+}
+
+export interface ReconcileDayResult {
+  /** The bucket the day now draws on, or null when it is not leave. */
+  bucket: LeaveBucket | null;
+  posted: boolean;
+  withdrawn: boolean;
+  /** An approved request already accounts for the day, so nothing was posted. */
+  coveredByRequest: boolean;
+}
+
+/**
+ * Reconciles a single day, for the moment an admin edits it on the register.
+ *
+ * The year-wide reconcile exists for imports and backfills; this is what makes
+ * a hand edit feel like one action rather than two, so nobody has to remember a
+ * button for the balance to be right. It is deliberately narrow — one person,
+ * one day — so an edit can never move more than the day it was about.
+ *
+ * Idempotent, like the wider one: marking the same day twice posts one debit,
+ * and changing the day back to Present withdraws it again.
+ */
+export async function reconcileAttendanceDay(
+  input: {
+    staff: Staff;
+    attendanceId: string;
+    date: Date;
+    status: Attendance["status"];
+    leaveRequestId?: string;
+  },
+  user: AuthUser | null
+): Promise<ReconcileDayResult> {
+  const { staff, attendanceId, date, status, leaveRequestId } = input;
+  if (!staff.id) return { bucket: null, posted: false, withdrawn: false, coveredByRequest: false };
+
+  const year = date.getFullYear();
+  const [adjustments, approved] = await Promise.all([
+    getDocuments<LeaveAdjustment>(ADJUSTMENTS_COLLECTION, [
+      where("staffId", "==", staff.id),
+      where("year", "==", year),
+    ]),
+    getDocuments<StaffRequest>(REQUESTS_COLLECTION, [
+      where("staffId", "==", staff.id),
+      where("status", "==", "approved"),
+    ]),
+  ]);
+
+  const coveredDays = new Set<string>();
+  for (const request of approved) {
+    if (!consumesLeaveBalance(request.type)) continue;
+    if (!bucketForLeaveType(request.leaveType)) continue;
+    for (const dayKey of requestDayKeys(request)) {
+      coveredDays.add(coveredDayKey(staff.id, dayKey));
+    }
+  }
+
+  // Only this day's adjustment is in scope. Passing the rest would read every
+  // other day as "source row missing" and withdraw the lot.
+  const mine = adjustments.filter((a) => a.sourceAttendanceId === attendanceId);
+  const plan = planAttendanceReconcile({
+    rows: [
+      {
+        id: attendanceId,
+        staffId: staff.id,
+        date: Timestamp.fromDate(atMidnight(date)),
+        status,
+        ...(leaveRequestId ? { leaveRequestId } : {}),
+      } as Attendance,
+    ],
+    adjustments: mine,
+    coveredDays,
+  });
+
+  for (const entry of plan.create) {
+    await createDocument(
+      ADJUSTMENTS_COLLECTION,
+      {
+        staffId: entry.staffId,
+        staffName: `${staff.firstName} ${staff.lastName}`.trim(),
+        departmentId: staff.departmentId,
+        year: entry.year,
+        bucket: entry.bucket,
+        kind: "attendance",
+        days: entry.days,
+        date: Timestamp.fromDate(atMidnight(new Date(`${entry.dayKey}T00:00:00`))),
+        reason: `${entry.bucket} marked on the attendance register for ${entry.dayKey}`,
+        sourceAttendanceId: entry.attendanceId,
+        createdBy: user?.staffId,
+        createdByName: user ? `${user.firstName} ${user.lastName}` : undefined,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      } as unknown as Record<string, unknown>
+    );
+  }
+  for (const { adjustmentId, entry } of plan.update) {
+    await updateDocument(ADJUSTMENTS_COLLECTION, adjustmentId, {
+      bucket: entry.bucket,
+      days: entry.days,
+      reason: `${entry.bucket} marked on the attendance register for ${entry.dayKey}`,
+      updatedAt: Timestamp.now(),
+    });
+  }
+  for (const adjustmentId of plan.remove) {
+    await deleteDocument(ADJUSTMENTS_COLLECTION, adjustmentId);
+  }
+
+  return {
+    bucket: plan.create[0]?.bucket ?? plan.update[0]?.entry.bucket ?? plan.mismatches[0]?.bucket ?? null,
+    posted: plan.create.length > 0 || plan.update.length > 0,
+    withdrawn: plan.remove.length > 0,
+    coveredByRequest: plan.mismatches.length > 0,
+  };
 }
 
 /** Adds a week-off duty day by hand, for a day attendance never captured. */

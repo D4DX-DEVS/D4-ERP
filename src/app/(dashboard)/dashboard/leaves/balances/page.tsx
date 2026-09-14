@@ -25,7 +25,12 @@ import { exportToCSV } from "@/lib/asset-export-utils";
 import { MONTH_LABELS, days } from "@/lib/leave-ledger";
 import { clampMonth, monthViewRow } from "@/lib/leave-month-view";
 import { leaveBalanceExportRows } from "@/lib/leave-balance-export";
-import { detectSundayDuties, loadOrgLedgers, type OrgLedgerRow } from "@/lib/leave-adjustments";
+import {
+  detectSundayDuties,
+  loadOrgLedgers,
+  reconcileAttendanceLeave,
+  type OrgLedgerRow,
+} from "@/lib/leave-adjustments";
 import { LeaveBalancePanel } from "@/components/leaves/leave-balance-panel";
 import {
   LeaveBalanceCardList,
@@ -45,6 +50,7 @@ import {
   Download,
   FilterX,
   Loader2,
+  RefreshCw,
   Search,
   Sun,
   Users,
@@ -91,6 +97,7 @@ export default function LeaveBalancesPage() {
   const [ledgers, setLedgers] = useState<Record<string, OrgLedgerRow>>({});
   const [ledgersLoading, setLedgersLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [openStaffId, setOpenStaffId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
@@ -222,6 +229,34 @@ export default function LeaveBalancesPage() {
     }
   };
 
+  /**
+   * Posts a ledger debit for every leave day marked straight onto the attendance
+   * register that no approved request accounts for. Days a request already
+   * claimed are skipped, so running this twice changes nothing the second time.
+   */
+  const handleReconcile = async () => {
+    setReconciling(true);
+    try {
+      const all = await getDocuments<Staff>("staff", [where("isActive", "==", true)]);
+      const result = await reconcileAttendanceLeave({ staffList: all, year }, user);
+      const moved = result.created + result.updated + result.removed;
+      toast(
+        "success",
+        moved === 0
+          ? "Balances already match the attendance register"
+          : `${result.created} posted, ${result.updated} corrected, ${result.removed} withdrawn` +
+            (result.mismatched > 0
+              ? ` · ${result.mismatched} day(s) marked differently to an approved request`
+              : "")
+      );
+      await loadLedgers();
+    } catch (error) {
+      toast("error", error instanceof Error ? error.message : "Reconcile failed");
+    } finally {
+      setReconciling(false);
+    }
+  };
+
   /** Exports every row matching the current filters, not just the page on screen. */
   const handleExport = async () => {
     setExporting(true);
@@ -311,6 +346,22 @@ export default function LeaveBalancesPage() {
                 <CalendarSearch className="mr-2 h-4 w-4" />
               )}
               Scan week-off duty
+            </Button>
+          )}
+          {canEdit && (
+            <Button
+              variant="outline"
+              size="sm"
+              title="Post a balance debit for leave marked on the attendance register that no request covers"
+              onClick={() => void handleReconcile()}
+              disabled={reconciling}
+            >
+              {reconciling ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              Sync attendance leave
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={() => void handleExport()} disabled={exporting}>
