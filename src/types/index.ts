@@ -139,6 +139,14 @@ export interface ContractHistory extends BaseDocument {
   contractType: ContractType;
   reason: string;
   extendedOn: Timestamp;
+  /**
+   * Terms the renewal carried. Optional because rows written before renewals
+   * revised pay and the job description have none of it.
+   */
+  previousSalary?: number;
+  newSalary?: number;
+  previousJobDescription?: string;
+  newJobDescription?: string;
 }
 
 // ==================== Employee Documents ====================
@@ -200,7 +208,9 @@ export type LeaveAdjustmentKind =
   | "grant"
   | "sunday-credit"
   | "correction"
-  | "deduction";
+  | "deduction"
+  /** Posted by reconciling a leave day marked straight onto the attendance register. */
+  | "attendance";
 
 /**
  * One manual (or conversion-generated) movement on a staff member's leave
@@ -222,6 +232,13 @@ export interface LeaveAdjustment extends BaseDocument {
   reason: string;
   /** Set when this row was produced by converting a week-off duty. */
   sundayDutyId?: string;
+  /**
+   * Set when this row was posted by reconciling an attendance day. It is what
+   * makes reconciling idempotent: the row is found again by its source, so a
+   * second run updates rather than duplicates, and deleting the attendance day
+   * deletes the adjustment with it.
+   */
+  sourceAttendanceId?: string;
   createdBy?: string;
   createdByName?: string;
 }
@@ -831,6 +848,12 @@ export interface Attendance extends BaseDocument {
   remarks?: string;
   notes?: string;
   leaveRequestId?: string;
+  /**
+   * What this day was before an approved leave claimed it. Set only by the
+   * leave writeback, and only when it overwrote something, so withdrawing the
+   * approval can put the day back instead of destroying what the register knew.
+   */
+  statusBeforeLeave?: AttendanceStatus;
   correctionId?: string;
   shiftId?: string;
   /** Source of the record — manual admin entry, self check-in, leave/holiday sync, biometric import. */

@@ -13,8 +13,11 @@ import {
   scopeFilter,
   DEPT_SCOPED_BY_FIELD,
   DEPT_SCOPED_BY_STAFF,
+  OWN_WRITE_FOR_STAFF,
+  authorizeOwnWorkLogWrite,
   type AuthzUser,
 } from "@/lib/db-authz";
+import { hasFeature } from "@/lib/permissions";
 import type { TokenPayload } from "@/lib/auth";
 import { canDeleteTask, canTransitionTask, transitionNeedsRemark, type TaskOwnership } from "@/lib/task-workflow";
 import { isSoftDeleteCollection, softDeletePatch, withoutDeleted } from "@/lib/soft-delete";
@@ -376,9 +379,45 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const denied = authorize(authzUser, action, collectionName, docType);
+    // Own-record writes (the self-service daily work log) are allowed without
+    // the management feature, so authorization needs the row's owner: the
+    // payload on create, the stored document on update/delete.
+    let ownerId: unknown;
+    let ownerDoc: Record<string, unknown> | null = null;
+    const ownerField = OWN_WRITE_FOR_STAFF[collectionName];
+    if (ownerField && isWriteAction(action)) {
+      if (action === "create") {
+        ownerId = (body.data as Record<string, unknown> | undefined)?.[ownerField];
+      } else {
+        ownerDoc = (await getModel(collectionName)
+          .findById(body.id)
+          .select(`${ownerField} status`)
+          .lean()) as Record<string, unknown> | null;
+        ownerId = ownerDoc?.[ownerField];
+      }
+    }
+
+    const denied = authorize(authzUser, action, collectionName, docType, ownerId);
     if (denied) {
       return NextResponse.json({ error: denied }, { status: 403 });
+    }
+
+    // Owner-side work log rules: a reviewer (work-logs grant) is unrestricted;
+    // the owner may only edit a draft or returned log, may not mark it reviewed,
+    // and may not write the reviewer's fields.
+    if (
+      collectionName === "work_logs" &&
+      isWriteAction(action) &&
+      !hasFeature(authzUser, "work-logs")
+    ) {
+      const deniedOwn = authorizeOwnWorkLogWrite(
+        action,
+        ownerDoc,
+        body.data as Record<string, unknown> | undefined
+      );
+      if (deniedOwn) {
+        return NextResponse.json({ error: deniedOwn }, { status: 403 });
+      }
     }
 
     // Trusted audit identity derived from the verified token — never the body.

@@ -7,6 +7,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocument, getDocuments, where, orderBy, Timestamp } from "@/lib/firestore";
 import { getAppSettings, isNonWorkingDay, AppSettings } from "@/lib/settings";
+import { consumesLeaveBalance } from "@/lib/leave-ledger";
 import { Attendance, Banner, LeaveRequest, Staff, Task, StaffRequest } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -123,7 +124,7 @@ export default function StaffPortalHome() {
         let clUsed = 0;
         let slUsed = 0;
         for (const request of leaves) {
-          if (request.status !== "approved" || request.type !== "leave") continue;
+          if (request.status !== "approved" || !consumesLeaveBalance(request.type)) continue;
           if (!request.startDate?.seconds || request.startDate.seconds < yearStartSec) continue;
           if (request.leaveType === "CL") clUsed += leaveDays(request, appSettings, staffDoc?.companyId);
           else if (request.leaveType === "SL") slUsed += leaveDays(request, appSettings, staffDoc?.companyId);

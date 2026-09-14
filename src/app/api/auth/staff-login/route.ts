@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import { getModel } from "@/models";
-import { signToken, sessionCookieOptions, AUTH_COOKIE, PWA_TOKEN_TTL_SECONDS } from "@/lib/auth";
+import {
+  signToken,
+  sessionCookieOptions,
+  AUTH_COOKIE,
+  pwaTtlSeconds,
+  isSessionDeniedStatus,
+} from "@/lib/auth";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
@@ -44,12 +50,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Mobile number does not match" }, { status: 401 });
     }
 
-    if (staff.status === "terminated") {
-      return NextResponse.json({ error: "Your account has been terminated" }, { status: 403 });
-    }
-
-    if (staff.status === "suspended") {
-      return NextResponse.json({ error: "Your account is currently suspended" }, { status: 403 });
+    if (isSessionDeniedStatus(staff.status)) {
+      return NextResponse.json(
+        {
+          error:
+            staff.status === "terminated"
+              ? "Your account has been terminated"
+              : "Your account is currently suspended",
+        },
+        { status: 403 }
+      );
     }
 
     const uid = (staff._id as object).toString();
@@ -57,7 +67,7 @@ export async function POST(req: NextRequest) {
       ? (staff.grantedFeatures as unknown[]).filter((f): f is string => typeof f === "string")
       : [];
     // Installed PWA gets a long-lived session (one-time login, like a native app).
-    const ttl = body?.pwa === true ? PWA_TOKEN_TTL_SECONDS : undefined;
+    const ttl = body?.pwa === true ? pwaTtlSeconds() : undefined;
     const token = signToken(
       {
         uid,

@@ -3,8 +3,10 @@ import {
   allowsNegativeBalance,
   bucketForLeaveType,
   countsAsWeekOffDuty,
+  LEAVE_BUCKETS,
   weekOffDutyKey,
   computeLeaveLedger,
+  consumesLeaveBalance,
   emptyLedger,
   employmentTypeOf,
   groupByEmployment,
@@ -106,6 +108,28 @@ function ledgerOf(input: {
     allowNegative: input.allowNegative ?? false,
   });
 }
+
+describe("consumesLeaveBalance", () => {
+  it("accepts both leave request types", () => {
+    expect(consumesLeaveBalance("leave")).toBe(true);
+    expect(consumesLeaveBalance("long-leave")).toBe(true);
+  });
+
+  it("rejects request types that never touch a leave bucket", () => {
+    expect(consumesLeaveBalance("overtime")).toBe(false);
+    expect(consumesLeaveBalance("wfh")).toBe(false);
+    expect(consumesLeaveBalance("on-duty")).toBe(false);
+    expect(consumesLeaveBalance("salary-increment")).toBe(false);
+    expect(consumesLeaveBalance("other")).toBe(false);
+  });
+
+  it("rejects a missing or unknown type rather than assuming leave", () => {
+    expect(consumesLeaveBalance(undefined)).toBe(false);
+    expect(consumesLeaveBalance(null)).toBe(false);
+    expect(consumesLeaveBalance("")).toBe(false);
+    expect(consumesLeaveBalance("nonsense")).toBe(false);
+  });
+});
 
 describe("bucketForLeaveType (legacy code mapping)", () => {
   it("maps stored SL to the Medical Leave bucket", () => {
@@ -377,7 +401,13 @@ describe("computeLeaveLedger — week-off duty summary", () => {
         duty("2026-08-23", "rejected"),
       ],
     });
-    expect(l.sundays).toEqual({ worked: 3, converted: 2, pending: 1, creditedDays: 1.5 });
+    expect(l.sundays).toEqual({
+      worked: 3,
+      converted: 2,
+      pending: 1,
+      creditedDays: 1.5,
+      monthlyWorked: [0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0],
+    });
   });
 
   it("ignores duties from another year", () => {
@@ -649,5 +679,83 @@ describe("computeLeaveLedger — on-duty summary", () => {
     const ledger = ledgerOf({ onDutyDays });
     expect(ledger.totalDays).toBe(0);
     expect(ledger.monthly[0]).toBe(0);
+  });
+});
+
+describe("month-wise attribution of debits", () => {
+  it("files a debit against the month of its effective date", () => {
+    const ledger = ledgerOf({ adjustments: [adjustment("CL", -2, "2026-04-18")] });
+    expect(ledger.cl.monthly[3]).toBe(2);
+  });
+
+  it("falls back to the month it was recorded when the debit has no effective date", () => {
+    const undated = {
+      ...adjustment("CL", -2, "2026-04-18"),
+      date: undefined as unknown as Timestamp,
+      createdAt: ts("2026-07-02"),
+    };
+    const ledger = ledgerOf({ adjustments: [undated] });
+    expect(ledger.cl.monthly[6]).toBe(2);
+  });
+
+  it("files a debit with neither date into January rather than dropping it", () => {
+    const undated = {
+      ...adjustment("CL", -2, "2026-04-18"),
+      date: undefined as unknown as Timestamp,
+    };
+    const ledger = ledgerOf({ adjustments: [undated] });
+    expect(ledger.cl.monthly[0]).toBe(2);
+  });
+
+  it("ignores an effective date from another year instead of filing it in that month", () => {
+    // Dated in 2025 but booked against 2026 — December 2025 must not become
+    // December 2026. The recorded month wins.
+    const misdated = {
+      ...adjustment("CL", -2, "2025-12-20"),
+      createdAt: ts("2026-02-09"),
+    };
+    const ledger = ledgerOf({ adjustments: [misdated] });
+    expect(ledger.cl.monthly[11]).toBe(0);
+    expect(ledger.cl.monthly[1]).toBe(2);
+  });
+
+  it("keeps the month-wise split adding up to the days used, for every bucket", () => {
+    const ledger = ledgerOf({
+      requests: [leave("CL", "2026-03-02", "2026-03-04"), leave("SL", "2026-05-11")],
+      adjustments: [
+        adjustment("EL", -3, "2026-06-01"),
+        { ...adjustment("FL", -1, "2026-04-18"), date: undefined as unknown as Timestamp },
+      ],
+    });
+
+    for (const code of LEAVE_BUCKETS) {
+      const bucket = ledgerBucket(ledger, code);
+      const summed = bucket.monthly.reduce((a, b) => a + b, 0);
+      expect(summed).toBe(bucket.used);
+    }
+  });
+});
+
+describe("week-off duty, month by month", () => {
+  it("counts the days worked in each month", () => {
+    const ledger = ledgerOf({
+      sundayDuties: [duty("2026-03-08", "converted"), duty("2026-03-15", "pending"), duty("2026-08-16", "converted")],
+    });
+    expect(ledger.sundays.monthlyWorked[2]).toBe(2);
+    expect(ledger.sundays.monthlyWorked[7]).toBe(1);
+    expect(ledger.sundays.monthlyWorked[1]).toBe(0);
+  });
+
+  it("leaves a rejected duty out of the month-wise count", () => {
+    const ledger = ledgerOf({ sundayDuties: [duty("2026-03-08", "rejected")] });
+    expect(ledger.sundays.monthlyWorked[2]).toBe(0);
+  });
+
+  it("keeps the month-wise count adding up to the days worked", () => {
+    const ledger = ledgerOf({
+      sundayDuties: [duty("2026-01-04", "converted"), duty("2026-03-08", "pending"), duty("2026-11-01", "converted")],
+    });
+    const summed = ledger.sundays.monthlyWorked.reduce((a, b) => a + b, 0);
+    expect(summed).toBe(ledger.sundays.worked);
   });
 });

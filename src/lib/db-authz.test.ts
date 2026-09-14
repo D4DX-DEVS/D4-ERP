@@ -8,6 +8,7 @@ import {
   isWriteAction,
   MAX_QUERY_LIMIT,
   scopeFilter,
+  authorizeOwnWorkLogWrite,
 } from "@/lib/db-authz";
 import type { TokenPayload } from "@/lib/auth";
 
@@ -470,5 +471,101 @@ describe("payroll grant lifts own-record scoping on payroll inputs", () => {
     for (const col of ["attendance_corrections", "employee_documents"]) {
       expect(scopeFilter(payrollStaff, col, null, null)).toEqual({ staffId: "u1" });
     }
+  });
+});
+
+// ── Self-service work logs (2026-09-14) ───────────────────────────────────────
+// The `work-logs` feature gates the MANAGEMENT view (everyone else's logs).
+// Every staff member owns the self-service daily log at /staff-portal/work-log
+// and must be able to save it with no grant at all.
+
+describe("work_logs: staff may write their OWN log without the review grant", () => {
+  const own = { staffId: "u1" };
+  const other = { staffId: "u2" };
+
+  it("allows a zero-grant staff member to create their own log", () => {
+    expect(authorize(staff, "create", "work_logs", undefined, own.staffId)).toBeNull();
+  });
+
+  it("allows a zero-grant staff member to update and delete their own log", () => {
+    expect(authorize(staff, "update", "work_logs", undefined, own.staffId)).toBeNull();
+    expect(authorize(staff, "delete", "work_logs", undefined, own.staffId)).toBeNull();
+  });
+
+  it("blocks a zero-grant staff member from writing somebody else's log", () => {
+    expect(authorize(staff, "create", "work_logs", undefined, other.staffId)).toMatch(/permission/i);
+    expect(authorize(staff, "update", "work_logs", undefined, other.staffId)).toMatch(/permission/i);
+  });
+
+  it("blocks a write that carries no owner id at all", () => {
+    expect(authorize(staff, "create", "work_logs")).toMatch(/permission/i);
+  });
+
+  it("still lets reviewers (admin, dept head, granted staff) write any log", () => {
+    expect(authorize(admin, "update", "work_logs", undefined, other.staffId)).toBeNull();
+    expect(authorize(deptHead, "update", "work_logs", undefined, other.staffId)).toBeNull();
+    expect(authorize(user("staff", ["work-logs"]), "update", "work_logs", undefined, other.staffId)).toBeNull();
+  });
+
+  it("does not open other feature-gated collections to own-record writes", () => {
+    expect(authorize(staff, "create", "payroll", undefined, "u1")).toMatch(/permission/i);
+    expect(authorize(staff, "create", "transactions", undefined, "u1")).toMatch(/permission/i);
+  });
+});
+
+describe("authorizeOwnWorkLogWrite (owner-side rules on their own log)", () => {
+  it("allows saving a draft and submitting", () => {
+    expect(authorizeOwnWorkLogWrite("create", null, { status: "draft" })).toBeNull();
+    expect(authorizeOwnWorkLogWrite("create", null, { status: "submitted" })).toBeNull();
+    expect(authorizeOwnWorkLogWrite("update", { status: "draft" }, { status: "submitted" })).toBeNull();
+  });
+
+  it("allows editing a log the reviewer sent back for revision", () => {
+    expect(
+      authorizeOwnWorkLogWrite("update", { status: "needs-revision" }, { status: "submitted" })
+    ).toBeNull();
+  });
+
+  it("blocks editing a log that is already submitted or reviewed", () => {
+    expect(authorizeOwnWorkLogWrite("update", { status: "submitted" }, { status: "draft" })).toMatch(
+      /no longer|already/i
+    );
+    expect(authorizeOwnWorkLogWrite("delete", { status: "reviewed" }, undefined)).toMatch(
+      /no longer|already/i
+    );
+  });
+
+  it("blocks the owner from marking their own log reviewed", () => {
+    expect(authorizeOwnWorkLogWrite("create", null, { status: "reviewed" })).toMatch(/draft|submit/i);
+    expect(authorizeOwnWorkLogWrite("update", { status: "draft" }, { status: "reviewed" })).toMatch(
+      /draft|submit/i
+    );
+  });
+
+  it("blocks the owner from writing the reviewer's fields", () => {
+    for (const field of ["reviewedBy", "reviewedByName", "reviewDate", "reviewRemarks"]) {
+      expect(
+        authorizeOwnWorkLogWrite("update", { status: "draft" }, { [field]: "x" })
+      ).toMatch(/reviewer/i);
+    }
+  });
+
+  it("treats a legacy log with no status as an editable draft", () => {
+    expect(authorizeOwnWorkLogWrite("update", {}, { status: "draft" })).toBeNull();
+  });
+});
+
+describe("work_logs read scoping", () => {
+  it("limits a zero-grant staff member to their own logs", () => {
+    expect(scopeFilter(staff, "work_logs", null, null)).toEqual({ staffId: "u1" });
+  });
+
+  it("lifts the scope for the work-logs review grant and for reports", () => {
+    expect(scopeFilter(user("staff", ["work-logs"]), "work_logs", null, null)).toBeNull();
+    expect(scopeFilter(user("staff", ["reports"]), "work_logs", null, null)).toBeNull();
+  });
+
+  it("keeps dept heads scoped to their department", () => {
+    expect(scopeFilter(deptHead, "work_logs", "d1", null)).toEqual({ departmentId: "d1" });
   });
 });

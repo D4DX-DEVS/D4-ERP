@@ -98,6 +98,30 @@ function detach<T>(data: T): T {
   return Array.isArray(data) ? ([...data] as T) : data;
 }
 
+/**
+ * Called when the server reports the session is gone. Registered by the auth
+ * layer so this module stays free of a store import (auth-store already imports
+ * setAuditUser from here).
+ */
+let _onUnauthorized: (() => void) | null = null;
+/** A dashboard page fires many parallel reads; one dead session must log out once. */
+let _unauthorizedReported = false;
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  _onUnauthorized = handler;
+  _unauthorizedReported = false;
+}
+
+/**
+ * Unregister, but only if `handler` is still the live one. Two layouts mount the
+ * auth hook (dashboard and staff portal); on a route change between them React
+ * can mount the new one before the old one's cleanup runs, and an unconditional
+ * clear would drop the handler the new layout just registered.
+ */
+export function clearUnauthorizedHandler(handler: () => void) {
+  if (_onUnauthorized === handler) _onUnauthorized = null;
+}
+
 async function rawCall(body: Record<string, unknown>) {
   // Attach audit user info for server-side audit logging
   if (_auditUser) {
@@ -106,8 +130,24 @@ async function rawCall(body: Record<string, unknown>) {
   const res = await fetch("/api/db", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify(body),
   });
+  // 401 means the session cookie is gone or expired while the persisted user is
+  // still in localStorage. Left unhandled, every call just throws "Unauthorized"
+  // and the user sits on a dashboard that will never load again until they log
+  // out by hand — which is exactly what "access denied, need to relogin" is.
+  // 403 is a permission denial on a live session and must NOT end it.
+  if (res.status === 401) {
+    if (!_unauthorizedReported) {
+      _unauthorizedReported = true;
+      _onUnauthorized?.();
+    }
+    throw new Error("Session expired. Please sign in again.");
+  }
+  // A call got through, so the session is alive again (fresh login, or the 401
+  // was transient) — arm the notification for the next time it dies.
+  _unauthorizedReported = false;
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: "Request failed" }));
     throw new Error(err.error || "Request failed");

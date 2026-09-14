@@ -7,6 +7,9 @@ import { createDocument, getDocuments, orderBy, where, Timestamp, updateDocument
 import { Attendance, AttendanceStatus, Department, Staff } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
 import { ATTENDANCE_STATUS_CONFIG, attendanceStatusMeta, normalizeAttendanceStatus, type ActiveAttendanceStatus } from "@/lib/attendance-status";
+import { attendanceStats } from "@/lib/attendance-stats";
+import { reconcileAttendanceDay } from "@/lib/leave-adjustments";
+import { useAuthStore } from "@/store/auth-store";
 import { pickAttendanceRecord } from "@/lib/attendance-dedupe";
 import { resolveDayCell } from "@/lib/attendance-grid";
 import { Badge } from "@/components/ui/badge";
@@ -54,8 +57,6 @@ const VIEWS: { id: ViewMode; label: string; icon: typeof Rows3 }[] = [
 const STATUS_CONFIG = ATTENDANCE_STATUS_CONFIG;
 
 
-const PRESENT_STATUSES: AttendanceStatus[] = ["present", "late", "half-day", "wfh", "on-duty"];
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 type Rec = Attendance & { id: string };
@@ -82,6 +83,7 @@ const fullName = (s?: Staff) => (s ? `${s.firstName} ${s.lastName}` : "Unknown")
 export default function AttendanceRegisterPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { user } = useAuthStore();
 
   const now = new Date();
   const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
@@ -183,6 +185,8 @@ export default function AttendanceRegisterPage() {
           })()
         : undefined;
 
+      let savedId = editTarget.record?.id ?? "";
+
       if (editTarget.record) {
         await updateDocument("attendance", editTarget.record.id, {
           status: editStatus,
@@ -210,10 +214,37 @@ export default function AttendanceRegisterPage() {
           isDeleted: false,
         };
         const id = await createDocument("attendance", newDoc);
+        savedId = id;
         setRecords((prev) => [...prev, { ...newDoc, id } as Rec]);
       }
 
-      toast("success", "Attendance updated");
+      // One day, one person. A day an approved request already owns is skipped
+      // inside the reconcile, so this can never deduct the same leave twice.
+      let balanceNote = "";
+      const staff = staffList.find((s) => s.id === editTarget.staffId);
+      if (staff && savedId) {
+        try {
+          const result = await reconcileAttendanceDay(
+            {
+              staff,
+              attendanceId: savedId,
+              date: dateObj,
+              status: editStatus,
+              leaveRequestId: editTarget.record?.leaveRequestId,
+            },
+            user
+          );
+          if (result.posted) balanceNote = ` · ${result.bucket} balance updated`;
+          else if (result.withdrawn) balanceNote = " · leave balance restored";
+          else if (result.coveredByRequest) balanceNote = " · already covered by an approved request";
+        } catch {
+          // The attendance edit itself succeeded; say so rather than implying
+          // it failed, but do not claim a balance moved when it may not have.
+          balanceNote = " · balance not updated — run Sync attendance leave";
+        }
+      }
+
+      toast("success", `Attendance updated${balanceNote}`);
       setEditTarget(null);
     } catch (error) {
       toast("error", error instanceof Error ? error.message : "Failed to update attendance");
@@ -282,14 +313,7 @@ export default function AttendanceRegisterPage() {
   }, [records, filteredStaffIds, statusFilter]);
 
   // ── Stats ───────────────────────────────────────────────────────────────────
-  const stats = useMemo(() => {
-    const presentDays = records.filter((r) => PRESENT_STATUSES.includes(r.status)).length;
-    const leaveDays = records.filter((r) => r.status === "leave").length;
-    const lateMarks = records.filter((r) => r.isLate).length;
-    // Headcount is the live roster — removed staff are history, not employees.
-    const staffCount = staffList.filter((s) => !s.isDeleted).length;
-    return { staff: staffCount, presentDays, leaveDays, lateMarks };
-  }, [records, staffList]);
+  const stats = useMemo(() => attendanceStats(records, staffList), [records, staffList]);
 
   // ── Log stream events (every check-in / check-out) ───────────────────────────
   const logEvents = useMemo(() => {

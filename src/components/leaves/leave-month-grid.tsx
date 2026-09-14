@@ -13,6 +13,7 @@ import {
   ledgerBucket,
   type LeaveLedger,
 } from "@/lib/leave-ledger";
+import { clampMonth } from "@/lib/leave-month-view";
 import type { LeaveBucket } from "@/types";
 
 /** One row of the grid: a label, twelve months, and the year total. */
@@ -59,10 +60,17 @@ interface LeaveMonthGridProps {
    * attendance, so it is corrected there, not here.
    */
   onEditCell?: (bucket: LeaveBucket, month: number, current: number) => void;
+  /**
+   * The month the page is currently scoped to, marked down the grid. Without
+   * it an admin reading a month-scoped table has to count columns to find the
+   * month they are already looking at.
+   */
+  highlightMonth?: number | null;
 }
 
-export function LeaveMonthGrid({ ledger, onEditCell }: LeaveMonthGridProps) {
+export function LeaveMonthGrid({ ledger, onEditCell, highlightMonth = null }: LeaveMonthGridProps) {
   const rows = leaveMonthRows(ledger);
+  const marked = highlightMonth === null ? null : clampMonth(highlightMonth);
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
       <table className="w-full min-w-[680px] border-collapse text-xs">
@@ -71,8 +79,17 @@ export function LeaveMonthGrid({ ledger, onEditCell }: LeaveMonthGridProps) {
             <th scope="col" className="px-3 py-2 text-left font-semibold">
               Month-wise
             </th>
-            {MONTH_LABELS.map((m) => (
-              <th key={m} scope="col" className="px-2 py-2 text-center font-medium">
+            {MONTH_LABELS.map((m, i) => (
+              <th
+                key={m}
+                scope="col"
+                aria-current={i === marked ? "true" : undefined}
+                className={`px-2 py-2 text-center ${
+                  i === marked
+                    ? "bg-emerald-100 font-bold text-emerald-900"
+                    : "font-medium"
+                }`}
+              >
                 {m}
               </th>
             ))}
@@ -95,8 +112,8 @@ export function LeaveMonthGrid({ ledger, onEditCell }: LeaveMonthGridProps) {
                   <td
                     key={MONTH_LABELS[i]}
                     className={`p-0 text-center tabular-nums ${
-                      value > 0 ? `font-semibold ${row.tone}` : "text-slate-300"
-                    }`}
+                      i === marked ? "bg-emerald-50" : ""
+                    } ${value > 0 ? `font-semibold ${row.tone}` : "text-slate-300"}`}
                   >
                     {editable ? (
                       <button

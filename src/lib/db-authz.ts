@@ -12,6 +12,8 @@ import { hasFeature, type FeatureKey } from "@/lib/permissions";
 export interface AuthzUser {
   role: string;
   grantedFeatures?: string[] | null;
+  /** Staff document id of the caller; required for own-record write checks. */
+  uid?: string;
 }
 
 /** Collections whose contents must never be returned to the client. */
@@ -70,6 +72,74 @@ export const FEATURE_WRITE: Record<string, FeatureKey> = {
   // tasks intentionally absent: staff must update their own assigned tasks;
   // the task-workflow guard (role/assignee/status) is the write authority.
 };
+
+/**
+ * Collections a `staff` role user may write for their OWN rows without holding
+ * the FEATURE_WRITE feature that gates everybody else's. The value names the
+ * field carrying the owner's staff id.
+ *
+ * `work_logs` is the case this exists for: the `work-logs` feature gates the
+ * MANAGEMENT view (reviewing other people's logs), but every staff member owns
+ * the self-service daily log at /staff-portal/work-log and must be able to save
+ * it with no grant at all. Owner-side rules (which statuses stay editable, which
+ * fields belong to the reviewer) live in authorizeOwnWorkLogWrite.
+ */
+export const OWN_WRITE_FOR_STAFF: Record<string, string> = {
+  work_logs: "staffId",
+};
+
+/** True when this write is a staff member editing their own row. */
+export function isOwnWrite(
+  user: AuthzUser,
+  collectionName: string,
+  ownerId?: unknown
+): boolean {
+  if (!OWN_WRITE_FOR_STAFF[collectionName]) return false;
+  if (typeof user.uid !== "string" || !user.uid) return false;
+  return typeof ownerId === "string" && ownerId === user.uid;
+}
+
+/** Work log fields only a reviewer may write. */
+export const WORK_LOG_REVIEWER_FIELDS = [
+  "reviewedBy",
+  "reviewedByName",
+  "reviewDate",
+  "reviewRemarks",
+] as const;
+
+/** Statuses an owner may still edit their own log in. */
+const OWNER_EDITABLE_STATUSES = new Set(["draft", "needs-revision"]);
+/** Statuses an owner may set on their own log. */
+const OWNER_WRITABLE_STATUSES = new Set(["draft", "submitted"]);
+
+/**
+ * Owner-side rules for a staff member writing their OWN work log without the
+ * `work-logs` review grant. Returns an error message or null.
+ * `existing` is the stored document (null on create).
+ */
+export function authorizeOwnWorkLogWrite(
+  action: string,
+  existing: Record<string, unknown> | null,
+  data: Record<string, unknown> | undefined
+): string | null {
+  if (action !== "create" && existing) {
+    // A log stops being the owner's to change once it is with the reviewer.
+    // Legacy rows saved without a status are treated as drafts.
+    const status = String(existing.status ?? "draft");
+    if (!OWNER_EDITABLE_STATUSES.has(status)) {
+      return "A submitted work log can no longer be edited. Ask your reviewer to send it back.";
+    }
+  }
+  if (action === "delete") return null;
+  if (!data) return null;
+  if ("status" in data && !OWNER_WRITABLE_STATUSES.has(String(data.status))) {
+    return "You may only save your work log as a draft or submit it.";
+  }
+  for (const field of WORK_LOG_REVIEWER_FIELDS) {
+    if (field in data) return "Review fields may only be written by a reviewer.";
+  }
+  return null;
+}
 
 /**
  * Collections whose READS require at least one of the listed features.
@@ -158,12 +228,15 @@ export function isWriteAction(action: string): boolean {
  * `docType` is only consulted for writes to the type-split `invoices`
  * collection (pass the document's `type`: existing doc for update/delete,
  * payload for create).
+ * `ownerId` is only consulted for writes to OWN_WRITE_FOR_STAFF collections
+ * (pass the owner staff id: existing doc for update/delete, payload for create).
  */
 export function authorize(
   user: AuthzUser,
   action: string,
   collectionName: string,
-  docType?: unknown
+  docType?: unknown,
+  ownerId?: unknown
 ): string | null {
   if (FORBIDDEN_COLLECTIONS.has(collectionName) && action !== "nextSequence") {
     return "This collection is not accessible.";
@@ -183,7 +256,7 @@ export function authorize(
       return "You do not have permission to modify this resource.";
     }
     const featureKey = FEATURE_WRITE[collectionName];
-    if (featureKey && !hasFeature(user, featureKey)) {
+    if (featureKey && !hasFeature(user, featureKey) && !isOwnWrite(user, collectionName, ownerId)) {
       return "You do not have permission to modify this resource.";
     }
     const allowed = WRITE_ROLES[collectionName];
@@ -235,6 +308,7 @@ export const DEPT_SCOPED_BY_STAFF = new Set([
 /** Collections where a `staff` role user may only read their own records. */
 export const OWN_SCOPED_FOR_STAFF: Record<string, string> = {
   leaveRequests: "staffId",
+  work_logs: "staffId",
   leave_adjustments: "staffId",
   sunday_duties: "staffId",
   attendance: "staffId",
@@ -258,6 +332,9 @@ export const FEATURE_UNSCOPES: Record<string, FeatureKey[]> = {
   // adjustments and week-off credits, not just the processor's own.
   leave_adjustments: ["payroll"],
   sunday_duties: ["payroll"],
+  // Reviewing other people's logs, and the productivity/department reports
+  // built on them, both need the whole company's rows.
+  work_logs: ["work-logs", "reports"],
 };
 
 export function isReadAction(action: string): boolean {

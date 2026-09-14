@@ -10,7 +10,8 @@ import {
 } from "@/lib/firestore";
 import { createNotification, createBulkNotifications } from "@/lib/notifications";
 import { loadStaffLedger } from "@/lib/leave-adjustments";
-import type { LeaveLedger } from "@/lib/leave-ledger";
+import { consumesLeaveBalance, type LeaveLedger } from "@/lib/leave-ledger";
+import { applyRequestWriteback, withdrawRequestWriteback } from "@/lib/leave-writeback";
 import type {
   ApprovalStep,
   AuthUser,
@@ -220,6 +221,16 @@ export async function decideRequest({ request, step, decision, remarks }: Decide
 
   if (next.status === "approved" && request.type === "overtime") {
     await createOvertimeCalendarEvent(next, user);
+  }
+
+  // Keep the register in step with the decision. Approving leave claims the
+  // days it covers so the biometric import’s "absent" stops standing for an
+  // approved absence; withdrawing approval releases them again. Each claimed
+  // row carries the request id, which is what stops the attendance reconcile
+  // deducting the same day a second time.
+  if (consumesLeaveBalance(request.type)) {
+    if (next.status === "approved") await applyRequestWriteback(next, user);
+    else if (next.status === "rejected") await withdrawRequestWriteback(next, user);
   }
 
   return next;

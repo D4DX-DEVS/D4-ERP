@@ -32,14 +32,14 @@ describe("renewalTtlSeconds", () => {
   });
 
   it("upgrades a browser-issued session to the PWA window when the app is installed", async () => {
-    const { renewalTtlSeconds, PWA_TOKEN_TTL_SECONDS } = await import("./auth");
-    expect(renewalTtlSeconds(60 * 60 * 24 * 7, true)).toBe(PWA_TOKEN_TTL_SECONDS);
+    const { renewalTtlSeconds, pwaTtlSeconds } = await import("./auth");
+    expect(renewalTtlSeconds(60 * 60 * 24 * 7, true)).toBe(pwaTtlSeconds());
   });
 
   it("never shortens an already-long PWA session", async () => {
-    const { renewalTtlSeconds, PWA_TOKEN_TTL_SECONDS } = await import("./auth");
-    expect(renewalTtlSeconds(PWA_TOKEN_TTL_SECONDS, true)).toBe(PWA_TOKEN_TTL_SECONDS);
-    expect(renewalTtlSeconds(PWA_TOKEN_TTL_SECONDS, false)).toBe(PWA_TOKEN_TTL_SECONDS);
+    const { renewalTtlSeconds, pwaTtlSeconds } = await import("./auth");
+    expect(renewalTtlSeconds(pwaTtlSeconds(), true)).toBe(pwaTtlSeconds());
+    expect(renewalTtlSeconds(pwaTtlSeconds(), false)).toBe(pwaTtlSeconds());
   });
 
   it("passes null through — a dead session is never renewed", async () => {

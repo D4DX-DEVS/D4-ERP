@@ -156,7 +156,9 @@ export default function StaffWorkLogPage() {
       await fetchData();
     } catch (error) {
       console.error("Save failed:", error);
-      toast("error", "Failed to save");
+      // Surface the server's reason (permission, stale log, session) — a bare
+      // "Failed to save" leaves staff with no idea what to do next.
+      toast("error", error instanceof Error && error.message ? error.message : "Failed to save");
     } finally {
       setSaving(false);
     }

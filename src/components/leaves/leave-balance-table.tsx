@@ -5,6 +5,12 @@
 // REMAINING — each split CL / EL / ML / FL — then on duty, week-off and the
 // year total. The sheet spells its month-wise block out across 48 more
 // columns; here that block lives one click away, under the row it belongs to.
+//
+// Given a `month`, the same table re-scopes to it: the three yearly blocks
+// collapse to two — what was taken during the month, and what was left when it
+// closed — and the counters beside them follow. Eight numeric columns instead
+// of twelve, so the month view is narrower than the year view, not wider.
+//
 // Presentational — the page owns fetching, paging and filtering.
 
 import { Fragment } from "react";
@@ -12,12 +18,15 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   LEAVE_BUCKETS,
   LEAVE_BUCKET_LABELS,
+  MONTH_LABELS,
   days,
   groupByEmployment,
   ledgerBucket,
 } from "@/lib/leave-ledger";
+import { clampMonth, monthViewRow, type MonthViewRow } from "@/lib/leave-month-view";
 import { LeaveMonthGrid } from "@/components/leaves/leave-month-grid";
-import type { EmploymentGroupSection } from "@/lib/leave-ledger";
+import type { EmploymentGroupSection, LeaveLedger } from "@/lib/leave-ledger";
+import type { LeaveBucket } from "@/types";
 import type { OrgLedgerRow } from "@/lib/leave-adjustments";
 
 export type LeaveBalanceSection = EmploymentGroupSection<OrgLedgerRow>;
@@ -27,20 +36,76 @@ export function groupLedgerRows(rows: OrgLedgerRow[]): LeaveBalanceSection[] {
   return groupByEmployment(rows);
 }
 
+type BlockKey = "allocated" | "used" | "remaining" | "taken" | "monthRemaining";
+
+interface Block {
+  key: BlockKey;
+  label: string;
+  hint: string;
+  head: string;
+}
+
 /**
- * The three bucket blocks. The sheet calls them CURRENT / USED / BALANCE and
- * prints balance first; here they read left to right as the sum they describe —
+ * The yearly blocks. The sheet calls them CURRENT / USED / BALANCE and prints
+ * balance first; here they read left to right as the sum they describe —
  * allocated minus used leaves remaining — because that is the question an admin
  * is actually asking when they open this page.
  */
-const BLOCKS = [
+const YEAR_BLOCKS: Block[] = [
   { key: "allocated", label: "Allocated", hint: "Days granted for the year", head: "bg-sky-50 text-sky-800" },
   { key: "used", label: "Used", hint: "Days already taken", head: "bg-orange-50 text-orange-800" },
   { key: "remaining", label: "Remaining", hint: "Allocated minus used", head: "bg-emerald-50 text-emerald-800" },
-] as const;
+];
 
-/** Staff + expander + (3 blocks x 4 buckets) + OD + week-off + total. */
-const COLUMN_COUNT = 2 + BLOCKS.length * LEAVE_BUCKETS.length + 3;
+/**
+ * In month mode there is nothing useful to say about allocation — entitlement
+ * is annual, so an "allocated" column would print the same number twelve times.
+ * What changes month to month is what was taken and what survived it.
+ */
+function blocksFor(month: number | null): Block[] {
+  if (month === null) return YEAR_BLOCKS;
+  const label = MONTH_LABELS[clampMonth(month)];
+  return [
+    {
+      key: "taken",
+      label: `Taken in ${label}`,
+      hint: `Days taken during ${label}`,
+      head: "bg-orange-50 text-orange-800",
+    },
+    {
+      key: "monthRemaining",
+      label: `Remaining @ ${label} end`,
+      hint: `Balance left when ${label} closed`,
+      head: "bg-emerald-50 text-emerald-800",
+    },
+  ];
+}
+
+/** Staff + expander + (blocks x 4 buckets) + OD + week-off + total. */
+function columnCount(blocks: Block[]): number {
+  return 2 + blocks.length * LEAVE_BUCKETS.length + 3;
+}
+
+function cellValue(
+  key: BlockKey,
+  ledger: LeaveLedger,
+  view: MonthViewRow | null,
+  code: LeaveBucket
+): number {
+  const bucket = ledgerBucket(ledger, code);
+  switch (key) {
+    case "allocated":
+      return bucket.entitled;
+    case "used":
+      return bucket.used;
+    case "remaining":
+      return bucket.balance;
+    case "taken":
+      return view?.buckets[code].taken ?? 0;
+    case "monthRemaining":
+      return view?.buckets[code].remaining ?? 0;
+  }
+}
 
 interface LeaveBalanceTableProps {
   sections: LeaveBalanceSection[];
@@ -48,6 +113,8 @@ interface LeaveBalanceTableProps {
   /** Rows whose month-wise block is open. */
   expanded: ReadonlySet<string>;
   onToggleExpand: (staffId: string) => void;
+  /** A month index to scope every column to, or null for the whole year. */
+  month?: number | null;
 }
 
 export function LeaveBalanceTable({
@@ -55,12 +122,17 @@ export function LeaveBalanceTable({
   onOpenStaff,
   expanded,
   onToggleExpand,
+  month = null,
 }: LeaveBalanceTableProps) {
+  const blocks = blocksFor(month);
+  const columns = columnCount(blocks);
+  const monthLabel = month === null ? null : MONTH_LABELS[clampMonth(month)];
+
   // Desktop only. Below md the page renders LeaveBalanceCardList instead —
   // twelve numeric columns are not readable on a phone at any zoom.
   return (
     <div className="hidden overflow-x-auto md:block">
-      <table className="w-full min-w-[980px] border-collapse text-sm">
+      <table className="w-full min-w-[860px] border-collapse text-sm">
         <thead>
           <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <th
@@ -73,7 +145,7 @@ export function LeaveBalanceTable({
             <th scope="col" rowSpan={2} className="border-b border-slate-200 px-1 py-2">
               <span className="sr-only">Month-wise detail</span>
             </th>
-            {BLOCKS.map((block) => (
+            {blocks.map((block) => (
               <th
                 key={block.key}
                 scope="colgroup"
@@ -87,7 +159,11 @@ export function LeaveBalanceTable({
             <th
               scope="col"
               rowSpan={2}
-              title="On duty — worked away from the office"
+              title={
+                monthLabel
+                  ? `On duty in ${monthLabel} — worked away from the office`
+                  : "On duty — worked away from the office"
+              }
               className="border-b border-l border-slate-200 bg-violet-50 px-3 py-2 text-center font-bold text-violet-800"
             >
               On duty
@@ -95,7 +171,11 @@ export function LeaveBalanceTable({
             <th
               scope="col"
               rowSpan={2}
-              title="Week-off days worked, and how many became flexible leave"
+              title={
+                monthLabel
+                  ? `Week-off days worked during ${monthLabel}`
+                  : "Week-off days worked, and how many became flexible leave"
+              }
               className="border-b border-l border-slate-200 px-3 py-2 text-center font-semibold"
             >
               Week-off
@@ -103,14 +183,18 @@ export function LeaveBalanceTable({
             <th
               scope="col"
               rowSpan={2}
-              title="All leave days taken this year, across every type"
+              title={
+                monthLabel
+                  ? `All leave days taken in ${monthLabel}, across every type`
+                  : "All leave days taken this year, across every type"
+              }
               className="border-b border-l border-slate-200 px-3 py-2 text-center font-semibold"
             >
               Total
             </th>
           </tr>
           <tr className="bg-slate-50 text-[11px] uppercase text-slate-500">
-            {BLOCKS.map((block) =>
+            {blocks.map((block) =>
               LEAVE_BUCKETS.map((code, i) => (
                 <th
                   key={`${block.key}-${code}`}
@@ -135,7 +219,7 @@ export function LeaveBalanceTable({
             <Fragment key={section.title}>
               <tr>
                 <td
-                  colSpan={COLUMN_COUNT}
+                  colSpan={columns}
                   className="sticky left-0 bg-slate-900 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-white"
                 >
                   {section.title}
@@ -145,6 +229,9 @@ export function LeaveBalanceTable({
                 const staffId = row.staff.id!;
                 const isOpen = expanded.has(staffId);
                 const open = () => onOpenStaff(staffId);
+                const view = month === null ? null : monthViewRow(row.ledger, month);
+                const onDuty = view ? view.onDuty : row.ledger.onDuty.total;
+                const total = view ? view.total : row.ledger.totalDays;
                 return (
                   <Fragment key={staffId}>
                     <tr className="border-b border-slate-100 hover:bg-slate-50">
@@ -175,15 +262,9 @@ export function LeaveBalanceTable({
                           )}
                         </button>
                       </td>
-                      {BLOCKS.map((block) =>
+                      {blocks.map((block) =>
                         LEAVE_BUCKETS.map((code, i) => {
-                          const bucket = ledgerBucket(row.ledger, code);
-                          const value =
-                            block.key === "allocated"
-                              ? bucket.entitled
-                              : block.key === "used"
-                                ? bucket.used
-                                : bucket.balance;
+                          const value = cellValue(block.key, row.ledger, view, code);
                           // A negative remaining balance is the sheet's way of
                           // saying the person went past their allowance. The
                           // bare minus sign does not say that, so the cell does.
@@ -220,36 +301,50 @@ export function LeaveBalanceTable({
                       <td
                         onClick={open}
                         className={`cursor-pointer border-l border-slate-200 px-3 py-3 text-center tabular-nums ${
-                          row.ledger.onDuty.total > 0
-                            ? "font-semibold text-violet-700"
-                            : "text-slate-300"
+                          onDuty > 0 ? "font-semibold text-violet-700" : "text-slate-300"
                         }`}
                       >
-                        {days(row.ledger.onDuty.total)}
+                        {days(onDuty)}
                       </td>
                       <td
                         onClick={open}
                         className="cursor-pointer border-l border-slate-200 px-3 py-3 text-center tabular-nums"
                       >
-                        <span className="font-semibold text-slate-900">
-                          {row.ledger.sundays.worked}
-                        </span>
-                        <span className="text-xs text-slate-400">
-                          {" "}
-                          / {row.ledger.sundays.converted} conv
-                        </span>
+                        {view ? (
+                          <span
+                            className={
+                              view.weekOffWorked > 0
+                                ? "font-semibold text-slate-900"
+                                : "text-slate-300"
+                            }
+                          >
+                            {view.weekOffWorked}
+                          </span>
+                        ) : (
+                          <>
+                            <span className="font-semibold text-slate-900">
+                              {row.ledger.sundays.worked}
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              {" "}
+                              / {row.ledger.sundays.converted} conv
+                            </span>
+                          </>
+                        )}
                       </td>
                       <td
                         onClick={open}
                         className="cursor-pointer border-l border-slate-200 px-3 py-3 text-center font-semibold tabular-nums text-slate-900"
                       >
-                        {days(row.ledger.totalDays)}
+                        {days(total)}
                       </td>
                     </tr>
                     {isOpen && (
                       <tr className="border-b border-slate-200 bg-slate-50">
-                        <td colSpan={COLUMN_COUNT} className="px-4 py-3">
-                          <LeaveMonthGrid ledger={row.ledger} />
+                        <td colSpan={columns} className="px-4 py-3">
+                          {/* The wide view, with the scoped month marked, so the
+                              two readings of the same numbers visibly agree. */}
+                          <LeaveMonthGrid ledger={row.ledger} highlightMonth={month} />
                         </td>
                       </tr>
                     )}
@@ -269,7 +364,8 @@ export function LeaveBalanceTable({
  * twelve columns of full words do not fit, and the codes are what the team
  * already writes on the printed sheet every day — so the expansion lives here.
  */
-export function LeaveCodeLegend() {
+export function LeaveCodeLegend({ month = null }: { month?: number | null }) {
+  const monthLabel = month === null ? null : MONTH_LABELS[clampMonth(month)];
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
       {LEAVE_BUCKETS.map((code) => (
@@ -283,15 +379,28 @@ export function LeaveCodeLegend() {
       <span className="text-rose-500">
         <span className="font-semibold">over</span> past the allowance
       </span>
+      {monthLabel && (
+        <span>
+          Remaining counts every day taken from January through {monthLabel}; the yearly
+          entitlement is available across the whole year.
+        </span>
+      )}
     </div>
   );
 }
 
 /** Skeleton shaped like the real table, so the layout does not jump on load. */
-export function LeaveBalanceTableSkeleton({ rows = 10 }: { rows?: number }) {
+export function LeaveBalanceTableSkeleton({
+  rows = 10,
+  month = null,
+}: {
+  rows?: number;
+  month?: number | null;
+}) {
+  const columns = columnCount(blocksFor(month));
   return (
     <div className="hidden overflow-x-auto md:block">
-      <table className="w-full min-w-[980px] border-collapse text-sm">
+      <table className="w-full min-w-[860px] border-collapse text-sm">
         <tbody>
           {Array.from({ length: rows }).map((_, r) => (
             <tr key={r} className="border-b border-slate-100">
@@ -299,7 +408,7 @@ export function LeaveBalanceTableSkeleton({ rows = 10 }: { rows?: number }) {
                 <div className="h-4 w-40 animate-pulse rounded bg-slate-100" />
                 <div className="mt-1.5 h-3 w-24 animate-pulse rounded bg-slate-100" />
               </td>
-              {Array.from({ length: COLUMN_COUNT - 1 }).map((__, c) => (
+              {Array.from({ length: columns - 1 }).map((__, c) => (
                 <td key={c} className="border-l border-slate-100 px-3 py-3">
                   <div className="mx-auto h-4 w-8 animate-pulse rounded bg-slate-100" />
                 </td>
