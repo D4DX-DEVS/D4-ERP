@@ -1,9 +1,10 @@
 // Verification for the Google Sheet migration.
 //
-// The point of these tests is not that the helper returns some adjustments — it
-// is that feeding those adjustments through the real ledger reproduces the
-// numbers the team already reads off the printed sheet, to the day. The rows
-// below are verbatim from the CL/EL/ML tab, including its blanks.
+// The point of these tests is not that the helpers return some adjustments — it
+// is that what the migration writes, fed through the real ledger, lands on the
+// balance the register justifies. The sheet supplies entitlement; the daily
+// grids supply what was taken. The rows below are verbatim from the CL/EL/ML
+// tab, including its blanks.
 //
 // The migration writes a raw Date into Mongo and /api/db converts Date ->
 // { seconds, nanoseconds } on the way out, so `asStored` mimics that boundary
@@ -13,12 +14,17 @@ import { describe, it, expect } from "vitest";
 import {
   BUCKETS,
   CODE_MAP,
-  buildBalanceAdjustments,
+  buildEntitlement,
+  buildFormerStaffDoc,
+  buildVariance,
+  employmentTypeForSection,
   isSectionRow,
   nameKey,
   parseCsv,
   readBalanceRow,
   resolveSheetRow,
+  splitName,
+  titleCase,
 } from "../../scripts/lib/sheet-import.mjs";
 import { computeLeaveLedger, ledgerBucket } from "@/lib/leave-ledger";
 import type { LeaveAdjustment, LeaveBucket, LeaveQuota } from "@/types";
@@ -49,11 +55,36 @@ function asStored(adjustments: { date: Date }[]): LeaveAdjustment[] {
   })) as unknown as LeaveAdjustment[];
 }
 
-function ledgerFor(name: string, allowNegative: boolean) {
-  const { quota, adjustments, sheet } = buildBalanceAdjustments(ROWS[name], BASE, YEAR);
+/**
+ * The debits the reconcile posts: one per leave day marked on the register,
+ * which is where usage comes from now that the balance tab supplies entitlement
+ * only. `days` says how many days of each bucket the grids carry.
+ */
+function registerDebits(days: Partial<Record<LeaveBucket, number>>) {
+  const rows: { date: Date }[] = [];
+  for (const [bucket, count] of Object.entries(days)) {
+    for (let i = 0; i < (count ?? 0); i++) {
+      rows.push({
+        ...BASE,
+        bucket,
+        kind: "attendance",
+        days: -1,
+        year: YEAR,
+        // Spread across the year so the monthly columns are exercised too.
+        date: new Date(YEAR, i % 12, 1),
+        sourceAttendanceId: `a${bucket}${i}`,
+        reason: `${bucket} marked on the attendance register`,
+      } as unknown as { date: Date });
+    }
+  }
+  return rows;
+}
+
+function ledgerFor(name: string, allowNegative: boolean, taken: Partial<Record<LeaveBucket, number>> = {}) {
+  const { quota, adjustments, sheet } = buildEntitlement(ROWS[name], BASE, YEAR);
   const ledger = computeLeaveLedger({
     requests: [],
-    adjustments: asStored(adjustments),
+    adjustments: asStored([...adjustments, ...registerDebits(taken)]),
     sundayDuties: [],
     quota: quota as LeaveQuota,
     year: YEAR,
@@ -62,52 +93,25 @@ function ledgerFor(name: string, allowNegative: boolean) {
   return { ledger, sheet, quota, adjustments };
 }
 
-describe("buildBalanceAdjustments — the ERP reproduces the printed sheet", () => {
-  // Permanent staff are the ones carrying deficits, so they need the policy that
-  // lets a bucket go below zero; everyone else is clamped either way.
-  const PEOPLE: [string, boolean][] = [
-    ["MUHAMMAD RASHID A P", true],
-    ["FAROOQUE C T", false],
-    ["MUHAMMED SHAMIL M P", false],
-    ["HILAL A P", false],
-    ["RAHEEF", false],
-  ];
-
-  for (const [name, allowNegative] of PEOPLE) {
-    describe(name, () => {
-      it("lands on the sheet's BALANCE for every bucket", () => {
-        const { ledger, sheet } = ledgerFor(name, allowNegative);
-        for (const code of BUCKETS as LeaveBucket[]) {
-          expect(ledgerBucket(ledger, code).balance, `${name} ${code} balance`).toBe(sheet.balance[code]);
-        }
+describe("buildEntitlement — the sheet supplies what was granted, not what was taken", () => {
+  it("carries the sheet's CURRENT allocation as the quota", () => {
+    for (const name of Object.keys(ROWS)) {
+      const { quota, sheet } = ledgerFor(name, false);
+      expect(quota, name).toEqual({
+        casualLeave: sheet.current.CL,
+        sickLeave: sheet.current.ML,
+        earnedLeave: sheet.current.EL,
       });
+    }
+  });
 
-      it("lands on the sheet's USED for every bucket", () => {
-        const { ledger, sheet } = ledgerFor(name, allowNegative);
-        for (const code of BUCKETS as LeaveBucket[]) {
-          expect(ledgerBucket(ledger, code).used, `${name} ${code} used`).toBe(sheet.used[code]);
-        }
-      });
-
-      it("carries the sheet's CURRENT allocation as the quota", () => {
-        const { quota, sheet } = ledgerFor(name, allowNegative);
-        expect(quota).toEqual({
-          casualLeave: sheet.current.CL,
-          sickLeave: sheet.current.ML,
-          earnedLeave: sheet.current.EL,
-        });
-      });
-
-      it("never attributes more to the months than the year's used total", () => {
-        const { ledger } = ledgerFor(name, allowNegative);
-        for (const code of BUCKETS as LeaveBucket[]) {
-          const b = ledgerBucket(ledger, code);
-          const monthSum = b.monthly.reduce((x, y) => x + y, 0);
-          expect(monthSum, `${name} ${code} months`).toBeLessThanOrEqual(b.used + 1e-9);
-        }
-      });
-    });
-  }
+  it("writes no deduction of any kind — the register is what counts days", () => {
+    for (const name of Object.keys(ROWS)) {
+      const { adjustments } = ledgerFor(name, false);
+      expect(adjustments.every((a) => a.kind === "opening"), name).toBe(true);
+      expect(adjustments.every((a) => a.days > 0), name).toBe(true);
+    }
+  });
 
   it("credits flexible leave with what the sheet says was earned, never a quota", () => {
     const { ledger, sheet } = ledgerFor("FAROOQUE C T", false);
@@ -115,21 +119,136 @@ describe("buildBalanceAdjustments — the ERP reproduces the printed sheet", () 
     expect(ledger.fl.entitled).toBe(sheet.used.FL + sheet.balance.FL);
   });
 
+  it("leaves a bucket at full entitlement until the register says otherwise", () => {
+    const { ledger, sheet } = ledgerFor("FAROOQUE C T", false);
+    expect(ledger.cl.used).toBe(0);
+    expect(ledger.cl.balance).toBe(sheet.current.CL);
+  });
+
   it("gives a permanent staff member no allocation at all", () => {
     const { quota } = ledgerFor("MUHAMMAD RASHID A P", true);
     expect(quota).toEqual({ casualLeave: 0, sickLeave: 0, earnedLeave: 0 });
   });
 
-  it("clamps a deficit to zero when the policy forbids negatives, so the sheet needs one that allows them", () => {
-    const clamped = ledgerFor("MUHAMMAD RASHID A P", false).ledger;
-    expect(clamped.cl.balance).toBe(0);
-    const allowed = ledgerFor("MUHAMMAD RASHID A P", true).ledger;
-    expect(allowed.cl.balance).toBe(-3);
-  });
-
   it("writes nothing for a bucket the sheet leaves entirely empty", () => {
     const { adjustments } = ledgerFor("RAHEEF", false);
     expect(adjustments.some((a) => a.bucket === "EL")).toBe(false);
+  });
+});
+
+describe("entitlement plus the register lands on a balance", () => {
+  it("reproduces the sheet's balance where the grids agree with its USED column", () => {
+    // Hilal's row is one the two halves of the sheet agree about: 8 CL and 15 ML
+    // used, and the grids carry exactly that.
+    const { ledger, sheet } = ledgerFor("HILAL A P", false, { CL: 8, ML: 15 });
+    expect(ledger.cl.balance).toBe(sheet.balance.CL);
+    expect(ledger.ml.balance).toBe(sheet.balance.ML);
+  });
+
+  it("follows the grids, not the sheet, where the two disagree", () => {
+    // The August grid carries a CL day the balance tab never recorded.
+    const { ledger, sheet } = ledgerFor("HILAL A P", false, { CL: 9, ML: 15 });
+    expect(ledger.cl.used).toBe(9);
+    expect(ledger.cl.balance).toBe(sheet.balance.CL - 1);
+  });
+
+  it("moves every bucket, not just the ones the sheet happens to fill", () => {
+    const { ledger } = ledgerFor("FAROOQUE C T", false, { CL: 2, EL: 1, ML: 3, FL: 4 });
+    for (const [bucket, taken] of [["CL", 2], ["EL", 1], ["ML", 3], ["FL", 4]] as [LeaveBucket, number][]) {
+      expect(ledgerBucket(ledger, bucket).used, bucket).toBe(taken);
+    }
+  });
+
+  it("takes a permanent staff member's balance negative, which needs the policy that allows it", () => {
+    const taken = { CL: 8, ML: 3 };
+    expect(ledgerFor("MUHAMMAD RASHID A P", false, taken).ledger.cl.balance).toBe(0);
+    expect(ledgerFor("MUHAMMAD RASHID A P", true, taken).ledger.cl.balance).toBe(-8);
+  });
+
+  it("spends flexible leave against the opening credit rather than a quota", () => {
+    const { ledger } = ledgerFor("MUHAMMAD RASHID A P", true, { FL: 9 });
+    expect(ledger.fl.entitled).toBe(8); // 9 used + -1 balance, per the sheet
+    expect(ledger.fl.used).toBe(9);
+    expect(ledger.fl.balance).toBe(-1);
+  });
+});
+
+describe("buildVariance — what to show the team", () => {
+  it("reports no difference when the grids match the sheet", () => {
+    const sheet = readBalanceRow(ROWS["HILAL A P"]);
+    const rows = buildVariance(sheet, { CL: 8, EL: 0, ML: 15, FL: 3 });
+    expect(rows.every((r) => r.diff === 0)).toBe(true);
+  });
+
+  it("reports the shortfall when the grids carry days the balance tab missed", () => {
+    const sheet = readBalanceRow(ROWS["HILAL A P"]);
+    const cl = buildVariance(sheet, { CL: 9, EL: 0, ML: 15, FL: 3 }).find((r) => r.bucket === "CL")!;
+    expect(cl.sheetUsed).toBe(8);
+    expect(cl.erpUsed).toBe(9);
+    expect(cl.sheetBalance).toBe(7);
+    expect(cl.erpBalance).toBe(6);
+    expect(cl.diff).toBe(-1);
+  });
+
+  it("measures flexible leave against what the sheet says was earned", () => {
+    const sheet = readBalanceRow(ROWS["FAROOQUE C T"]);
+    const fl = buildVariance(sheet, { CL: 0, EL: 0, ML: 0, FL: 10 }).find((r) => r.bucket === "FL")!;
+    expect(fl.entitled).toBe(10); // 9 used + 1 left, per the sheet
+    expect(fl.erpBalance).toBe(0);
+    expect(fl.diff).toBe(-1);
+  });
+
+  it("covers every bucket, so a blank one is still accounted for", () => {
+    const rows = buildVariance(readBalanceRow(ROWS.RAHEEF), { CL: 0, EL: 0, ML: 0, FL: 0 });
+    expect(rows.map((r) => r.bucket)).toEqual(BUCKETS);
+  });
+});
+
+describe("buildFormerStaffDoc — people the sheet carries and the ERP never held", () => {
+  const doc = buildFormerStaffDoc({
+    name: "BILAL M SHAREEF",
+    code: "D4A-101-EX",
+    section: "CONTRACT",
+    designation: "SR. PHOTOGRAPHER",
+    firstMonth: 1,
+    lastDay: new Date(YEAR, 7, 31),
+    departmentId: "d9",
+    companyId: "c1",
+    now: new Date(YEAR, 8, 14),
+  });
+
+  it("creates them relieved and soft-deleted, so they leave every roster but keep their history", () => {
+    expect(doc.status).toBe("relieved");
+    expect(doc.isActive).toBe(false);
+    expect(doc.isDeleted).toBe(true);
+    expect(doc.deletedAt).toEqual(new Date(YEAR, 7, 31));
+  });
+
+  it("writes the name the way the roster does, not the way the sheet shouts it", () => {
+    expect(doc.firstName).toBe("Bilal");
+    expect(doc.lastName).toBe("M Shareef");
+    expect(doc.designation).toBe("Sr. Photographer");
+  });
+
+  it("dates the joining from the first month they appear, which is an approximation", () => {
+    expect(doc.dateOfJoining).toEqual(new Date(YEAR, 0, 1));
+  });
+
+  it("cannot be signed in as", () => {
+    expect(doc.email).toBe("");
+    expect(doc.isActive).toBe(false);
+  });
+
+  it("reads the employment category off the sheet's band", () => {
+    expect(employmentTypeForSection("PERMANENT")).toBe("permanent");
+    expect(employmentTypeForSection("INTERNS")).toBe("intern");
+    expect(employmentTypeForSection("CONTRACT")).toBe("staff");
+    expect(employmentTypeForSection("")).toBe("staff");
+  });
+
+  it("splits a name the way the roster stores it", () => {
+    expect(splitName("MUHAMMAD RASHID A P")).toEqual({ firstName: "Muhammad", lastName: "Rashid A P" });
+    expect(titleCase("AL AMEEN")).toBe("Al Ameen");
   });
 });
 
@@ -149,41 +268,19 @@ describe("readBalanceRow — column offsets", () => {
     const r = readBalanceRow(ROWS["HILAL A P"]);
     for (const code of BUCKETS) expect(r.monthly[code]).toHaveLength(12);
   });
-});
 
-describe("a row the sheet itself does not add up", () => {
-  // Rashid's row is one cell shorter than the header, so its tail is shifted:
-  // the month cells read as JAN 2, MAY 2, JUN 3, JUL 2 and DEC 3 — twelve days
-  // of flexible leave in a sheet that stops at August, against a USED of nine.
   it("reads TOTAL off the end of the row, so a short row still reconciles", () => {
+    // Rashid's row is one cell shorter than the header, so an absolute offset
+    // would read the wrong four cells.
     const r = readBalanceRow(ROWS["MUHAMMAD RASHID A P"]);
     expect(r.total).toEqual(r.used);
   });
 
-  it("spots the buckets whose months do not add up to USED", () => {
+  it("spots the buckets whose months do not add up to USED — which is why they are not imported", () => {
     const r = readBalanceRow(ROWS["MUHAMMAD RASHID A P"]);
     expect(r.monthsReconcile).toMatchObject({ CL: true, EL: true, ML: true, FL: false });
     expect(r.monthly.FL.reduce((a, b) => a + b, 0)).toBe(12);
     expect(r.used.FL).toBe(9);
-  });
-
-  it("still lands on the sheet USED, dropping the month detail it cannot trust", () => {
-    const { ledger } = ledgerFor("MUHAMMAD RASHID A P", true);
-    expect(ledger.fl.used).toBe(9);
-    expect(ledger.fl.monthly.reduce((a, b) => a + b, 0)).toBe(9);
-    // December is not attributed, because the sheet has no December data.
-    expect(ledger.fl.monthly[11]).toBe(0);
-  });
-
-  it("keeps the month detail for the buckets that do reconcile", () => {
-    const { ledger } = ledgerFor("MUHAMMAD RASHID A P", true);
-    expect(ledger.cl.monthly[4]).toBe(2); // May
-    expect(ledger.cl.monthly[6]).toBe(1); // July
-  });
-
-  it("attributes every month for a row that is whole", () => {
-    const r = readBalanceRow(ROWS["FAROOQUE C T"]);
-    expect(Object.values(r.monthsReconcile).every(Boolean)).toBe(true);
   });
 });
 
@@ -213,8 +310,14 @@ describe("CODE_MAP — what each sheet day code means", () => {
 });
 
 describe("resolveSheetRow — who a row belongs to", () => {
-  it("drops someone who has left before looking at their code", () => {
-    expect(resolveSheetRow("D4A-101", "BILAL M SHAREEF").kind).toBe("resigned");
+  it("sends somebody who left to their own code, not to the colleague who inherited it", () => {
+    expect(resolveSheetRow("D4A-101", "BILAL M SHAREEF")).toMatchObject({ kind: "alias", code: "D4A-101-EX" });
+    expect(resolveSheetRow("D4P-104", "MUHAMMAD HISHAM")).toMatchObject({ kind: "alias", code: "D4P-104-EX" });
+  });
+
+  it("keeps the live code with the person still working here", () => {
+    expect(resolveSheetRow("INT-101", "SHAHID AMEEN T")).toMatchObject({ kind: "alias", code: "D4A-101" });
+    expect(resolveSheetRow("D4P-104", "RAHEEF M")).toMatchObject({ kind: "alias", code: "D4P-104" });
   });
 
   it("sends a reused code to the right person by name", () => {
