@@ -61,7 +61,7 @@ export default function EventsDashboardPage() {
         title="Event Management"
         description="Overview of all events, revenue, and team allocation."
         action={
-          <Button onClick={() => router.push(`${base}/events/list`)}>
+          <Button onClick={() => router.push(`${base}/events/list?new=1`)}>
             <PartyPopper className="h-4 w-4" /> Create Event
           </Button>
         }

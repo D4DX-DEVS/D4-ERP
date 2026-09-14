@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 import { Plus, Search, Pencil, Trash2, Loader2 } from "lucide-react";
 import {
   getDocuments,
@@ -100,6 +102,9 @@ const emptyForm: BookingForm = {
 export default function StudioBookingsPage() {
   const { user } = useAuthStore();
   const { toast } = useToast();
+  const router = useRouter();
+  const base = useWorkspaceBase();
+  const searchParams = useSearchParams();
 
   const [studios, setStudios] = useState<Studio[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -123,6 +128,22 @@ export default function StudioBookingsPage() {
   // Conflict/availability checks need every booking on the chosen day — the
   // paginated listing only holds one page, so the day's bookings load separately.
   const [dateBookings, setDateBookings] = useState<StudioBooking[]>([]);
+
+  const handleOpenCreate = () => {
+    setForm(emptyForm);
+    setEditingId(null);
+    setDialogOpen(true);
+  };
+
+  // Deep link "?new=1" (from the studio dashboard) opens the create dialog
+  // right away, then strips the param so a refresh does not reopen it.
+  useEffect(() => {
+    if (searchParams.get("new") !== "1") return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    handleOpenCreate();
+    router.replace(`${base}/studio/bookings`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const constraints = useMemo(() => {
     const c: ReturnType<typeof where>[] = [];
@@ -459,7 +480,7 @@ export default function StudioBookingsPage() {
         title="Studio Bookings"
         description="Manage all studio booking requests."
         action={
-          <Button onClick={() => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); }}>
+          <Button onClick={handleOpenCreate}>
             <Plus className="h-4 w-4" /> New Booking
           </Button>
         }

@@ -64,7 +64,7 @@ export default function StudioDashboardPage() {
         title="Studio Management"
         description="Dashboard overview of studio bookings and utilization."
         action={
-          <Button onClick={() => router.push(`${base}/studio/bookings`)}>
+          <Button onClick={() => router.push(`${base}/studio/bookings?new=1`)}>
             New Booking
           </Button>
         }
