@@ -53,6 +53,7 @@ import {
   RefreshCw,
   Search,
   Sun,
+  Timer,
   Users,
 } from "lucide-react";
 import type { Department, Staff } from "@/types";
@@ -182,12 +183,16 @@ export default function LeaveBalancesPage() {
     // Days awaiting conversion is a standing count, not something that happened
     // in a month, so it stays year-wide in both modes and the card says so.
     const sundaysPending = rows.reduce((sum, r) => sum + r.ledger.sundays.pending, 0);
+    // Overtime is summarised per year, not per month — the ledger keeps no
+    // month-wise split of it — so this figure stays year-wide and the card says so.
+    const overtimeHours = rows.reduce((sum, r) => sum + r.ledger.overtime.hours, 0);
     if (month === null) {
       return {
         daysTaken: rows.reduce((sum, r) => sum + r.ledger.totalDays, 0),
         onDuty: rows.reduce((sum, r) => sum + r.ledger.onDuty.total, 0),
         sundaysWorked: rows.reduce((sum, r) => sum + r.ledger.sundays.worked, 0),
         sundaysPending,
+        overtimeHours,
       };
     }
     const views = rows.map((r) => monthViewRow(r.ledger, month));
@@ -196,6 +201,7 @@ export default function LeaveBalancesPage() {
       onDuty: views.reduce((sum, v) => sum + v.onDuty, 0),
       sundaysWorked: views.reduce((sum, v) => sum + v.weekOffWorked, 0),
       sundaysPending,
+      overtimeHours,
     };
   }, [rows, month]);
 
@@ -409,7 +415,7 @@ export default function LeaveBalancesPage() {
         </div>
       </div>
 
-      <StatGrid cols={5}>
+      <StatGrid autoFit>
         <StatCard title="Staff" value={totalCount} icon={Users} color="text-indigo-600" bg="bg-indigo-50" />
         <StatCard
           title={`Leave days (${scopeLabel})`}
@@ -438,6 +444,13 @@ export default function LeaveBalancesPage() {
           icon={CalendarSearch}
           color="text-amber-600"
           bg="bg-amber-50"
+        />
+        <StatCard
+          title={monthLabel ? "Overtime (year)" : "Overtime"}
+          value={`${days(totals.overtimeHours)}h`}
+          icon={Timer}
+          color="text-rose-600"
+          bg="bg-rose-50"
         />
       </StatGrid>
 

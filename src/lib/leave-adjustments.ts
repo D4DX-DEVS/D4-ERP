@@ -60,6 +60,34 @@ export const ADJUSTMENT_KIND_LABELS: Record<LeaveAdjustmentKind, string> = {
   attendance: "Marked on attendance",
 };
 
+/**
+ * The same six kinds said the way the office says them. The short labels above
+ * still title the history rows, where the surrounding line already supplies the
+ * sign and the date; these are for the form, where the admin has to pick one
+ * cold and "Deduction" does not tell them whether the balance goes up or down.
+ */
+export const ADJUSTMENT_REASON_LABELS: Record<LeaveAdjustmentKind, string> = {
+  opening: "Carried from last year",
+  grant: "Extra days given",
+  "sunday-credit": "Earned by working a week-off",
+  correction: "Fixing a mistake",
+  deduction: "Leave not logged yet",
+  attendance: "Marked as leave on the attendance register",
+};
+
+/**
+ * Which reasons an admin may pick by hand, split by what the entry does to the
+ * balance. The sign is the admin's choice, not the kind's — which is why
+ * `correction` appears under both, and why the two system kinds appear under
+ * neither: `sunday-credit` belongs to the week-off conversion and `attendance`
+ * to the reconciler, which finds its own rows again by `sourceAttendanceId`.
+ * Hand-posting either kind puts a row in the way of a job that owns it.
+ */
+export const ADJUSTMENT_REASONS: Record<"credit" | "debit", LeaveAdjustmentKind[]> = {
+  credit: ["opening", "grant", "correction"],
+  debit: ["deduction", "correction"],
+};
+
 /** Local midnight for a date, so day keys never drift by a timezone hour. */
 function atMidnight(date: Date): Date {
   const d = new Date(date);

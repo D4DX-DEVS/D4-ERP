@@ -13,7 +13,8 @@
 //
 // Presentational — the page owns fetching, paging and filtering.
 
-import { Fragment } from "react";
+import { Fragment, useCallback, useLayoutEffect, useRef, useState } from "react";
+import type React from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   LEAVE_BUCKETS,
@@ -30,6 +31,68 @@ import type { LeaveBucket } from "@/types";
 import type { OrgLedgerRow } from "@/lib/leave-adjustments";
 
 export type LeaveBalanceSection = EmploymentGroupSection<OrgLedgerRow>;
+
+/**
+ * How tall the scrolling table box is allowed to get. Bounded, because the box
+ * only scrolls — and so only pins its header — if it has a height to overflow.
+ * Deep enough that a default page of 20 rows still shows a dozen at a time.
+ */
+const TABLE_VIEWPORT = "max-h-[calc(100dvh-15rem)] min-h-[22rem]";
+
+/**
+ * The lines that close the pinned edges, drawn as box-shadows rather than
+ * borders: under `border-collapse: collapse` a sticky cell's own border is
+ * collapsed away with its neighbour's and stops being painted once the cell
+ * detaches, which is exactly when the line is needed. A zero-blur shadow is
+ * not subject to that and lands on the same pixel a border would.
+ *
+ * The bottom line belongs to whichever cell forms the band's BOTTOM edge — the
+ * code row, plus the tall cells spanning both rows — or it would be drawn
+ * halfway up the band, across the row still above it.
+ */
+const EDGE_DOWN = "shadow-[0_2px_0_0_#94a3b8]";
+const EDGE_RIGHT = "shadow-[2px_0_0_0_#cbd5e1]";
+const EDGE_BOTH = "shadow-[0_2px_0_0_#94a3b8,2px_0_0_0_#cbd5e1]";
+
+/** Whether the staff column currently has content hidden behind it. */
+function useScrollShadows() {
+  const [shadows, setShadows] = useState({ right: false });
+  const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    setShadows((prev) => {
+      const right = el.scrollLeft > 0;
+      return prev.right === right ? prev : { right };
+    });
+  }, []);
+  return { shadows, onScroll };
+}
+
+/**
+ * The height of the first header row, measured rather than assumed, so the
+ * second row (the CL/EL/ML/FL codes) sticks flush beneath it. A hardcoded
+ * offset drifts with font size and browser zoom, and the failure is ugly: a
+ * sliver of scrolled row showing between the two header bands.
+ */
+function useHeaderOffset<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [offset, setOffset] = useState(0);
+
+  const measure = useCallback(() => {
+    const el = ref.current;
+    if (el) setOffset(el.getBoundingClientRect().height);
+  }, []);
+
+  useLayoutEffect(() => {
+    measure();
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measure]);
+
+  return { ref, offset };
+}
 
 /** Splits a page of rows into the PERMANENT / CONTRACT / INTERNS sheet groups. */
 export function groupLedgerRows(rows: OrgLedgerRow[]): LeaveBalanceSection[] {
@@ -127,22 +190,37 @@ export function LeaveBalanceTable({
   const blocks = blocksFor(month);
   const columns = columnCount(blocks);
   const monthLabel = month === null ? null : MONTH_LABELS[clampMonth(month)];
+  const { ref: headRowRef, offset: headOffset } = useHeaderOffset<HTMLTableRowElement>();
+  const { shadows, onScroll } = useScrollShadows();
+  // The header line is always drawn — it is the band's edge, not a scroll hint,
+  // and appearing only once scrolled made the header look like it moved. The
+  // staff column's line waits for a sideways scroll, because until then there
+  // is nothing behind it to separate from.
+  const leftEdge = shadows.right ? EDGE_RIGHT : "";
+  const cornerEdge = shadows.right ? EDGE_BOTH : EDGE_DOWN;
 
   // Desktop only. Below md the page renders LeaveBalanceCardList instead —
   // twelve numeric columns are not readable on a phone at any zoom.
+  //
+  // The table owns its own vertical scroll rather than riding the page's. A
+  // sticky header cannot stick to the viewport from inside an overflow-x
+  // wrapper — the wrapper becomes the scrollport, and one that never scrolls
+  // vertically pins nothing. Bounding its height makes it scroll for real, so
+  // the two header rows and the staff column stay put together, and the legend
+  // and pager below stay on screen while the roster moves.
   return (
-    <div className="hidden overflow-x-auto md:block">
+    <div onScroll={onScroll} className={`hidden overflow-auto md:block ${TABLE_VIEWPORT}`}>
       <table className="w-full min-w-[860px] border-collapse text-sm">
         <thead>
-          <tr className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <tr ref={headRowRef} className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <th
               scope="col"
               rowSpan={2}
-              className="sticky left-0 z-10 border-b border-slate-200 bg-slate-50 px-4 py-2 text-left font-semibold"
+              className={`sticky left-0 top-0 z-30 border-b border-slate-200 bg-slate-50 px-4 py-2 text-left font-semibold ${cornerEdge}`}
             >
               Staff
             </th>
-            <th scope="col" rowSpan={2} className="border-b border-slate-200 px-1 py-2">
+            <th scope="col" rowSpan={2} className={`sticky top-0 z-20 border-b border-slate-200 bg-slate-50 px-1 py-2 ${EDGE_DOWN}`}>
               <span className="sr-only">Month-wise detail</span>
             </th>
             {blocks.map((block) => (
@@ -151,7 +229,7 @@ export function LeaveBalanceTable({
                 scope="colgroup"
                 colSpan={LEAVE_BUCKETS.length}
                 title={block.hint}
-                className={`border-b border-l border-slate-200 px-3 py-2 text-center font-bold ${block.head}`}
+                className={`sticky top-0 z-20 border-b border-l border-slate-200 px-3 py-2 text-center font-bold ${block.head}`}
               >
                 {block.label}
               </th>
@@ -164,7 +242,7 @@ export function LeaveBalanceTable({
                   ? `On duty in ${monthLabel} — worked away from the office`
                   : "On duty — worked away from the office"
               }
-              className="border-b border-l border-slate-200 bg-violet-50 px-3 py-2 text-center font-bold text-violet-800"
+              className={`sticky top-0 z-20 border-b border-l border-slate-200 bg-violet-50 px-3 py-2 text-center font-bold text-violet-800 ${EDGE_DOWN}`}
             >
               On duty
             </th>
@@ -176,7 +254,7 @@ export function LeaveBalanceTable({
                   ? `Week-off days worked during ${monthLabel}`
                   : "Week-off days worked, and how many became flexible leave"
               }
-              className="border-b border-l border-slate-200 px-3 py-2 text-center font-semibold"
+              className={`sticky top-0 z-20 border-b border-l border-slate-200 bg-slate-50 px-3 py-2 text-center font-semibold ${EDGE_DOWN}`}
             >
               Week-off
             </th>
@@ -188,7 +266,7 @@ export function LeaveBalanceTable({
                   ? `All leave days taken in ${monthLabel}, across every type`
                   : "All leave days taken this year, across every type"
               }
-              className="border-b border-l border-slate-200 px-3 py-2 text-center font-semibold"
+              className={`sticky top-0 z-20 border-b border-l border-slate-200 bg-slate-50 px-3 py-2 text-center font-semibold ${EDGE_DOWN}`}
             >
               Total
             </th>
@@ -199,7 +277,8 @@ export function LeaveBalanceTable({
                 <th
                   key={`${block.key}-${code}`}
                   scope="col"
-                  className={`border-b border-slate-200 px-3 py-1.5 text-center font-semibold ${
+                  style={{ top: headOffset }}
+                  className={`sticky z-20 border-b border-slate-200 bg-slate-50 px-3 py-1.5 text-center font-semibold ${EDGE_DOWN} ${
                     i === 0 ? "border-l" : ""
                   }`}
                 >
@@ -220,7 +299,7 @@ export function LeaveBalanceTable({
               <tr>
                 <td
                   colSpan={columns}
-                  className="sticky left-0 bg-slate-900 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-white"
+                  className="sticky left-0 z-10 bg-slate-900 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-white"
                 >
                   {section.title}
                 </td>
@@ -237,7 +316,7 @@ export function LeaveBalanceTable({
                     <tr className="border-b border-slate-100 hover:bg-slate-50">
                       <td
                         onClick={open}
-                        className="sticky left-0 z-10 cursor-pointer bg-white px-4 py-3"
+                        className={`sticky left-0 z-10 cursor-pointer bg-white px-4 py-3 ${leftEdge}`}
                       >
                         <p className="font-medium text-slate-900">
                           {row.staff.firstName} {row.staff.lastName}
@@ -399,7 +478,7 @@ export function LeaveBalanceTableSkeleton({
 }) {
   const columns = columnCount(blocksFor(month));
   return (
-    <div className="hidden overflow-x-auto md:block">
+    <div className={`hidden overflow-auto md:block ${TABLE_VIEWPORT}`}>
       <table className="w-full min-w-[860px] border-collapse text-sm">
         <tbody>
           {Array.from({ length: rows }).map((_, r) => (
