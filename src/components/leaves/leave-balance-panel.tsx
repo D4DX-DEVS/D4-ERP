@@ -28,6 +28,7 @@ import {
   LeaveBalanceCards,
   LeaveMonthlyStrip,
   LeaveSummaryLine,
+  OvertimeCards,
   SundaySummaryCards,
   days,
 } from "@/components/leaves/leave-balance-cards";
@@ -168,7 +169,7 @@ export function LeaveBalancePanel({ staff, year, canEdit, user, onYearChange }: 
     return <EmptyState title="No leave data" description="This staff member has no leave records yet." />;
   }
 
-  const { ledger, quota, adjustments, sundayDuties } = bundle;
+  const { ledger, quota, adjustments, sundayDuties, requests } = bundle;
   const thisYear = new Date().getFullYear();
   const yearOptions = [thisYear + 1, thisYear, thisYear - 1, thisYear - 2];
 
@@ -233,6 +234,9 @@ export function LeaveBalancePanel({ staff, year, canEdit, user, onYearChange }: 
             : undefined
         }
       />
+
+      {/* ───── Overtime ───── */}
+      <OvertimeCards ledger={ledger} requests={requests} />
 
       {/* ───── Week-off duty ───── */}
       <Card>
@@ -388,6 +392,7 @@ export function LeaveBalancePanel({ staff, year, canEdit, user, onYearChange }: 
           year={year}
           quota={quota}
           prefill={dialog === "adjust" ? cellEdit ?? undefined : undefined}
+          ledgerRows={{ requests, adjustments }}
           user={user}
           onSaved={() => void load()}
         />

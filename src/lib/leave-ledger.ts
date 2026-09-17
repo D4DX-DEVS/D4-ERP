@@ -425,7 +425,7 @@ function monthInYear(seconds: number | undefined, year: number): number | null {
  * a date missing or belonging to another year loses the row a column, never
  * the whole figure.
  */
-function monthColumn(
+export function monthColumn(
   row: { date?: { seconds?: number } | null; createdAt?: { seconds?: number } | null },
   year: number
 ): number {
