@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
@@ -192,30 +194,23 @@ function EditableRecordCell({
   if (isEditing) {
     return (
       <div className="flex flex-col gap-1 p-1">
-        <select
+        <Select
           value={status}
           onChange={(e) => setStatus(e.target.value as AttendanceStatus)}
-          className="rounded border border-slate-200 px-1.5 py-0.5 text-xs"
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <Input
-          type="time"
+          className="h-7 rounded-lg px-2 py-0.5 text-xs"
+          options={STATUS_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+        />
+        <TimePicker
           value={checkIn}
           onChange={(e) => setCheckIn(e.target.value)}
           placeholder="In"
-          className="h-6 px-1.5 py-0.5 text-xs"
+          className="h-7 px-2 py-0.5 text-xs"
         />
-        <Input
-          type="time"
+        <TimePicker
           value={checkOut}
           onChange={(e) => setCheckOut(e.target.value)}
           placeholder="Out"
-          className="h-6 px-1.5 py-0.5 text-xs"
+          className="h-7 px-2 py-0.5 text-xs"
         />
         <div className="flex gap-1">
           <button
@@ -638,8 +633,8 @@ export default function AttendanceImportPage() {
           />
           {/* ponytail: native date inputs — no picker component needed */}
           <div className="grid grid-cols-2 gap-2 sm:contents">
-            <Input type="date" value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} className="w-full min-w-0 sm:w-auto" />
-            <Input type="date" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} className="w-full min-w-0 sm:w-auto" />
+            <DatePicker value={fromDate} max={toDate || undefined} onChange={(e) => setFromDate(e.target.value)} className="w-full min-w-0 sm:w-auto" />
+            <DatePicker value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} className="w-full min-w-0 sm:w-auto" />
           </div>
           {filtersActive && (
             <Button

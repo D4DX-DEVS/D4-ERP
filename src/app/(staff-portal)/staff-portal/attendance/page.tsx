@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
+import { useOrgTimeZone } from "@/hooks/use-org-timezone";
+import { formatTimeInZone, type TimeValue } from "@/lib/tz";
 import { clearCache, createDocument, getDocuments, orderBy, where, Timestamp } from "@/lib/firestore";
 import { pickAttendanceRecord } from "@/lib/attendance-dedupe";
 import { Attendance, AttendanceCorrection } from "@/types";
@@ -48,10 +50,8 @@ const secOf = (ts: unknown): number | undefined =>
     ? (ts as { seconds: number }).seconds
     : undefined;
 
-const timeStr = (ts: unknown): string => {
-  const s = secOf(ts);
-  return s ? new Date(s * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
-};
+/** Office clock, not the phone's — a punch must read the same on every device. */
+const timeStr = (ts: unknown, timeZone: string): string => formatTimeInZone(ts as TimeValue, timeZone);
 
 interface DayCell {
   day: number;
@@ -63,6 +63,7 @@ interface DayCell {
 
 export default function StaffAttendancePage() {
   const { user } = useAuthStore();
+  const timeZone = useOrgTimeZone();
   const { toast } = useToast();
   const correctionRef = useRef<HTMLDetailsElement>(null);
 
@@ -460,7 +461,7 @@ export default function StaffAttendancePage() {
                       </p>
                       {selectedRecord ? (
                         <p className="text-xs text-slate-500">
-                          In {timeStr(selectedRecord.checkIn)} · Out {timeStr(selectedRecord.checkOut)}
+                          In {timeStr(selectedRecord.checkIn, timeZone)} · Out {timeStr(selectedRecord.checkOut, timeZone)}
                           {selectedRecord.workingHours ? ` · ${selectedRecord.workingHours.toFixed(1)}h` : ""}
                         </p>
                       ) : null}

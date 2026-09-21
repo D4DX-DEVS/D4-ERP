@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
+import { landingPathFor } from "@/lib/portal-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,7 +48,9 @@ export default function LoginPage() {
       }
 
       setUser(data.user);
-      router.push("/dashboard");
+      // Staff have no dashboard shell; sending them there is an instant
+      // "Access denied" they cannot navigate out of.
+      router.push(landingPathFor(data.user?.role));
     } catch {
       setError("Invalid email or password");
     } finally {

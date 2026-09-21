@@ -140,7 +140,8 @@ describe("dashboard roles (sidebar shell)", () => {
     expect(sidebarPagesFor("department-head", "tools-vault")).toEqual(["System › Tools & Accounts"]);
     expect(sidebarPagesFor("department-head", "events")).toEqual([]);
     expect(sidebarPagesFor("accounts", "tasks")).toEqual([]);
-    expect(sidebarPagesFor("accounts", "work-logs")).toEqual(["Work › Daily Updates", "Work › Work Logs", "Work › Performance"]);
+    // Daily Updates lives with the people it reports on; the logs stay in Work.
+    expect(sidebarPagesFor("accounts", "work-logs")).toEqual(["People › Daily Updates", "Work › Work Logs", "Work › Performance"]);
   });
 
   it("isUnsupported for a dashboard role means the grant reveals nothing in the sidebar", () => {
