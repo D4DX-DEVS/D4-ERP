@@ -161,6 +161,16 @@ export const navigationModules: NavModule[] = [
       { label: "Corrections", href: "/dashboard/attendance/corrections", icon: ClipboardCheck, roles: ["admin", "department-head"] },
       { label: "Shifts", href: "/dashboard/attendance/shifts", icon: Hourglass, roles: ["admin"] },
       { label: "Attendance Reports", href: "/dashboard/attendance/reports", icon: BarChart3, roles: ["admin", "department-head", "accounts"] },
+      // Heads file the day's report here and admins read them back, so it sits
+      // with the people it is about rather than with the task board.
+      { label: "Daily Updates", href: "/dashboard/tasks/daily-updates", icon: FileText, roles: ["admin", "department-head"], feature: "work-logs" },
+      // The monthly report a department head files and an admin signs off. It
+      // lived under Finance → Reports, where nobody looked for it.
+      { label: "Dept Reports", href: "/dashboard/reports/department", icon: FileText, roles: ["admin", "department-head", "accounts"] },
+      // Where the admin assembles one period's filings into the master document
+      // that leaves the building.
+      { label: "Org Reports", href: "/dashboard/reports/organization", icon: Layers, roles: ["admin", "accounts"] },
+      { label: "Final Report", href: "/dashboard/reports/company", icon: BarChart3, roles: ["admin"] },
       { label: "Leave Requests", href: "/dashboard/leaves", roles: ["admin", "department-head"] },
       { label: "Leave Balances", href: "/dashboard/leaves/balances", icon: Wallet, roles: ["admin", "department-head"] },
       { label: "Payroll", href: "/dashboard/payroll", roles: ["admin", "accounts"], feature: "payroll" },
@@ -176,7 +186,6 @@ export const navigationModules: NavModule[] = [
     roles: ["admin", "department-head"],
     items: [
       { label: "Task Board", href: "/dashboard/tasks", roles: ["admin", "department-head"] },
-      { label: "Daily Updates", href: "/dashboard/tasks/daily-updates", roles: ["admin", "department-head"], feature: "work-logs" },
       { label: "Work Logs", href: "/dashboard/tasks/work-logs", roles: ["admin", "department-head"], feature: "work-logs" },
       { label: "Performance", href: "/dashboard/tasks/performance", roles: ["admin", "department-head"], feature: "work-logs" },
       { label: "Team Calendar", href: "/dashboard/calendar", icon: Calendar, roles: ["admin", "department-head"] },
@@ -260,8 +269,6 @@ export const navigationModules: NavModule[] = [
         icon: BarChart3,
         items: [
           { label: "Overview", href: "/dashboard/reports", roles: ["admin", "accounts"], feature: "reports" },
-          { label: "Department Reports", href: "/dashboard/reports/department", icon: FileText, roles: ["admin", "department-head", "accounts"] },
-          { label: "Company Report", href: "/dashboard/reports/company", icon: BarChart3, roles: ["admin"] },
           { label: "KPI Management", href: "/dashboard/reports/kpis", roles: ["admin", "department-head"] },
           { label: "Productivity", href: "/dashboard/reports/productivity", roles: ["admin", "department-head"] },
         ],

@@ -5,6 +5,7 @@
 // the dashboard sidebar (rendered inside the portal via wrapper routes).
 
 import { FEATURES, type FeatureKey, type PortalSection } from "@/lib/permissions";
+import type { StaffRole } from "@/types";
 
 export interface PortalLink {
   href: string;
@@ -79,4 +80,48 @@ export function resolvePortalRoute(pathname: string | null | undefined): PortalG
 export function dashboardPathFor(pathname: string | null | undefined): string | null {
   if (!pathname || !resolvePortalRoute(pathname)) return null;
   return pathname.replace(/^\/staff-portal/, "/dashboard");
+}
+
+/**
+ * Portal twin of a dashboard module path — the reverse of dashboardPathFor.
+ *
+ * Only exact hubs and links map: those are the hrefs portal-nav.test.ts pins to
+ * a wrapper route on disk. Detail pages (/dashboard/events/abc123) and
+ * admin-only sub-pages (/dashboard/assets/categories) have no guaranteed
+ * wrapper, so forwarding there would swap "Access denied" for a 404.
+ */
+export function portalPathFor(pathname: string | null | undefined): string | null {
+  if (!pathname || !pathname.startsWith("/dashboard")) return null;
+  const twin = pathname.replace(/^\/dashboard/, "/staff-portal");
+  return PORTAL_GUARD.some((g) => g.href === twin) ? twin : null;
+}
+
+/**
+ * The shell a role belongs in. Staff live in the portal; every other role runs
+ * the dashboard. An unknown/missing role gets the portal because it is the only
+ * shell that turns nobody away — /dashboard denies plain staff outright.
+ */
+export function landingPathFor(role: StaffRole | string | null | undefined): string {
+  if (!role) return "/staff-portal";
+  return role === "staff" ? "/staff-portal" : "/dashboard";
+}
+
+/**
+ * Where to send someone the dashboard guard refused.
+ *
+ * Bouncing everyone to /dashboard was the dead end behind the stuck "Access
+ * denied" card: a staff member cannot open /dashboard either, so the guard
+ * denied the page it had just redirected them to, forever. The answer must be a
+ * route the role can actually open — their own shell, or the portal twin of the
+ * page they were reaching for so a deep link still lands somewhere useful.
+ */
+export function deniedRedirectFor(
+  role: StaffRole | string | null | undefined,
+  pathname: string | null | undefined
+): string {
+  const target =
+    (role === "staff" ? portalPathFor(pathname) : null) ?? landingPathFor(role);
+  // Redirecting a page to itself is the loop this function exists to prevent;
+  // the root route re-routes by role, so it is always a safe way out.
+  return target === pathname ? "/" : target;
 }

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createDocument, getDocuments, orderBy, where, Timestamp, updateDocument } from "@/lib/firestore";
 import { Attendance, AttendanceStatus, Department, Staff } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
@@ -10,12 +10,16 @@ import { ATTENDANCE_STATUS_CONFIG, attendanceStatusMeta, normalizeAttendanceStat
 import { attendanceStats } from "@/lib/attendance-stats";
 import { reconcileAttendanceDay } from "@/lib/leave-adjustments";
 import { useAuthStore } from "@/store/auth-store";
+import { deptScopeFor, inDeptScope } from "@/lib/dept-scope";
+import { useOrgTimeZone } from "@/hooks/use-org-timezone";
+import { dateKeyInZone, formatTimeInZone, timeInputValue, zonedDateAt, type TimeValue } from "@/lib/tz";
 import { pickAttendanceRecord } from "@/lib/attendance-dedupe";
 import { resolveDayCell } from "@/lib/attendance-grid";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
+import { TimePicker } from "@/components/ui/time-picker";
 import { Select } from "@/components/ui/select";
 import { exportToCSV } from "@/lib/asset-export-utils";
 import { exportAttendanceSheetPDF, groupStaffForSheet, type SheetStaffEntry } from "@/lib/attendance-sheet";
@@ -43,6 +47,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Pagination } from "@/components/ui/pagination";
 
 const LOG_PAGE_SIZE = 10;
+// The register is read a day at a time; a whole month of rows in one scroll was
+// how 400+ rows ended up on screen with no way to find yesterday.
+const DAILY_PAGE_SIZE = 25;
+// 25 fits a roster-sized day; the rest are there for "show me the lot" and for
+// phones, where 25 rows is a long scroll.
+const DAILY_PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+const ALL_DAYS = "all";
 
 // ── View + status configuration ──────────────────────────────────────────────
 
@@ -66,17 +77,24 @@ const secOf = (ts: unknown): number | undefined =>
     ? (ts as { seconds: number }).seconds
     : undefined;
 
-const timeStr = (ts: unknown): string => {
-  const s = secOf(ts);
-  return s ? new Date(s * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
-};
-
 // Local-date key (YYYY-MM-DD). Never toISOString here: that shifts IST
 // records stored at local midnight onto the previous UTC day.
 const localDateKey = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-const dateKeyFromSec = (s: number): string => localDateKey(new Date(s * 1000));
+/** "Fri, 18 Sep 2026" for a day key. Parsed as plain numbers, never as an
+ *  ISO string — `new Date("2026-09-18")` is UTC midnight and reads as the 17th
+ *  for anyone west of Greenwich. */
+const dayKeyLabel = (key: string): string => {
+  const [y, m, d] = key.split("-").map(Number);
+  if (!y || !m || !d) return key;
+  return new Date(y, m - 1, d).toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
 
 const fullName = (s?: Staff) => (s ? `${s.firstName} ${s.lastName}` : "Unknown");
 
@@ -84,14 +102,65 @@ export default function AttendanceRegisterPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuthStore();
+  // Punches are stored as instants; the register shows them on the office clock
+  // so a head reading the sheet abroad sees the same 09:54 the device printed.
+  const timeZone = useOrgTimeZone();
+  const timeStr = (ts: unknown): string => formatTimeInZone(ts as TimeValue, timeZone);
+  const dateKeyFromSec = (sec: number): string => dateKeyInZone(sec, timeZone) ?? "";
+  const dayLabel = (sec: number, opts: Intl.DateTimeFormatOptions): string =>
+    new Date(sec * 1000).toLocaleDateString("en-IN", { ...opts, timeZone });
+  // "Today" is the office's today — the one the register and the grid mark.
+  const todayKey = dateKeyInZone(new Date(), timeZone) ?? localDateKey(new Date());
 
   const now = new Date();
-  const [month, setMonth] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+
+  // ── Where you are lives in the URL ──────────────────────────────────────────
+  // Opening a row and pressing Back used to drop you on the monthly grid for the
+  // current month: view, day and page were component state, so the remount after
+  // the back navigation rebuilt them from their defaults. Same fix the staff
+  // list already uses — replace() rather than push(), so the register does not
+  // stack a history entry per filter click and Back still leaves the page.
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const setParams = useCallback(
+    (patch: Record<string, string | null>) => {
+      const next = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) next.delete(key);
+        else next.set(key, value);
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [router, pathname, searchParams]
+  );
+
+  const thisMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const month = searchParams.get("month") ?? thisMonth;
+  const setMonth = (value: string) => setParams({ month: value || null, day: null, page: null });
+
   // The monthly grid is the register the org actually works from — it mirrors
   // the printed attendance sheet — so it opens first, not the raw log stream.
-  const [view, setView] = useState<ViewMode>("grid");
+  const viewParam = searchParams.get("view");
+  const view: ViewMode = VIEWS.some((v) => v.id === viewParam) ? (viewParam as ViewMode) : "grid";
+  const setView = (value: ViewMode) => setParams({ view: value === "grid" ? null : value, page: null });
+
+  const statusParam = searchParams.get("status");
+  const statusFilter = (statusParam ?? "all") as "all" | ActiveAttendanceStatus;
+  const setStatusFilter = (value: "all" | ActiveAttendanceStatus) =>
+    setParams({ status: value === "all" ? null : value, page: null });
+
+  // The search box stays local: one URL write per keystroke would bury the
+  // history and make typing stutter, and a half-typed name is not a place.
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | ActiveAttendanceStatus>("all");
+
+  // 1-based in the URL (what a person reads), 0-based in the code.
+  const pageParam = Math.max(1, Number(searchParams.get("page") ?? "1") || 1) - 1;
+  const sizeParam = Number(searchParams.get("size"));
+  const dailyPageSize = DAILY_PAGE_SIZE_OPTIONS.includes(sizeParam) ? sizeParam : DAILY_PAGE_SIZE;
+  const setDailyPageSize = (size: number) =>
+    // Page 1 again: row 260 of the old paging is nowhere near row 260 of the new.
+    setParams({ size: size === DAILY_PAGE_SIZE ? null : String(size), page: null });
 
   const [staffList, setStaffList] = useState<(Staff & { id: string })[]>([]);
   const [departments, setDepartments] = useState<(Department & { id: string })[]>([]);
@@ -147,13 +216,8 @@ export default function AttendanceRegisterPage() {
     setEditStatus(record ? normalizeAttendanceStatus(record.status) : "present");
     // <input type="time"> needs 24h HH:mm — locale strings like "02:58pm" get rejected,
     // leaving the field blank and silently wiping punches on save.
-    const hhmm = (sec?: number) => {
-      if (!sec) return "";
-      const d = new Date(sec * 1000);
-      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-    };
-    setEditCheckIn(hhmm(secOf(record?.checkIn)));
-    setEditCheckOut(hhmm(secOf(record?.checkOut)));
+    setEditCheckIn(timeInputValue(record?.checkIn as TimeValue, timeZone));
+    setEditCheckOut(timeInputValue(record?.checkOut as TimeValue, timeZone));
   }
 
   function openEditDialog(record: Rec) {
@@ -168,22 +232,15 @@ export default function AttendanceRegisterPage() {
       const dateObj = new Date(editTarget.date);
       dateObj.setHours(0, 0, 0, 0);
 
-      const inTime = editCheckIn
-        ? (() => {
-            const [h, m] = editCheckIn.split(":").map(Number);
-            const d = new Date(dateObj);
-            d.setHours(h, m, 0);
-            return Timestamp.fromDate(d);
-          })()
-        : undefined;
-      const outTime = editCheckOut
-        ? (() => {
-            const [h, m] = editCheckOut.split(":").map(Number);
-            const d = new Date(dateObj);
-            d.setHours(h, m, 0);
-            return Timestamp.fromDate(d);
-          })()
-        : undefined;
+      // Same clock going out as coming in: "09:54" means 09:54 in the office,
+      // whatever zone the browser saving it happens to be in.
+      const editDayKey = localDateKey(dateObj);
+      const punchAt = (value: string) => {
+        const when = zonedDateAt(editDayKey, value, timeZone);
+        return when ? Timestamp.fromDate(when) : undefined;
+      };
+      const inTime = punchAt(editCheckIn);
+      const outTime = punchAt(editCheckOut);
 
       let savedId = editTarget.record?.id ?? "";
 
@@ -284,13 +341,31 @@ export default function AttendanceRegisterPage() {
     return map;
   }, [staffList]);
 
+  // A department head reads their own department's register and nobody else's;
+  // admins and accounts stay unscoped. A head with no department on record sees
+  // an empty register rather than the whole company (see dept-scope.ts).
+  // `|| null` on purpose: the API already fails closed for a head with no
+  // department (it resolves the department from the staff document, not the
+  // token), so an empty token field must not blank a register the server
+  // filled. This filter is UI convenience over already-scoped data.
+  const deptScope = deptScopeFor(user?.role, user?.departmentId) || null;
+  const scopedStaff = useMemo(
+    () => staffList.filter((s) => inDeptScope(deptScope, s.departmentId)),
+    [staffList, deptScope]
+  );
+  const scopedStaffIds = useMemo(() => new Set(scopedStaff.map((s) => s.id)), [scopedStaff]);
+  const scopedRecords = useMemo(
+    () => records.filter((r) => scopedStaffIds.has(r.staffId)),
+    [records, scopedStaffIds]
+  );
+
   // Rows for the month: the live roster, plus removed staff who actually have
   // records in this month — their history stays visible where it happened
   // instead of vanishing with the staff record.
   const rosterStaff = useMemo(() => {
-    const withRecords = new Set(records.map((r) => r.staffId));
-    return staffList.filter((s) => !s.isDeleted || withRecords.has(s.id));
-  }, [staffList, records]);
+    const withRecords = new Set(scopedRecords.map((r) => r.staffId));
+    return scopedStaff.filter((s) => !s.isDeleted || withRecords.has(s.id));
+  }, [scopedStaff, scopedRecords]);
 
   // Staff filtered by the search box
   const filteredStaff = useMemo(() => {
@@ -305,15 +380,15 @@ export default function AttendanceRegisterPage() {
 
   // Records matching the current search + status filter
   const visibleRecords = useMemo(() => {
-    return records.filter((r) => {
+    return scopedRecords.filter((r) => {
       if (!filteredStaffIds.has(r.staffId)) return false;
       if (statusFilter !== "all" && normalizeAttendanceStatus(r.status) !== statusFilter) return false;
       return true;
     });
-  }, [records, filteredStaffIds, statusFilter]);
+  }, [scopedRecords, filteredStaffIds, statusFilter]);
 
   // ── Stats ───────────────────────────────────────────────────────────────────
-  const stats = useMemo(() => attendanceStats(records, staffList), [records, staffList]);
+  const stats = useMemo(() => attendanceStats(scopedRecords, scopedStaff), [scopedRecords, scopedStaff]);
 
   // ── Log stream events (every check-in / check-out) ───────────────────────────
   const logEvents = useMemo(() => {
@@ -361,42 +436,71 @@ export default function AttendanceRegisterPage() {
   // ponytail: month's records are already in memory (stats + grid need them all),
   // so page the log stream by slicing. Swap for cursor queries if a month ever
   // grows past a few thousand punches.
-  // Page is stored with the filter signature it belongs to, so changing month /
-  // search / status resets to page 1 without a setState-in-effect round trip.
-  const logFilterSig = `${month}|${query}|${statusFilter}`;
-  const [logPageState, setLogPageState] = useState({ sig: logFilterSig, page: 0 });
   const logTotalPages = Math.ceil(logEvents.length / LOG_PAGE_SIZE);
-  // Clamp: an edit that drops punches can shrink the list under the current page.
-  const logPage = Math.min(
-    logPageState.sig === logFilterSig ? logPageState.page : 0,
-    Math.max(0, logTotalPages - 1)
-  );
-  const setLogPage = (page: number) => setLogPageState({ sig: logFilterSig, page });
+  // Clamp: an edit that drops punches, or a stale ?page= from another filter,
+  // can leave the URL pointing past the end of the list.
+  const logPage = Math.min(pageParam, Math.max(0, logTotalPages - 1));
+  const setLogPage = (page: number) => setParams({ page: page > 0 ? String(page + 1) : null });
   const pagedLogEvents = useMemo(
     () => logEvents.slice(logPage * LOG_PAGE_SIZE, (logPage + 1) * LOG_PAGE_SIZE),
     [logEvents, logPage]
   );
 
-  // ── Daily register rows (one per record, newest first) ───────────────────────
+  // ── Daily register rows (one day at a time, newest day first) ───────────────
+  // The register is read per day. Listing a whole month at once put 400+ rows on
+  // one unpaged screen, which is where "it shows everything" came from.
+  const dailyDayKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const r of visibleRecords) {
+      const sec = secOf(r.date);
+      const key = sec ? dateKeyInZone(sec, timeZone) : undefined;
+      if (key) keys.add(key);
+    }
+    return [...keys].sort((a, b) => b.localeCompare(a));
+  }, [visibleRecords, timeZone]);
+
+  // Land on today when the month has it, else the most recent day with records.
+  const defaultDailyDay = dailyDayKeys.includes(todayKey) ? todayKey : dailyDayKeys[0] ?? ALL_DAYS;
+  // A day still loading its records is not yet in dailyDayKeys, so an unknown
+  // key falls back for this render without being written out of the URL.
+  const dayParam = searchParams.get("day");
+  const dailyDay =
+    dayParam && (dayParam === ALL_DAYS || dailyDayKeys.includes(dayParam)) ? dayParam : defaultDailyDay;
+
   const dailyRows = useMemo(() => {
-    return [...visibleRecords].sort((a, b) => (secOf(b.date) ?? 0) - (secOf(a.date) ?? 0));
-  }, [visibleRecords]);
+    const rows =
+      dailyDay === ALL_DAYS
+        ? visibleRecords
+        : visibleRecords.filter((r) => {
+            const sec = secOf(r.date);
+            return sec ? dateKeyInZone(sec, timeZone) === dailyDay : false;
+          });
+    return [...rows].sort((a, b) => (secOf(b.date) ?? 0) - (secOf(a.date) ?? 0));
+  }, [visibleRecords, dailyDay, timeZone]);
+
+  const dailyTotalPages = Math.max(1, Math.ceil(dailyRows.length / dailyPageSize));
+  const dailyPage = Math.min(pageParam, dailyTotalPages - 1);
+  const setDailyDay = (day: string) => setParams({ day, page: null });
+  const setDailyPage = (page: number) => setParams({ page: page > 0 ? String(page + 1) : null });
+  const pagedDailyRows = useMemo(
+    () => dailyRows.slice(dailyPage * dailyPageSize, (dailyPage + 1) * dailyPageSize),
+    [dailyRows, dailyPage, dailyPageSize]
+  );
 
   // ── Monthly grid lookup ──────────────────────────────────────────────────────
   const gridLookup = useMemo(() => {
     const map = new Map<string, Rec>();
-    for (const r of records) {
+    for (const r of scopedRecords) {
       const s = secOf(r.date);
       if (!s) continue;
-      const k = `${r.staffId}_${dateKeyFromSec(s)}`;
+      const k = `${r.staffId}_${dateKeyInZone(s, timeZone) ?? ""}`;
       const prev = map.get(k);
       // Duplicate rows for one day: correction > manual > import, then newest write
       map.set(k, prev ? pickAttendanceRecord(prev, r) : r);
     }
     return map;
-  }, [records]);
+  }, [scopedRecords, timeZone]);
 
-  const todayKey = localDateKey(new Date());
 
   const dayMeta = useMemo(() => {
     const holidayMap = new Map(holidays.map((h) => [h.date, h.name]));
@@ -434,7 +538,7 @@ export default function AttendanceRegisterPage() {
     if (view === "logs") {
       const rows = logEvents.map((e) => ({
         Date: dateKeyFromSec(e.sec),
-        Time: new Date(e.sec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+        Time: formatTimeInZone(e.sec, timeZone),
         Staff: fullName(staffMap.get(e.staffId)),
         Action: e.action,
         Status: attendanceStatusMeta(e.status).label,
@@ -574,6 +678,17 @@ export default function AttendanceRegisterPage() {
               className="w-full pl-9 sm:w-auto"
             />
           </div>
+          {view === "daily" ? (
+            <Select
+              value={dailyDay}
+              onChange={(e) => setDailyDay(e.target.value)}
+              className="w-auto shrink-0 sm:min-w-[190px]"
+              options={[
+                { value: ALL_DAYS, label: `All days in ${monthLabel}` },
+                ...dailyDayKeys.map((key) => ({ value: key, label: dayKeyLabel(key) })),
+              ]}
+            />
+          ) : null}
           {view !== "grid" ? (
             <Select
               value={statusFilter}
@@ -620,10 +735,10 @@ export default function AttendanceRegisterPage() {
                   return (
                     <TableRow key={e.key}>
                       <TableCell className="font-medium text-slate-950">
-                        {new Date(e.sec * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                        {formatTimeInZone(e.sec, timeZone)}
                       </TableCell>
                       <TableCell className="text-slate-600">
-                        {new Date(e.sec * 1000).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                        {dayLabel(e.sec, { day: "2-digit", month: "short" })}
                       </TableCell>
                       <TableCell className="font-medium text-slate-950">{fullName(staffMap.get(e.staffId))}</TableCell>
                       <TableCell>
@@ -675,7 +790,11 @@ export default function AttendanceRegisterPage() {
       {view === "daily" ? (
         <ListingPanel
           title={`Daily Register (${dailyRows.length})`}
-          description="One row per staff per day. Click a row to open the daily detail."
+          description={
+            dailyDay === ALL_DAYS
+              ? `Every day in ${monthLabel}, newest first. Click a row to open the daily detail.`
+              : `${dayKeyLabel(dailyDay)} — one row per staff. Click a row to open the daily detail.`
+          }
           contentClassName="p-0"
         >
           <Table>
@@ -696,11 +815,13 @@ export default function AttendanceRegisterPage() {
               {dailyRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="py-10 text-center text-sm text-slate-500">
-                    No attendance records for this period.
+                    {dailyDay === ALL_DAYS
+                      ? "No attendance records for this period."
+                      : `No attendance records on ${dayKeyLabel(dailyDay)}.`}
                   </TableCell>
                 </TableRow>
               ) : (
-                dailyRows.map((r) => {
+                pagedDailyRows.map((r) => {
                   const cfg = attendanceStatusMeta(r.status);
                   const dateKey = dateKeyFromSec(secOf(r.date) ?? 0);
                   const detailHref = `/dashboard/attendance/${r.staffId}?date=${dateKey}`;
@@ -719,11 +840,7 @@ export default function AttendanceRegisterPage() {
                       }}
                     >
                       <TableCell className="font-medium text-slate-950">
-                        {new Date((secOf(r.date) ?? 0) * 1000).toLocaleDateString("en-IN", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        })}
+                        {dayLabel(secOf(r.date) ?? 0, { day: "2-digit", month: "short", year: "numeric" })}
                       </TableCell>
                       <TableCell className="font-medium text-slate-950">{fullName(staffMap.get(r.staffId))}</TableCell>
                       <TableCell>
@@ -731,7 +848,15 @@ export default function AttendanceRegisterPage() {
                       </TableCell>
                       <TableCell>{timeStr(r.checkIn)}</TableCell>
                       <TableCell className="hidden sm:table-cell">{timeStr(r.checkOut)}</TableCell>
-                      <TableCell>{r.workingHours ? `${r.workingHours.toFixed(1)}h` : "—"}</TableCell>
+                      <TableCell>
+                        {r.workingHours ? (
+                          `${r.workingHours.toFixed(1)}h`
+                        ) : secOf(r.checkIn) && !secOf(r.checkOut) ? (
+                          <span className="text-xs text-slate-400">no out punch</span>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         {r.overtimeHours ? (
                           <Badge variant="bg-orange-100 text-orange-700">+{r.overtimeHours.toFixed(1)}h</Badge>
@@ -743,7 +868,14 @@ export default function AttendanceRegisterPage() {
                         <div className="flex flex-wrap gap-1.5">
                           {r.isLate ? <Badge variant="bg-amber-100 text-amber-700">Late</Badge> : null}
                           {r.isEarlyDeparture ? <Badge variant="bg-yellow-100 text-yellow-700">Early</Badge> : null}
-                          {!r.isLate && !r.isEarlyDeparture ? <span className="text-xs text-slate-400">None</span> : null}
+                          {/* Two thirds of imported days have no out punch, so an
+                              empty Hours column needs a reason beside it. */}
+                          {secOf(r.checkIn) && !secOf(r.checkOut) ? (
+                            <Badge variant="bg-slate-100 text-slate-600">No out punch</Badge>
+                          ) : null}
+                          {!r.isLate && !r.isEarlyDeparture && !(secOf(r.checkIn) && !secOf(r.checkOut)) ? (
+                            <span className="text-xs text-slate-400">None</span>
+                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -762,6 +894,18 @@ export default function AttendanceRegisterPage() {
               )}
             </TableBody>
           </Table>
+          <Pagination
+            page={dailyPage}
+            totalPages={dailyTotalPages}
+            totalCount={dailyRows.length}
+            pageSize={dailyPageSize}
+            hasPrev={dailyPage > 0}
+            hasNext={dailyPage < dailyTotalPages - 1}
+            onPrev={() => setDailyPage(Math.max(0, dailyPage - 1))}
+            onNext={() => setDailyPage(Math.min(dailyTotalPages - 1, dailyPage + 1))}
+            onPageSizeChange={setDailyPageSize}
+            pageSizeOptions={DAILY_PAGE_SIZE_OPTIONS}
+          />
         </ListingPanel>
       ) : null}
 
@@ -769,7 +913,11 @@ export default function AttendanceRegisterPage() {
       {view === "grid" ? (
         <ListingPanel
           title={`Monthly Grid — ${monthLabel}`}
-          description="Staff down the side, days across the top. Tap a name to expand their full month."
+          description={
+            deptScope
+              ? `${deptNameById.get(deptScope) ?? "Your department"} — ${filteredStaff.length} staff. Days across the top; tap a name to expand the full month.`
+              : "Staff down the side, days across the top. Tap a name to expand their full month."
+          }
           contentClassName="p-0"
         >
           <div className="overflow-x-auto">
@@ -1017,11 +1165,11 @@ export default function AttendanceRegisterPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Check In (optional)</label>
-                <Input type="time" value={editCheckIn} onChange={(e) => setEditCheckIn(e.target.value)} />
+                <TimePicker value={editCheckIn} onChange={(e) => setEditCheckIn(e.target.value)} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Check Out (optional)</label>
-                <Input type="time" value={editCheckOut} onChange={(e) => setEditCheckOut(e.target.value)} />
+                <TimePicker value={editCheckOut} onChange={(e) => setEditCheckOut(e.target.value)} />
               </div>
             </div>
             <div className="mt-6 flex gap-3">

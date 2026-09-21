@@ -7,6 +7,7 @@ import { hasFeature } from "@/lib/permissions";
 import type { ParsedEmployee } from "@/lib/attendance-import/parsers";
 import type { AttendanceStatus } from "@/types";
 import { normalizeSettings, isNonWorkingDay, evaluateCheckIn, type AppSettings } from "@/lib/settings";
+import { DEFAULT_TIME_ZONE, hoursBetween, zonedDateAt } from "@/lib/tz";
 
 interface ParsedRecord {
   date: string;
@@ -29,16 +30,19 @@ function dateOnly(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d, 0, 0, 0, 0);
 }
-function dateAt(iso: string, time?: string): Date | undefined {
+/**
+ * The same punch expressed in the HOST's clock.
+ *
+ * Only for schedule maths: evaluateCheckIn compares `when.getHours()` against
+ * "09:30", so it needs a Date whose local fields are the wall clock the device
+ * printed. The value that gets STORED is the zone-correct instant instead.
+ */
+function hostWallClock(iso: string, time?: string): Date | undefined {
   if (!time) return undefined;
   const [y, m, d] = iso.split("-").map(Number);
   const [h, min] = time.split(":").map(Number);
+  if ([y, m, d, h, min].some((n) => Number.isNaN(n))) return undefined;
   return new Date(y, m - 1, d, h, min, 0, 0);
-}
-function workingHoursOf(checkIn?: Date, checkOut?: Date): number {
-  if (!checkIn || !checkOut) return 0;
-  const hrs = (checkOut.getTime() - checkIn.getTime()) / 3600000;
-  return hrs > 0 ? Math.round(hrs * 100) / 100 : 0;
 }
 
 export async function POST(req: NextRequest) {
@@ -70,6 +74,10 @@ export async function POST(req: NextRequest) {
   } catch {
     settings = normalizeSettings(null);
   }
+  // The device prints the office wall clock and nothing else. Reading "09:54"
+  // with the host's zone stored 09:54 UTC on Vercel, which every viewer in
+  // India then read as a 03:24 pm check-in.
+  const timeZone = settings.timezone || DEFAULT_TIME_ZONE;
 
   // Removed staff (soft-deleted) are excluded — their rows stay for history but
   // they take no new punches; the device code lands in unmappedCount instead.
@@ -137,15 +145,18 @@ export async function POST(req: NextRequest) {
         if (rec.status === "absent" && !rec.checkIn && !rec.checkOut && isNonWorkingDay(settings, date, companyId)) {
           rec.status = "week-off";
         }
-        const checkIn = dateAt(rec.date, rec.checkIn);
-        let checkOut = dateAt(rec.date, rec.checkOut);
+        const checkIn = zonedDateAt(rec.date, rec.checkIn, timeZone);
+        let checkOut = zonedDateAt(rec.date, rec.checkOut, timeZone);
         if (checkIn && checkOut && checkOut < checkIn) {
           // Overnight shift — the punch landed after midnight, so it belongs to the next calendar day.
           checkOut = new Date(checkOut.getTime() + 86400000);
         }
 
         // Late flag mirrors the manual register edit: schedule + grace, off days never late.
-        const isLate = checkIn ? evaluateCheckIn(settings, checkIn, null, companyId).isLate : false;
+        const punchWallClock = hostWallClock(rec.date, rec.checkIn);
+        const isLate = punchWallClock
+          ? evaluateCheckIn(settings, punchWallClock, null, companyId).isLate
+          : false;
 
         // Same staff+day rows can carry different midnight conventions (see
         // attendance-dedupe.ts), so match the whole local day, not one exact Date.
@@ -166,11 +177,15 @@ export async function POST(req: NextRequest) {
           checkIn,
           checkOut,
           status: rec.status,
-          workingHours: workingHoursOf(checkIn, checkOut),
+          workingHours: hoursBetween(checkIn, checkOut),
           overtimeHours: 0,
           isLate,
           isEarlyDeparture: false,
           source: "biometric",
+          // Stamps the row as already anchored to the office clock. The
+          // migration that repaired the pre-fix imports skips stamped rows, so
+          // re-running it can never shift a punch this importer wrote.
+          punchTimeZone: timeZone,
           importBatchId: batchId,
           remarks: "rawStatus" in rec && rec.rawStatus && rec.rawStatus !== "P" && rec.rawStatus !== "A" ? `ESSL status: ${rec.rawStatus}` : undefined,
           updatedAt: new Date(),

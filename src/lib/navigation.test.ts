@@ -30,4 +30,44 @@ describe("dashboard navigation feature gating", () => {
     }
     expect(mismatches).toEqual([]);
   });
+
+  it("puts Daily Updates in People, where admins look for staff reports", () => {
+    const people = navigationModules.find((m) => m.id === "people");
+    const item = people?.items?.find((i) => i.href === "/dashboard/tasks/daily-updates");
+    expect(item, "Daily Updates should sit under the People module").toBeDefined();
+    expect(item?.roles).toContain("department-head");
+    // One home only — a second copy under Work lights up two sidebar rows at once.
+    const copies = getAllNavItems().filter((i) => i.href === "/dashboard/tasks/daily-updates");
+    expect(copies).toHaveLength(1);
+  });
+
+  it("keeps the department report flow in People, where heads and admins look for it", () => {
+    const people = navigationModules.find((m) => m.id === "people");
+    const deptReports = people?.items?.find((i) => i.href === "/dashboard/reports/department");
+    const finalReport = people?.items?.find((i) => i.href === "/dashboard/reports/company");
+    expect(deptReports?.roles).toContain("department-head");
+    expect(deptReports?.roles).toContain("admin");
+    // The roll-up is the admin's sign-off view; a head only files their own.
+    expect(finalReport?.roles).toEqual(["admin"]);
+    // One home each, so the sidebar cannot light up two rows for one page.
+    for (const href of ["/dashboard/reports/department", "/dashboard/reports/company"]) {
+      expect(getAllNavItems().filter((i) => i.href === href)).toHaveLength(1);
+    }
+  });
+
+  it("gives the organization report builder a home a head cannot open", () => {
+    const people = navigationModules.find((m) => m.id === "people");
+    const builder = people?.items?.find((i) => i.href === "/dashboard/reports/organization");
+    expect(builder, "Org Reports should sit under People, beside the filings it is built from").toBeDefined();
+    // It prints every department's numbers — reporting roles only.
+    expect(builder?.roles).toEqual(["admin", "accounts"]);
+    expect(getAllNavItems().filter((i) => i.href === "/dashboard/reports/organization")).toHaveLength(1);
+  });
+
+  it("keeps every People item readable by a department head except the admin-only ones", () => {
+    const people = navigationModules.find((m) => m.id === "people");
+    expect(people?.roles).toContain("department-head");
+    const headItems = (people?.items ?? []).filter((i) => i.roles?.includes("department-head"));
+    expect(headItems.map((i) => i.href)).toContain("/dashboard/attendance");
+  });
 });

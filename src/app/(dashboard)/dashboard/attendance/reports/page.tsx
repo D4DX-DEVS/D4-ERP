@@ -14,6 +14,7 @@ import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } fro
 import { PageLoader } from "@/components/ui/loading";
 import { ListingHeader, ListingPanel } from "@/components/ui/listing";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
 import { CalendarDays, Download, FileSpreadsheet, FileText, Search, X } from "lucide-react";
 
 type Rec = Attendance & { id: string };
@@ -25,6 +26,9 @@ const REPORT_OPTIONS = [
   { value: "department", label: "Department Summary" },
   { value: "matrix", label: "Monthly Matrix" },
 ];
+
+/** 50 suits a roster-sized month; the rest are for scanning or for phones. */
+const ROWS_PER_PAGE_OPTIONS = [25, 50, 100, 200];
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "All statuses" },
@@ -252,6 +256,18 @@ export default function AttendanceReportsPage() {
 
   const activeRows = reportType === "employee" ? employeeRows : reportType === "daily" ? dailyRows : reportType === "department" ? departmentRows : matrixRows;
   const columns = activeRows.length ? Object.keys(activeRows[0]) : [];
+
+  // A month of per-day rows runs to several hundred; the page used to render
+  // every one of them in a single scroll. Export still covers the whole report.
+  const [pageSize, setPageSize] = useState(ROWS_PER_PAGE_OPTIONS[1]);
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(activeRows.length / pageSize));
+  // Switching report type or filters can shrink the list under the current page.
+  const safePage = Math.min(page, totalPages - 1);
+  const pagedRows = useMemo(
+    () => activeRows.slice(safePage * pageSize, (safePage + 1) * pageSize),
+    [activeRows, safePage, pageSize]
+  );
   const reportLabel = REPORT_OPTIONS.find((r) => r.value === reportType)?.label ?? "Attendance Report";
   const fileBase = `attendance-${reportType}-${month}`;
 
@@ -375,7 +391,11 @@ export default function AttendanceReportsPage() {
         </div>
       </div>
 
-      <ListingPanel title={reportLabel} description={`${activeRows.length} rows for ${month}.`} contentClassName={reportType === "matrix" ? "p-0 overflow-x-auto" : "p-0"}>
+      <ListingPanel
+        title={reportLabel}
+        description={`${activeRows.length} rows for ${month}.`}
+        contentClassName={reportType === "matrix" ? "p-0 overflow-x-auto" : "p-0"}
+      >
         {loading ? (
           <div className="py-10 text-center text-sm text-slate-500">Loading…</div>
         ) : reportType === "matrix" ? (
@@ -404,7 +424,7 @@ export default function AttendanceReportsPage() {
                     </td>
                   </tr>
                 ) : (
-                  activeRows.map((row, idx) => (
+                  pagedRows.map((row, idx) => (
                     <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/40">
                       {columns.map((c, cidx) => (
                         <td
@@ -456,7 +476,7 @@ export default function AttendanceReportsPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  activeRows.map((row, idx) => (
+                  pagedRows.map((row, idx) => (
                     <TableRow key={idx}>
                       {columns.map((c, cidx) => (
                         <TableCell
@@ -475,6 +495,23 @@ export default function AttendanceReportsPage() {
               </TableBody>
             </Table>
           </div>
+        )}
+        {loading ? null : (
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            totalCount={activeRows.length}
+            pageSize={pageSize}
+            hasPrev={safePage > 0}
+            hasNext={safePage < totalPages - 1}
+            onPrev={() => setPage(Math.max(0, safePage - 1))}
+            onNext={() => setPage(Math.min(totalPages - 1, safePage + 1))}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(0);
+            }}
+            pageSizeOptions={ROWS_PER_PAGE_OPTIONS}
+          />
         )}
       </ListingPanel>
     </div>

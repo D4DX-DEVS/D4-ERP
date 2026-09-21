@@ -2,7 +2,15 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { FEATURES } from "@/lib/permissions";
-import { PORTAL_MODULES, PORTAL_GUARD, resolvePortalRoute, dashboardPathFor } from "@/lib/portal-nav";
+import {
+  PORTAL_MODULES,
+  PORTAL_GUARD,
+  resolvePortalRoute,
+  dashboardPathFor,
+  portalPathFor,
+  landingPathFor,
+  deniedRedirectFor,
+} from "@/lib/portal-nav";
 
 const PORTAL_ROOT = path.resolve(__dirname, "../app/(staff-portal)/staff-portal");
 const DASHBOARD_ROOT = path.resolve(__dirname, "../app/(dashboard)/dashboard");
@@ -113,5 +121,60 @@ describe("dashboardPathFor (admin opens a portal module link)", () => {
       return !fs.existsSync(path.join(DASHBOARD_ROOT, rel, "page.tsx"));
     });
     expect(missing).toEqual([]);
+  });
+});
+
+describe("landingPathFor (which shell a role belongs in)", () => {
+  it("sends staff to the portal and everyone else to the dashboard", () => {
+    expect(landingPathFor("staff")).toBe("/staff-portal");
+    expect(landingPathFor("admin")).toBe("/dashboard");
+    expect(landingPathFor("department-head")).toBe("/dashboard");
+    expect(landingPathFor("accounts")).toBe("/dashboard");
+  });
+
+  it("falls back to the portal when the role is missing — the shell nobody is locked out of", () => {
+    expect(landingPathFor(null)).toBe("/staff-portal");
+    expect(landingPathFor(undefined)).toBe("/staff-portal");
+  });
+});
+
+describe("portalPathFor (staff opens a dashboard module link)", () => {
+  it("maps a dashboard path onto the portal hub or link that re-exports it", () => {
+    expect(portalPathFor("/dashboard/events")).toBe("/staff-portal/events");
+    expect(portalPathFor("/dashboard/tasks/daily-updates")).toBe("/staff-portal/tasks/daily-updates");
+  });
+
+  it("returns null when no wrapper route is guaranteed to exist", () => {
+    // Only hubs and links are enforced on disk; detail pages and admin-only
+    // sub-pages are not, so forwarding there would 404 inside the portal.
+    expect(portalPathFor("/dashboard/events/abc123")).toBeNull();
+    expect(portalPathFor("/dashboard/assets/categories")).toBeNull();
+    expect(portalPathFor("/dashboard")).toBeNull();
+    expect(portalPathFor("/dashboard/settings")).toBeNull();
+    expect(portalPathFor("/staff-portal/events")).toBeNull();
+    expect(portalPathFor(null)).toBeNull();
+  });
+});
+
+describe("deniedRedirectFor (the dashboard guard turned someone away)", () => {
+  it("never returns a dashboard path for staff — /dashboard denies them too, which is the dead end", () => {
+    expect(deniedRedirectFor("staff", "/dashboard")).toBe("/staff-portal");
+    expect(deniedRedirectFor("staff", "/dashboard/settings")).toBe("/staff-portal");
+    // A module the portal mirrors keeps the deep link alive; the portal's own
+    // guard sends them home from there if the grant is missing.
+    expect(deniedRedirectFor("staff", "/dashboard/events")).toBe("/staff-portal/events");
+  });
+
+  it("sends dashboard roles back to the dashboard home they can always open", () => {
+    expect(deniedRedirectFor("department-head", "/dashboard/settings")).toBe("/dashboard");
+    expect(deniedRedirectFor("accounts", "/dashboard/staff")).toBe("/dashboard");
+  });
+
+  it("never returns the path it was called with, whatever the role", () => {
+    for (const role of ["staff", "admin", "department-head", "accounts"] as const) {
+      for (const path of ["/dashboard", "/staff-portal", "/dashboard/events", "/dashboard/reports"]) {
+        expect(deniedRedirectFor(role, path)).not.toBe(path);
+      }
+    }
   });
 });

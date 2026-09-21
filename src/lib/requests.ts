@@ -8,7 +8,7 @@ import {
   where,
   Timestamp,
 } from "@/lib/firestore";
-import { createNotification, createBulkNotifications } from "@/lib/notifications";
+import { approverRecipientIds, createNotification, createBulkNotifications } from "@/lib/notifications";
 import { loadStaffLedger } from "@/lib/leave-adjustments";
 import { consumesLeaveBalance, type LeaveLedger } from "@/lib/leave-ledger";
 import { applyRequestWriteback, withdrawRequestWriteback } from "@/lib/leave-writeback";
@@ -17,7 +17,6 @@ import type {
   AuthUser,
   Department,
   RequestStatus,
-  Staff,
   StaffRequest,
   StaffRequestType,
 } from "@/types";
@@ -71,12 +70,12 @@ export function isLegacyRequest(req: Partial<StaffRequest>): boolean {
   return !req.deptHead && !req.admin;
 }
 
+/**
+ * Admins to notify. Resolved server-side because a department head filing their
+ * own request cannot read staff outside their department.
+ */
 export async function getAdminStaffIds(): Promise<string[]> {
-  const admins = await getDocuments<Staff>("staff", [
-    where("role", "==", "admin"),
-    where("isActive", "==", true),
-  ]);
-  return admins.map((a) => a.id!);
+  return approverRecipientIds();
 }
 
 export async function getDeptHeadStaffId(departmentId: string): Promise<string | null> {

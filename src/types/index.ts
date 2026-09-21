@@ -1197,7 +1197,28 @@ export interface StudioEquipment extends BaseDocument {
 
 // ==================== Department Reports ====================
 export type ReportPeriod = "daily" | "weekly" | "monthly" | "quarterly" | "yearly";
-export type ReportStatus = "draft" | "submitted" | "published";
+/** A department files two kinds of document: what happened, and what is next. */
+export type ReportKind = "report" | "plan";
+
+/**
+ * One part of a department's written report — "D4Productions", with
+ * "Design Squad" and "Edit Suite" under it. `body` is the rich HTML the head
+ * typed (paragraphs, bold, nested bullets, figures, Malayalam), because the
+ * real documents are written prose and lists, not a fixed set of KPI fields.
+ */
+export interface ReportSection {
+  id: string;
+  title: string;
+  body: string;
+  children?: ReportSection[];
+}
+
+/**
+ * A filing's life: the head drafts it, submits it, and the admin either
+ * publishes it or sends it back with a reason (rejected → the head edits the
+ * same report and resubmits).
+ */
+export type ReportStatus = "draft" | "submitted" | "published" | "rejected";
 
 export interface CustomKPI {
   label: string;
@@ -1224,7 +1245,35 @@ export interface StaffBreakdownEntry {
   remarks?: string;
 }
 
+/**
+ * One commitment for the period ahead, filed with the report that closes the
+ * period behind. Kept on the report itself so a month reads as one document:
+ * what happened, and what the department will do next.
+ */
+export interface ReportPlanItem {
+  id: string;
+  goal: string;
+  owner?: string;
+  /** YYYY-MM-DD */
+  targetDate?: string;
+  status?: "planned" | "in-progress" | "done" | "dropped";
+}
+
 export interface DepartmentReport extends BaseDocument {
+  /** Report or plan. Absent on rows written before plans became documents. */
+  kind?: ReportKind;
+  /** What the head called this document, e.g. "D4MEDIA 2025 Oct–Dec Report". */
+  documentTitle?: string;
+  /** A line or two introducing the filing, printed under the letterhead. */
+  description?: string;
+  /**
+   * The document itself: one piece of rich text the head writes freely, since
+   * a real department report has no fixed shape. Rows filed against the older
+   * section model keep `sections` instead — see report-document.ts.
+   */
+  body?: string;
+  /** Legacy: the document as a section tree. Read-only now. */
+  sections?: ReportSection[];
   departmentId: string;
   departmentName: string;
   companyId: string;
@@ -1238,9 +1287,59 @@ export interface DepartmentReport extends BaseDocument {
   generatedAt: Timestamp;
   status: ReportStatus;
   remarks?: string;
+  /** The narrative half of a report: what the numbers do not say. */
+  summary?: string;
+  activities?: string;
+  achievements?: string;
+  challenges?: string;
   staffBreakdown?: StaffBreakdownEntry[];
+  /** Narrative outlook for the next period, written by the department head. */
+  planSummary?: string;
+  /** The commitments behind that outlook, one row each. */
+  planItems?: ReportPlanItem[];
   submittedAt?: Timestamp;
   submittedBy?: string;
+  /** Why an admin sent the report back; cleared when it is resubmitted. */
+  reviewNote?: string;
+  reviewedAt?: Timestamp;
+  reviewedBy?: string;
+}
+
+/** One department's slot in a master organization report. */
+export interface OrganizationReportSection {
+  /** The report document printed for this department, if any. */
+  reportId: string | null;
+  /** The plan document printed for it, if any. */
+  planId: string | null;
+  departmentId: string;
+  departmentName: string;
+  /** Position in the printed document, 0-based. */
+  order: number;
+}
+
+/**
+ * A master report the admin assembles for one period out of the department
+ * filings they chose. Stored so the document can be listed, re-opened and
+ * re-generated exactly as it went out, and so the departments left out of it
+ * stay on the record instead of being silently absent.
+ */
+export interface OrganizationReport extends BaseDocument {
+  title: string;
+  period: ReportPeriod | "custom";
+  startDate: string;
+  endDate: string;
+  executiveSummary?: string;
+  closingNote?: string;
+  sections: OrganizationReportSection[];
+  missingDepartments: { departmentId: string; departmentName: string }[];
+  /**
+   * Departments the admin unticked from the did-not-submit list, because they
+   * were never expected to file. Kept so reopening rebuilds the same document.
+   */
+  exemptDepartments?: string[];
+  generatedBy: string;
+  generatedByName?: string;
+  generatedAt: Timestamp;
 }
 
 export interface CompanyReport extends BaseDocument {

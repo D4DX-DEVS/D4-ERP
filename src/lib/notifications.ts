@@ -65,6 +65,25 @@ export async function createNotification(params: CreateNotificationParams): Prom
 }
 
 /**
+ * Staff ids of everyone in an approving role.
+ *
+ * Resolved server-side: a department head's `staff` reads are scoped to their
+ * own department, so asking the database for admins from the browser returned
+ * nobody and their submissions notified no one.
+ */
+export async function approverRecipientIds(role: "admin" | "accounts" = "admin"): Promise<string[]> {
+  try {
+    const res = await fetch(`/api/notifications/recipients?role=${role}`, { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ids?: string[] };
+    return Array.isArray(data.ids) ? data.ids : [];
+  } catch (error) {
+    console.error("Failed to resolve notification recipients:", error);
+    return [];
+  }
+}
+
+/**
  * Creates notifications for multiple recipients at once.
  */
 export async function createBulkNotifications(

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Anek_Malayalam, Geist_Mono, Noto_Sans_Malayalam, Poppins } from "next/font/google";
 import { ToastProvider } from "@/components/ui/toast";
 import { PwaRegister } from "@/components/pwa-register";
 import { PwaInstallBanner } from "@/components/pwa-install-banner";
@@ -8,9 +8,27 @@ import "./globals.css";
 
 const appIcon = "/favicon.svg";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Latin text is Poppins; Malayalam is Noto Sans Malayalam for body copy and
+// Anek Malayalam for headings. The families are stacked rather than switched:
+// Poppins carries no Malayalam glyphs, so the browser falls through to the
+// Malayalam face per character, which is what keeps a mixed line like
+// "Edit Suite: ₹3,43,500" in one typeface each.
+const poppins = Poppins({
+  variable: "--font-poppins",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const notoSansMalayalam = Noto_Sans_Malayalam({
+  variable: "--font-malayalam",
+  subsets: ["malayalam"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const anekMalayalam = Anek_Malayalam({
+  variable: "--font-malayalam-heading",
+  subsets: ["malayalam"],
+  weight: ["500", "600", "700"],
 });
 
 const geistMono = Geist_Mono({
@@ -47,7 +65,7 @@ export default function RootLayout({
     <html
       lang="en"
       data-scroll-behavior="smooth"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${poppins.variable} ${notoSansMalayalam.variable} ${anekMalayalam.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <PwaRegister />

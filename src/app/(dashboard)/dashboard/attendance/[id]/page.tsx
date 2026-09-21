@@ -20,6 +20,8 @@ import {
   evaluateWorkSummary,
 } from "@/lib/settings";
 import { useAuthStore } from "@/store/auth-store";
+import { useOrgTimeZone } from "@/hooks/use-org-timezone";
+import { formatTimeInZone, timeInputValue, zonedDateAt, type TimeValue } from "@/lib/tz";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,22 +45,13 @@ const STATUS_OPTIONS: { value: AttendanceStatus; label: string }[] = [
   { value: "week-off", label: "Weekly Off" },
 ];
 
-const timeStr = (ts: { seconds: number } | undefined) =>
-  ts ? new Date(ts.seconds * 1000).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "—";
-
-const timeInputValue = (ts: { seconds: number } | undefined) => {
-  if (!ts) return "";
-  const d = new Date(ts.seconds * 1000);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
-
-function tsFromDateTime(dateStr: string, time: string): Timestamp | undefined {
-  if (!time) return undefined;
-  const [h, m] = time.split(":").map(Number);
-  if (Number.isNaN(h) || Number.isNaN(m)) return undefined;
-  const d = new Date(dateStr);
-  d.setHours(h, m, 0, 0);
-  return Timestamp.fromDate(d);
+/**
+ * Punches are read and written on the office clock, not the viewer's: the same
+ * record has to mean the same thing to a head in Kozhikode and one travelling.
+ */
+function tsFromDateTime(dateStr: string, time: string, timeZone: string): Timestamp | undefined {
+  const when = zonedDateAt(dateStr, time, timeZone);
+  return when ? Timestamp.fromDate(when) : undefined;
 }
 
 interface FormState {
@@ -84,6 +77,8 @@ export default function AttendanceDetailPage() {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [form, setForm] = useState<FormState>({ checkIn: "", checkOut: "", status: "present", notes: "" });
+  const timeZone = useOrgTimeZone();
+  const timeStr = (ts: TimeValue) => formatTimeInZone(ts, timeZone);
 
   const canEdit =
     !!user &&
@@ -125,8 +120,8 @@ export default function AttendanceDetailPage() {
 
   function startEdit() {
     setForm({
-      checkIn: timeInputValue(record?.checkIn as { seconds: number } | undefined),
-      checkOut: timeInputValue(record?.checkOut as { seconds: number } | undefined),
+      checkIn: timeInputValue(record?.checkIn as TimeValue, timeZone),
+      checkOut: timeInputValue(record?.checkOut as TimeValue, timeZone),
       status: record?.status ?? "present",
       notes: record?.notes ?? record?.remarks ?? "",
     });
@@ -140,8 +135,8 @@ export default function AttendanceDetailPage() {
       const baseDate = new Date(selectedDate);
       baseDate.setHours(0, 0, 0, 0);
 
-      const checkInTs = tsFromDateTime(selectedDate, form.checkIn);
-      const checkOutTs = tsFromDateTime(selectedDate, form.checkOut);
+      const checkInTs = tsFromDateTime(selectedDate, form.checkIn, timeZone);
+      const checkOutTs = tsFromDateTime(selectedDate, form.checkOut, timeZone);
 
       const data: Record<string, unknown> = {
         staffId,
@@ -276,8 +271,8 @@ export default function AttendanceDetailPage() {
 
       <ListingStatGrid>
         <ListingStatCard icon={<UserRound className="h-5 w-5" />} label="Role" value={staff.role.replace("-", " ")} toneClassName="bg-sky-50 text-sky-700" meta={staff.designation || "Staff member"} />
-        <ListingStatCard icon={<Clock3 className="h-5 w-5" />} label="Check In" value={timeStr(record?.checkIn as { seconds: number } | undefined)} toneClassName="bg-emerald-50 text-emerald-700" meta="First recorded punch" />
-        <ListingStatCard icon={<TimerReset className="h-5 w-5" />} label="Check Out" value={timeStr(record?.checkOut as { seconds: number } | undefined)} toneClassName="bg-indigo-50 text-indigo-700" meta="Last recorded punch" />
+        <ListingStatCard icon={<Clock3 className="h-5 w-5" />} label="Check In" value={timeStr(record?.checkIn as TimeValue)} toneClassName="bg-emerald-50 text-emerald-700" meta="First recorded punch" />
+        <ListingStatCard icon={<TimerReset className="h-5 w-5" />} label="Check Out" value={timeStr(record?.checkOut as TimeValue)} toneClassName="bg-indigo-50 text-indigo-700" meta="Last recorded punch" />
         <ListingStatCard icon={<ShieldAlert className="h-5 w-5" />} label="Flags" value={flagCount}
           toneClassName="bg-amber-50 text-amber-700" meta={record ? `${record.isLate ? "Late" : "On time"}${record.isEarlyDeparture ? " · Early departure" : ""}` : "No record"} />
       </ListingStatGrid>

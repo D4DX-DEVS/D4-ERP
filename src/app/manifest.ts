@@ -5,7 +5,10 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "D4 Media ERP",
     short_name: "D4 ERP",
     description: "D4 Media - Enterprise Resource Planning System",
-    start_url: "/dashboard",
+    // "/" routes by role; "/dashboard" launched every installed staff PWA
+    // straight into "Access denied", which no amount of re-login could clear.
+    start_url: "/",
+    scope: "/",
     display: "standalone",
     background_color: "#ffffff",
     theme_color: "#ffffff",

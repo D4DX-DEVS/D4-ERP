@@ -2,12 +2,15 @@
 
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { useAuthStore } from "@/store/auth-store";
 import { Sidebar } from "@/components/layout/sidebar";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { Header } from "@/components/layout/header";
 import { CommandSearch } from "@/components/layout/command-search";
 import { hasFeature } from "@/lib/permissions";
+import { deniedRedirectFor, landingPathFor } from "@/lib/portal-nav";
+import { Button } from "@/components/ui/button";
 import { useAuthRefresh } from "@/hooks/use-auth-refresh";
 import type { StaffRole } from "@/types";
 import type { FeatureKey } from "@/lib/permissions";
@@ -94,7 +97,7 @@ function getRouteFeature(pathname: string): FeatureKey | null {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading } = useAuthStore();
+  const { user, isLoading, logout } = useAuthStore();
   useAuthRefresh();
   const router = useRouter();
   const pathname = usePathname();
@@ -114,7 +117,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const feature = getRouteFeature(pathname);
         const featureSubject = { role: user.role, grantedFeatures: user.grantedFeatures };
         if (!feature || !hasFeature(featureSubject, feature)) {
-          router.replace("/dashboard");
+          // NOT "/dashboard": plain staff are denied there too, so bouncing
+          // them home re-denied the page they had just been sent to and left
+          // them stuck on "Access denied" with no navigation and no way back.
+          router.replace(deniedRedirectFor(user.role, pathname));
         }
       }
     }
@@ -149,6 +155,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <p className="eyebrow justify-center">Restricted</p>
           <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-slate-950">Access denied</h1>
           <p className="mt-3 text-sm leading-6 text-slate-500">You don&apos;t have permission to access this section with your current role.</p>
+          {/* Always leave a door open: this card can render before the redirect
+              lands, and a dead end here used to mean signing out to escape. */}
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href={landingPathFor(user.role)}
+              className="inline-flex h-11 items-center justify-center rounded-full bg-gradient-to-r from-[#1f3a7a] via-[#3730a3] to-[#5b21b6] px-5 text-sm font-semibold tracking-[-0.01em] text-white shadow-[0_14px_34px_rgba(55,48,163,0.28)] transition-all hover:-translate-y-0.5"
+            >
+              Go to my workspace
+            </Link>
+            <Button variant="outline" onClick={logout}>
+              Sign out
+            </Button>
+          </div>
         </div>
       </div>
     );

@@ -36,6 +36,9 @@ export const WRITE_ROLES: Record<string, string[]> = {
   studios: ["admin"],
   studio_equipment: ["admin"],
   department_reports: ["admin", "department-head"],
+  // A master report is assembled from every department's filings — only the
+  // admin who signs it off may write one.
+  organization_reports: ["admin"],
   custom_kpis: ["admin", "department-head"],
   attendance_imports: ["admin", "department-head"],
   // Leave ledger corrections move a real entitlement — admin only, never the
@@ -158,6 +161,9 @@ export const FEATURE_READ: Record<string, FeatureKey[]> = {
   "asset-activity-logs": ["asset-management"],
   // Holds sealed credentials — never readable on an open collection default.
   company_tools: ["tools-vault"],
+  // A master report carries every department's numbers, so reading one is a
+  // reporting capability, not something a single department head inherits.
+  organization_reports: ["reports"],
 };
 
 /**
