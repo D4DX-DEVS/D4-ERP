@@ -57,9 +57,10 @@ describe("overtimeCompOffDays", () => {
   it("8h OT = 1 day", () => {
     expect(overtimeCompOffDays({ startTime: "10:00", endTime: "18:00" })).toBe(1);
   });
-  it("4h OT = 0.5 day, floors to 0.5 steps", () => {
+  it("4h OT = 0.5 day; a shorter window keeps its exact share instead of flooring to 0", () => {
     expect(overtimeCompOffDays({ startTime: "18:00", endTime: "22:00" })).toBe(0.5);
-    expect(overtimeCompOffDays({ startTime: "18:00", endTime: "21:00" })).toBe(0);
+    // 3h used to earn nothing and vanish; it now counts toward the year's total.
+    expect(overtimeCompOffDays({ startTime: "18:00", endTime: "21:00" })).toBe(0.38);
   });
   it("handles overnight OT", () => {
     expect(overtimeCompOffDays({ startTime: "22:00", endTime: "06:00" })).toBe(1);

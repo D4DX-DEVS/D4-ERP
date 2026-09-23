@@ -107,6 +107,22 @@ export function landingPathFor(role: StaffRole | string | null | undefined): str
 }
 
 /**
+ * The other shell a role can open, or null when it only has one.
+ *
+ * Department heads and accounts manage their team from the dashboard, but they
+ * are staff too: their own attendance, leave requests and balance live in the
+ * portal. Each shell links to the other for them. Admins have no self-service
+ * session and plain staff cannot open /dashboard, so they get no switch.
+ */
+export function otherShellFor(
+  role: StaffRole | string | null | undefined,
+  current: "/dashboard" | "/staff-portal"
+): "/dashboard" | "/staff-portal" | null {
+  if (!role || role === "admin" || role === "staff") return null;
+  return current === "/dashboard" ? "/staff-portal" : "/dashboard";
+}
+
+/**
  * Where to send someone the dashboard guard refused.
  *
  * Bouncing everyone to /dashboard was the dead end behind the stuck "Access

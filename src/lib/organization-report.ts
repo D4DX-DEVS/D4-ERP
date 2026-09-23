@@ -21,17 +21,16 @@ export interface DepartmentRef {
 }
 
 /**
- * Statuses a filing must be in before it can go into a master report. Once a
- * head submits, the document is final — there is no approval step — so
- * `published` here only covers rows written before that step was dropped.
+ * Statuses a filing must be in before it can go into a master report: sent to
+ * the admin, whether or not they have approved it yet (`published` is the
+ * older name for approved).
  */
-const SELECTABLE = new Set(["submitted", "published"]);
+const SELECTABLE = new Set(["submitted", "approved", "published"]);
 
 /**
  * How a department stands for the period: they submitted, or they did not.
  * There is deliberately no "draft" state — an unsubmitted document is the
- * head's own business — and no "published" one, since nothing approves a
- * filing after it arrives.
+ * head's own business. Approval is shown on the filing itself.
  */
 export type ReportingState = "submitted" | "missing";
 

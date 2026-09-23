@@ -8,7 +8,9 @@ import { navigationModules, PRIMARY_MOBILE_HREFS, type NavModule, type NavItem }
 import { useVisibleNavModules } from "@/hooks/use-visible-nav-modules";
 import { useMobileNavStore } from "@/store/mobile-nav-store";
 import { useNavConfigStore } from "@/store/nav-config-store";
-import { ChevronDown, Sparkles, X } from "lucide-react";
+import { useAuthStore } from "@/store/auth-store";
+import { otherShellFor } from "@/lib/portal-nav";
+import { ArrowUpRight, ChevronDown, Sparkles, UserRound, X } from "lucide-react";
 import { useState, useEffect, useCallback, useMemo } from "react";
 
 const STORAGE_KEY = "d4-sidebar-expanded";
@@ -85,6 +87,10 @@ export function Sidebar() {
   }, []);
 
   const closeSidebar = () => setMobileOpen(false);
+
+  // Heads and accounts request their own leave and see their attendance in the portal.
+  const role = useAuthStore((s) => s.user?.role);
+  const selfServiceHref = otherShellFor(role, "/dashboard");
 
   // Compute all hrefs for active detection
   const allHrefs = useMemo(() => {
@@ -163,6 +169,17 @@ export function Sidebar() {
 
         {/* Navigation */}
         <nav className="sidebar-scroll flex-1 space-y-1 overflow-y-auto px-2.5 py-3">
+          {selfServiceHref && (
+            <Link
+              href={selfServiceHref}
+              onClick={closeSidebar}
+              className="mb-1 flex min-h-11 items-center gap-2 rounded-[12px] border border-indigo-100 bg-indigo-50/70 px-2.5 py-2 text-[12.5px] lg:min-h-0 font-semibold text-indigo-800 transition-colors hover:bg-indigo-100"
+            >
+              <UserRound className="h-4 w-4 text-indigo-500" />
+              <span className="flex-1">My leave &amp; attendance</span>
+              <ArrowUpRight className="h-3.5 w-3.5 text-indigo-400" />
+            </Link>
+          )}
           {visibleModules.map((mod) => (
             <ModuleItem
               key={mod.id}

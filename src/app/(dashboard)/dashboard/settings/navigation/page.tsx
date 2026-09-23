@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getAllNavItems, type FlatNavItem } from "@/lib/navigation";
+import {
+  defaultRoleMenu,
+  getAllNavItems,
+  materializeRoleMenus,
+  roleMenuShows,
+  type FlatNavItem,
+} from "@/lib/navigation";
 import { useAuthStore } from "@/store/auth-store";
 import { useNavConfigStore } from "@/store/nav-config-store";
 import { getDocuments, updateDocument, createDocument, where, Timestamp } from "@/lib/firestore";
@@ -25,7 +31,7 @@ interface ModuleGroup {
 export default function NavigationSettingsPage() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { config, fetchConfig } = useNavConfigStore();
+  const { fetchConfig } = useNavConfigStore();
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -62,7 +68,12 @@ export default function NavigationSettingsPage() {
         await fetchConfig();
         const staffDocs = await getDocuments<Staff>("staff", [where("isActive", "==", true)]);
         setStaff(staffDocs);
-        setLocalConfig(config || { roleMenus: {}, staffOverrides: {} });
+        // Read the store after the fetch: `config` in this closure is the value
+        // from before it, which on a cold load is null — the matrix then opened
+        // empty and saving it wiped every saved menu.
+        const fresh = useNavConfigStore.getState().config;
+        const base = fresh || { roleMenus: {}, staffOverrides: {} };
+        setLocalConfig({ ...base, ...materializeRoleMenus(base.roleMenus ?? {}, base.catalog, allItems) });
       } catch (error) {
         toast("error", "Failed to load configuration");
       } finally {
@@ -76,7 +87,9 @@ export default function NavigationSettingsPage() {
   const toggleRoleMenuItem = (role: StaffRole, href: string) => {
     if (!localConfig) return;
     const roleMenus = { ...localConfig.roleMenus };
-    const current = roleMenus[role] ?? [];
+    // No saved list means the code default is live — start from it, or the first
+    // tick would shrink the role's whole menu down to that one page.
+    const current = roleMenus[role] ?? defaultRoleMenu(allItems, role);
 
     if (current.includes(href)) {
       roleMenus[role] = current.filter((h) => h !== href);
@@ -120,6 +133,10 @@ export default function NavigationSettingsPage() {
 
   const handleSave = async () => {
     if (!localConfig) return;
+    // What the admin was looking at: pages added to the sidebar later are not
+    // hidden by a list that could not have mentioned them.
+    const catalog = allItems.map((item) => item.href);
+    const { roleMenus } = materializeRoleMenus(localConfig.roleMenus ?? {}, localConfig.catalog, allItems);
     setSaving(true);
     try {
       const docs = await getDocuments<NavigationConfig>("settings", [
@@ -129,12 +146,16 @@ export default function NavigationSettingsPage() {
       if (docs.length > 0) {
         await updateDocument("settings", docs[0].id, {
           ...localConfig,
+          roleMenus,
+          catalog,
           updatedAt: Timestamp.now(),
         });
       } else {
         await createDocument("settings", {
           key: "navigationConfig",
           ...localConfig,
+          roleMenus,
+          catalog,
           createdAt: Timestamp.now(),
         });
       }
@@ -227,7 +248,12 @@ export default function NavigationSettingsPage() {
                         </td>
 
                         {ROLES.map((role) => {
-                          const isChecked = (localConfig.roleMenus?.[role] ?? []).includes(item.href);
+                          const isChecked = roleMenuShows(
+                            localConfig.roleMenus?.[role],
+                            localConfig.catalog,
+                            item.href,
+                            item.roles.includes(role)
+                          );
                           return (
                             <td key={role} className="text-center py-3 px-2">
                               <input

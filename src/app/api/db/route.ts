@@ -15,9 +15,21 @@ import {
   DEPT_SCOPED_BY_STAFF,
   OWN_WRITE_FOR_STAFF,
   authorizeOwnWorkLogWrite,
+  authorizeSubCollection,
   type AuthzUser,
 } from "@/lib/db-authz";
 import { hasFeature } from "@/lib/permissions";
+import {
+  authorizeReportWrite,
+  authorizeRequestCreate,
+  authorizeRequestDelete,
+  authorizeRequestUpdate,
+  reportUpdatePrecondition,
+  reportDeletePrecondition,
+  requestUpdatePrecondition,
+  type WorkflowActor,
+} from "@/lib/workflow-authz";
+import { validateNewRequest } from "@/lib/request-validation";
 import type { TokenPayload } from "@/lib/auth";
 import { canDeleteTask, canTransitionTask, transitionNeedsRemark, type TaskOwnership } from "@/lib/task-workflow";
 import { isSoftDeleteCollection, softDeletePatch, withoutDeleted } from "@/lib/soft-delete";
@@ -239,49 +251,50 @@ async function applyReadScope(
   return withoutDeleted(collectionName, scoped, includeDeleted);
 }
 
-/**
- * Guard writes to leaveRequests (2-step approval): dept heads may only decide
- * the deptHead step on own-dept docs; staff may only cancel their own pending
- * request. Admin/accounts unrestricted. Returns error message or null.
- */
-async function guardRequestUpdate(
-  user: TokenPayload,
-  id: string,
-  data: Record<string, unknown>
-): Promise<string | null> {
-  const Model = getModel("leaveRequests");
-  const doc = (await Model.findById(id).lean()) as Record<string, unknown> | null;
-  if (!doc) return null; // let the update no-op
-  const allowedKeys = (keys: string[]) =>
-    Object.keys(data).every((k) => keys.includes(k) || k === "updatedAt");
+/** Stored document for a workflow guard, or null when the id matches nothing. */
+async function loadDoc(collectionName: string, id: unknown): Promise<Record<string, unknown> | null> {
+  if (typeof id !== "string" || !id) return null;
+  return (await getModel(collectionName).findById(id).lean()) as Record<string, unknown> | null;
+}
 
-  // Terminal states are immutable for everyone: no re-deciding or reopening.
-  const touchesWorkflow = ["deptHead", "admin", "status"].some((k) => k in data);
-  const isTerminal = ["approved", "rejected", "cancelled"].includes(doc.status as string);
-  if (touchesWorkflow && isTerminal) {
-    return "Request already finalised.";
-  }
+interface WorkflowGuard {
+  denied: string | null;
+  /** Extra match conditions an update must be applied under (see workflow-authz.ts). */
+  precondition: Record<string, unknown>;
+}
 
-  if (user.role === "admin") return null;
-
-  if (user.role === "department-head") {
-    const deptId = await callerDepartmentId(user);
-    if (doc.departmentId && deptId && doc.departmentId !== deptId) {
-      return "You may only act on requests from your own department.";
+/** Workflow rules for staff requests and department filings (see workflow-authz.ts). */
+async function guardWorkflowWrite(
+  actor: WorkflowActor,
+  action: string,
+  collectionName: string,
+  id: unknown,
+  data: Record<string, unknown> | undefined
+): Promise<WorkflowGuard> {
+  const allow = (precondition: Record<string, unknown> = {}): WorkflowGuard => ({ denied: null, precondition });
+  const deny = (denied: string | null): WorkflowGuard => ({ denied, precondition: {} });
+  if (collectionName === "leaveRequests") {
+    if (action === "create") {
+      // Shape and ownership first; then the checks that need the database
+      // (a day already claimed, a flexible-leave wallet that cannot cover it).
+      return deny(authorizeRequestCreate(actor, data ?? {}) ?? (await validateNewRequest(data ?? {})));
     }
-    if (!allowedKeys(["deptHead", "status"])) {
-      return "Department heads may only decide the department step.";
-    }
-    return null;
+    if (action === "delete") return deny(authorizeRequestDelete(actor));
+    const doc = await loadDoc(collectionName, id);
+    if (!doc) return allow(); // let the update no-op
+    const denied = authorizeRequestUpdate(actor, doc, data ?? {});
+    return denied ? deny(denied) : allow(requestUpdatePrecondition(data ?? {}));
   }
-  if (user.role === "staff") {
-    if (doc.staffId !== user.uid) return "You may only modify your own requests.";
-    const cancelOnly = allowedKeys(["status"]) && data.status === "cancelled";
-    if (!cancelOnly) return "You may only cancel your own pending request.";
-    if (doc.status !== "pending") return "Request already finalised.";
-    return null;
+  if (collectionName === "department_reports") {
+    const existing = action === "create" ? null : await loadDoc(collectionName, id);
+    const denied = authorizeReportWrite(actor, action, existing, data);
+    if (denied) return deny(denied);
+    if (action === "delete") return allow(reportDeletePrecondition(actor.role));
+    return allow(
+      action === "update" && existing ? reportUpdatePrecondition(existing, data ?? {}, actor.role) : {}
+    );
   }
-  return null;
+  return allow();
 }
 
 /**
@@ -349,8 +362,13 @@ export async function POST(req: NextRequest) {
     // stale for up to the token TTL after an admin edits permissions) ────────
     const staffDoc = (await getModel("staff")
       .findById(user.uid)
-      .select("role grantedFeatures isDeleted")
-      .lean()) as { role?: string; grantedFeatures?: unknown; isDeleted?: boolean } | null;
+      .select("role grantedFeatures isDeleted departmentId")
+      .lean()) as {
+      role?: string;
+      grantedFeatures?: unknown;
+      isDeleted?: boolean;
+      departmentId?: string;
+    } | null;
     // Soft-deleted staff keep their row for history but lose access immediately,
     // even while their session cookie is still inside its window.
     if (staffDoc?.isDeleted) {
@@ -420,6 +438,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Sub-documents are addressed by two body fields, not the authorized name.
+    if (action === "findSub" || action === "createSub") {
+      const deniedSub = authorizeSubCollection(
+        authzUser,
+        action,
+        body.parentCollection,
+        body.subCollection,
+        body.parentId,
+        collectionName
+      );
+      if (deniedSub) {
+        return NextResponse.json({ error: deniedSub }, { status: 403 });
+      }
+    }
+
+    // Approval workflows: who may file, decide, edit or delete, and in which state.
+    let workflowPrecondition: Record<string, unknown> = {};
+    if (isWriteAction(action)) {
+      const actor: WorkflowActor = {
+        uid: user.uid,
+        role: authzUser.role,
+        departmentId: staffDoc?.departmentId || null,
+      };
+      const payload = body.data ? (tsToDate(body.data) as Record<string, unknown>) : undefined;
+      const guard = await guardWorkflowWrite(actor, action, collectionName, body.id, payload);
+      if (guard.denied) {
+        return NextResponse.json({ error: guard.denied }, { status: 403 });
+      }
+      workflowPrecondition = guard.precondition;
+    }
+
     // Trusted audit identity derived from the verified token — never the body.
     const auditUser = { uid: user.uid, name: user.name || user.email || "Unknown" };
 
@@ -471,20 +520,29 @@ export async function POST(req: NextRequest) {
       case "update": {
         const { id, data: rawData } = body;
         const data = tsToDate(rawData) as Record<string, unknown>;
-        if (collectionName === "leaveRequests") {
-          const deniedUpdate = await guardRequestUpdate(authzUser, id, data);
-          if (deniedUpdate) {
-            return NextResponse.json({ error: deniedUpdate }, { status: 403 });
-          }
-        }
         if (collectionName === "tasks") {
           const deniedUpdate = await guardTaskUpdate(authzUser, id, data);
           if (deniedUpdate) {
             return NextResponse.json({ error: deniedUpdate }, { status: 403 });
           }
         }
+        // A workflow write must land on the state the guard just checked: two
+        // approvers acting at once would otherwise both pass and both write.
         data.updatedAt = new Date();
-        await Model.findByIdAndUpdate(id, { $set: encryptDocFields(collectionName, data) });
+        if (Object.keys(workflowPrecondition).length > 0) {
+          const result = await Model.updateOne(
+            { _id: id, ...workflowPrecondition },
+            { $set: encryptDocFields(collectionName, data) }
+          );
+          if (result.matchedCount === 0) {
+            return NextResponse.json(
+              { error: "Someone else changed this record just now. Refresh to see its current state." },
+              { status: 409 }
+            );
+          }
+        } else {
+          await Model.findByIdAndUpdate(id, { $set: encryptDocFields(collectionName, data) });
+        }
         writeAuditLog("update", collectionName, id, `Updated ${collectionName} record`, auditUser, {
           newData: redactEncryptedFields(collectionName, rawData),
         });
@@ -524,12 +582,22 @@ export async function POST(req: NextRequest) {
         // then re-invented every missing day as "Absent"). Flag the row instead
         // — it drops out of every listing via withoutDeleted(), and history
         // views read it back with includeDeleted.
+        const pinned = Object.keys(workflowPrecondition).length > 0;
         const removed = isSoftDeleteCollection(collectionName)
           ? await Model.findByIdAndUpdate(id, { $set: softDeletePatch() }, { new: true }).lean()
-          : await Model.findByIdAndDelete(id).lean();
+          : pinned
+            ? await Model.findOneAndDelete({ _id: id, ...workflowPrecondition }).lean()
+            : await Model.findByIdAndDelete(id).lean();
         // A no-op delete used to return success, so the row silently came back
         // on refresh. Say so instead.
         if (!removed) {
+          // Still there, so the workflow state moved on after the guard read it.
+          if (pinned && (await Model.exists({ _id: id }))) {
+            return NextResponse.json(
+              { error: "Someone else changed this record just now. Refresh to see its current state." },
+              { status: 409 }
+            );
+          }
           return NextResponse.json({ error: "Record not found — nothing was deleted." }, { status: 404 });
         }
         writeAuditLog("delete", collectionName, id, `Deleted ${collectionName} record`, auditUser);

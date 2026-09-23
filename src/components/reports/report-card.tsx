@@ -1,13 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Check, Edit2, Eye, FileText, Target, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Clock, Edit2, Eye, FileText, Target, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { REPORT_STATUS_COLORS } from "@/components/reports/plan-status";
+import {
+  APPROVED_REPORT_STATUSES,
+  REPORT_STATUS_COLORS,
+  reportStatusLabel,
+} from "@/components/reports/plan-status";
 import {
   DocumentLetterhead,
   ReportDocumentEditor,
@@ -35,13 +39,23 @@ interface ReportCardProps {
   onSubmit: (report: DepartmentReport, edits: ReportEdits) => void;
   /** Admin sends it back to the head with a reason. */
   onReject?: (report: DepartmentReport) => void;
+  /** Admin signs it off, optionally with feedback for the head. */
+  onApprove?: (report: DepartmentReport) => void;
+  /** Head removes a document still on their desk (draft or sent back). */
+  onDelete?: (report: DepartmentReport) => void;
+}
+
+/** "22 Sep 2026" from a stored timestamp, or "" when there is none. */
+function shortDate(value?: { seconds: number } | null): string {
+  if (!value?.seconds) return "";
+  return new Date(value.seconds * 1000).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
 /**
  * One filing — a written report or a plan, on D4 Media letterhead. The head
  * writes the document while it is a draft (or after it was sent back); once
- * submitted it is final, and the admin reads it, sends it back, or carries it
- * into the organization report. There is no approval step in between.
+ * submitted it is locked, and the admin approves it (optionally with feedback)
+ * or sends it back with a reason. Either way the head sees the outcome here.
  */
 export function ReportCard({
   report,
@@ -53,6 +67,8 @@ export function ReportCard({
   onSaveDraft,
   onSubmit,
   onReject,
+  onApprove,
+  onDelete,
 }: ReportCardProps) {
   const isPlan = (report.kind ?? "report") === "plan";
   // A rejected filing goes back to being editable: the head fixes the same
@@ -75,7 +91,8 @@ export function ReportCard({
     <Card>
       <CardContent className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-start gap-3">
+          {/* min-w-48: the title keeps a readable width; the badges and buttons wrap below it on a phone. */}
+          <div className="flex min-w-48 flex-1 items-start gap-3">
             {isPlan ? (
               <Target className="mt-0.5 h-5 w-5 text-indigo-600" />
             ) : (
@@ -94,8 +111,20 @@ export function ReportCard({
               {isPlan ? "Plan" : "Report"}
             </Badge>
             <Badge variant={REPORT_STATUS_COLORS[report.status]} className="capitalize">
-              {report.status.replace(/-/g, " ")}
+              {reportStatusLabel(report.status)}
             </Badge>
+            {editable && onDelete ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                aria-label={`Delete ${isPlan ? "plan" : "report"}`}
+                title={`Delete ${isPlan ? "plan" : "report"}`}
+                onClick={() => onDelete(report)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant={editable ? "default" : "outline"}
@@ -117,9 +146,33 @@ export function ReportCard({
               <div className="flex gap-2 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
-                  <p className="font-semibold">Sent back by the admin</p>
+                  <p className="font-semibold">
+                    Sent back by {report.reviewedByName || "the admin"}
+                    {shortDate(report.reviewedAt) ? ` · ${shortDate(report.reviewedAt)}` : ""}
+                  </p>
                   <p className="whitespace-pre-line">{report.reviewNote}</p>
                 </div>
+              </div>
+            ) : null}
+            {APPROVED_REPORT_STATUSES.has(report.status) ? (
+              <div className="flex gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <p className="font-semibold">
+                    Approved by {report.reviewedByName || "the admin"}
+                    {shortDate(report.reviewedAt) ? ` · ${shortDate(report.reviewedAt)}` : ""}
+                  </p>
+                  {report.reviewNote ? <p className="whitespace-pre-line">{report.reviewNote}</p> : null}
+                </div>
+              </div>
+            ) : null}
+            {report.status === "submitted" && role === "department-head" ? (
+              <div className="flex gap-2 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+                <p>
+                  Submitted{shortDate(report.submittedAt) ? ` on ${shortDate(report.submittedAt)}` : ""} — waiting for
+                  the admin&apos;s review. You&apos;ll be notified when it is approved or sent back.
+                </p>
               </div>
             ) : null}
 
@@ -169,6 +222,11 @@ export function ReportCard({
               {report.status === "submitted" && role === "admin" && onReject ? (
                 <Button size="sm" variant="outline" onClick={() => onReject(report)}>
                   Send back
+                </Button>
+              ) : null}
+              {report.status === "submitted" && role === "admin" && onApprove ? (
+                <Button size="sm" onClick={() => onApprove(report)}>
+                  <CheckCircle2 className="mr-1 h-4 w-4" /> Approve
                 </Button>
               ) : null}
             </div>

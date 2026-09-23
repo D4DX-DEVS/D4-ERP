@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
+import { landingPathFor } from "@/lib/portal-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,7 +47,9 @@ export default function StaffLoginPage() {
       }
 
       setUser(data.user);
-      router.push("/staff-portal");
+      // Heads sign in here too (they have no email login) — send them to the
+      // dashboard where their approvals and department reports are.
+      router.push(landingPathFor(data.user?.role));
     } catch {
       setError("Login failed. Please try again.");
     } finally {

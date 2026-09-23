@@ -9,6 +9,7 @@ import {
   getDocuments,
   createDocument,
   updateDocument,
+  deleteDocument,
   where,
   orderBy,
   Timestamp,
@@ -20,7 +21,9 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Pagination } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/ui/loading";
 import { Label } from "@/components/ui/label";
@@ -41,21 +44,24 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 /**
- * Which statuses a filter admits. A submitted filing is final — there is no
- * approval after it — so "filed" also admits `published`, which only rows from
- * before that step was dropped still carry.
+ * Which statuses a filter admits. "filed" is everything sent to the admin;
+ * `published` is the older name for approved and is read as it.
  */
 const STATUS_FILTERS: Record<string, ReportStatus[]> = {
-  filed: ["submitted", "published"],
+  filed: ["submitted", "approved", "published"],
+  awaiting: ["submitted"],
+  approved: ["approved", "published"],
   draft: ["draft"],
   rejected: ["rejected"],
-  all: ["draft", "submitted", "published", "rejected"],
+  all: ["draft", "submitted", "approved", "published", "rejected"],
 };
 
 const STATUS_FILTER_OPTIONS = [
-  { value: "filed", label: "Submitted" },
-  { value: "draft", label: "Drafts only" },
+  { value: "filed", label: "All filed" },
+  { value: "awaiting", label: "Awaiting review" },
+  { value: "approved", label: "Approved" },
   { value: "rejected", label: "Sent back" },
+  { value: "draft", label: "Drafts only" },
   { value: "all", label: "Every status" },
 ];
 
@@ -80,6 +86,9 @@ const DEFAULT_PAGE_SIZE = 10;
 
 /** Rows written before plans became their own document are reports. */
 const kindOf = (report: DepartmentReport): ReportKind => report.kind ?? "report";
+/** The heading the card shows for a document. */
+const docName = (report: DepartmentReport): string =>
+  report.documentTitle?.trim() || `${report.departmentName} ${kindOf(report)}`;
 
 export default function DepartmentReportsPage() {
   const { user } = useAuthStore();
@@ -99,14 +108,24 @@ export default function DepartmentReportsPage() {
   });
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<Record<string, boolean>>({});
-  const [rejecting, setRejecting] = useState<DepartmentReport | null>(null);
-  const [rejectNote, setRejectNote] = useState("");
+  // The admin's decision on a submission: approve (note optional) or send back (note required).
+  const [reviewing, setReviewing] = useState<{ report: DepartmentReport; decision: "approved" | "rejected" } | null>(
+    null
+  );
+  const [reviewNote, setReviewNote] = useState("");
+  const [reviewSaving, setReviewSaving] = useState(false);
+  // The head's draft (or sent-back document) waiting on a delete confirmation.
+  const [deleting, setDeleting] = useState<DepartmentReport | null>(null);
 
   // ---------- URL as state: the tab, the range and the page survive a refresh,
   // a back button and a pasted link. ----------
   const tab: TabKey = searchParams.get("tab") === "plan" ? "plan" : "report";
+  const isHead = user?.role === "department-head";
+  // A head works on their own drafts and sent-back filings, so they see every
+  // status by default; reviewers start on what has been filed.
+  const defaultStatus = isHead ? "all" : "filed";
   const statusParam = searchParams.get("status") ?? "";
-  const statusFilter = STATUS_FILTERS[statusParam] ? statusParam : "filed";
+  const statusFilter = STATUS_FILTERS[statusParam] ? statusParam : defaultStatus;
   const from = searchParams.get("from") ?? "";
   const to = searchParams.get("to") ?? "";
   const sizeParam = Number(searchParams.get("size"));
@@ -195,13 +214,29 @@ export default function DepartmentReportsPage() {
       });
       await loadReports();
       setNewDoc((prev) => ({ ...prev, open: false, title: "" }));
-      // A fresh document is a draft, and the default filter hides those.
-      setParams({ status: "all", page: null });
+      // Back to the head's default (every status) so the new draft is in view.
+      setParams({ status: null, page: null });
       toast("success", `${tab === "plan" ? "Plan" : "Report"} started as a draft — write it, then submit.`);
     } catch {
       toast("error", "Failed to start the document");
     } finally {
       setCreating(false);
+    }
+  };
+
+  /** Removes a document the head still holds; the server refuses it once submitted. */
+  const handleDelete = async () => {
+    const report = deleting;
+    setDeleting(null);
+    if (!report?.id) return;
+    const kind = kindOf(report);
+    try {
+      await deleteDocument("department_reports", report.id);
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+      if (expandedReportId === report.id) setExpandedReportId(null);
+      toast("success", `${kind === "plan" ? "Plan" : "Report"} deleted`);
+    } catch (error) {
+      toast("error", error instanceof Error ? error.message : `Failed to delete the ${kind}`);
     }
   };
 
@@ -232,7 +267,7 @@ export default function DepartmentReportsPage() {
         type: "system",
         title: `${kindOf(report) === "plan" ? "Plan" : "Report"} submitted`,
         message: `${report.departmentName} ${kindOf(report)} for ${report.startDate} to ${report.endDate} submitted for approval.`,
-        link: "/dashboard/reports/department?status=submitted",
+        link: `/dashboard/reports/department?status=awaiting${kindOf(report) === "plan" ? "&tab=plan" : ""}`,
       });
       setReports((prev) =>
         prev.map((r) =>
@@ -256,45 +291,71 @@ export default function DepartmentReportsPage() {
     }
   };
 
-  /** Sends a submission back to the head with the reason attached. */
-  const handleReject = async () => {
-    const report = rejecting;
-    if (!user || !report) return;
-    const note = rejectNote.trim();
-    if (!note) {
+  /**
+   * The admin's decision on a submission. Approving signs it off (a note is
+   * optional feedback); sending back reopens it for the head and needs a reason.
+   * Either way the head is told, and sees the note on the document.
+   */
+  const handleReview = async () => {
+    if (!user || !reviewing) return;
+    const { report, decision } = reviewing;
+    const note = reviewNote.trim();
+    if (decision === "rejected" && !note) {
       toast("error", "Say what needs fixing — a document sent back without a reason cannot be acted on");
       return;
     }
+    setReviewSaving(true);
     try {
+      const reviewedAt = Timestamp.now();
+      const reviewedByName = `${user.firstName} ${user.lastName}`.trim();
       await updateDocument("department_reports", report.id!, {
-        status: "rejected" as const,
+        status: decision,
         reviewNote: note,
-        reviewedAt: Timestamp.now(),
+        reviewedAt,
         reviewedBy: user.staffId,
+        reviewedByName,
         updatedAt: Timestamp.now(),
       });
+      const kind = kindOf(report);
       if (report.generatedBy) {
         await createBulkNotifications([report.generatedBy], {
           type: "system",
-          title: "Document sent back",
-          message: `${report.departmentName} ${kindOf(report)} for ${report.startDate} to ${report.endDate}: ${note}`,
-          link: "/dashboard/reports/department?status=rejected",
+          title: decision === "approved" ? `${kind === "plan" ? "Plan" : "Report"} approved` : "Document sent back",
+          message: `${report.departmentName} ${kind} for ${report.startDate} to ${report.endDate}${
+            note ? `: ${note}` : decision === "approved" ? " was approved." : "."
+          }`,
+          link: `/dashboard/reports/department?status=${decision === "approved" ? "approved" : "rejected"}${
+            kind === "plan" ? "&tab=plan" : ""
+          }`,
         });
       }
       setReports((prev) =>
-        prev.map((r) => (r.id === report.id ? { ...r, status: "rejected" as const, reviewNote: note } : r))
+        prev.map((r) =>
+          r.id === report.id
+            ? { ...r, status: decision, reviewNote: note, reviewedAt, reviewedBy: user.staffId, reviewedByName }
+            : r
+        )
       );
-      setRejecting(null);
-      setRejectNote("");
-      toast("success", "Sent back to the department head");
-    } catch {
-      toast("error", "Failed to send it back");
+      setReviewing(null);
+      setReviewNote("");
+      toast(
+        "success",
+        decision === "approved" ? "Approved — the department head has been told" : "Sent back to the department head"
+      );
+    } catch (error) {
+      toast("error", error instanceof Error ? error.message : "Failed to save the decision");
+    } finally {
+      setReviewSaving(false);
     }
+  };
+
+  const openReview = (report: DepartmentReport, decision: "approved" | "rejected") => {
+    setReviewing({ report, decision });
+    setReviewNote("");
   };
 
   // ---------- Filtering and paging ----------
   const range: PeriodRange = useMemo(() => ({ from, to }), [from, to]);
-  const isHead = user?.role === "department-head";
   const allowedStatuses = useMemo(() => {
     const statuses = STATUS_FILTERS[statusFilter] ?? STATUS_FILTERS.filed;
     return isHead ? statuses : statuses.filter((status) => !REVIEWER_HIDDEN.includes(status));
@@ -385,12 +446,12 @@ export default function DepartmentReportsPage() {
               <Label className="text-xs">Status</Label>
               <Select
                 value={statusFilter}
-                onChange={(e) => setParams({ status: e.target.value === "filed" ? null : e.target.value, page: null })}
+                onChange={(e) => setParams({ status: e.target.value === defaultStatus ? null : e.target.value, page: null })}
                 className="w-[230px]"
                 options={isHead ? STATUS_FILTER_OPTIONS : REVIEWER_FILTER_OPTIONS}
               />
             </div>
-            {from || to || statusFilter !== "filed" ? (
+            {from || to || statusFilter !== defaultStatus ? (
               <Button variant="ghost" onClick={() => setParams({ from: null, to: null, status: null, page: null })}>
                 Clear
               </Button>
@@ -429,7 +490,7 @@ export default function DepartmentReportsPage() {
                   : "Widen the dates or change the status filter."
               }
               action={
-                from || to || statusFilter !== "filed" ? (
+                from || to || statusFilter !== defaultStatus ? (
                   <Button variant="outline" onClick={() => setParams({ from: null, to: null, status: null, page: null })}>
                     Clear filters
                   </Button>
@@ -451,14 +512,9 @@ export default function DepartmentReportsPage() {
               onToggle={() => setExpandedReportId(expandedReportId === report.id ? null : report.id || null)}
               onSaveDraft={handleSaveDraft}
               onSubmit={handleSubmitToAdmin}
-              onReject={
-                user?.role === "admin"
-                  ? (r) => {
-                      setRejecting(r);
-                      setRejectNote("");
-                    }
-                  : undefined
-              }
+              onReject={user?.role === "admin" ? (r) => openReview(r, "rejected") : undefined}
+              onApprove={user?.role === "admin" ? (r) => openReview(r, "approved") : undefined}
+              onDelete={isHead ? setDeleting : undefined}
             />
           ))}
         </div>
@@ -523,24 +579,54 @@ export default function DepartmentReportsPage() {
         </div>
       </Dialog>
 
-      {/* Send a submission back */}
-      <Dialog open={Boolean(rejecting)} onClose={() => setRejecting(null)}>
-        <h3 className="text-lg font-semibold text-slate-900">Send this back</h3>
+      <ConfirmDialog
+        open={Boolean(deleting)}
+        title={`Delete this ${deleting ? kindOf(deleting) : "document"}?`}
+        message={
+          !deleting
+            ? ""
+            : deleting.status === "rejected"
+              ? `"${docName(deleting)}" and the admin's feedback on it will be removed for good. This cannot be undone.`
+              : `The draft "${docName(deleting)}" for ${deleting.startDate} to ${deleting.endDate} will be removed for good. This cannot be undone.`
+        }
+        confirmLabel="Delete"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleting(null)}
+      />
+
+      {/* Approve or send back a submission */}
+      <Dialog open={Boolean(reviewing)} onClose={() => (reviewSaving ? undefined : setReviewing(null))}>
+        <h3 className="text-lg font-semibold text-slate-900">
+          {reviewing?.decision === "approved" ? "Approve this filing" : "Send this back"}
+        </h3>
         <p className="mt-1 text-sm text-slate-500">
-          {rejecting?.departmentName} · {rejecting?.startDate} to {rejecting?.endDate}
+          {reviewing?.report.departmentName} · {reviewing?.report.startDate} to {reviewing?.report.endDate}
         </p>
-        <textarea
-          value={rejectNote}
-          onChange={(e) => setRejectNote(e.target.value)}
-          rows={4}
-          placeholder="What needs fixing before this can go into the organization report"
-          className="mt-4 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
-        />
+        <div className="mt-4 space-y-1">
+          <Label className="text-xs" htmlFor="review-note">
+            {reviewing?.decision === "approved"
+              ? "Feedback for the department head (optional)"
+              : "What needs fixing (required)"}
+          </Label>
+          <Textarea
+            id="review-note"
+            value={reviewNote}
+            onChange={(e) => setReviewNote(e.target.value)}
+            rows={4}
+            placeholder={
+              reviewing?.decision === "approved"
+                ? "e.g. Good report — add the event photos to next month's filing"
+                : "What needs fixing before this can go into the organization report"
+            }
+          />
+        </div>
         <div className="mt-4 flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => setRejecting(null)}>
+          <Button variant="secondary" onClick={() => setReviewing(null)} disabled={reviewSaving}>
             Cancel
           </Button>
-          <Button onClick={handleReject}>Send back</Button>
+          <Button onClick={handleReview} disabled={reviewSaving}>
+            {reviewSaving ? "Saving…" : reviewing?.decision === "approved" ? "Approve" : "Send back"}
+          </Button>
         </div>
       </Dialog>
     </div>

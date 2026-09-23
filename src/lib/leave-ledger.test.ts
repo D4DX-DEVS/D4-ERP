@@ -13,6 +13,7 @@ import {
   ledgerBucket,
   onDutyMonthsFromAttendance,
   overtimeCompOffDays,
+  overtimeDaysFromHours,
   overtimeHours,
   quotaForBucket,
   requestLeaveDays,
@@ -166,13 +167,18 @@ describe("requestLeaveDays", () => {
   });
 });
 
-describe("overtimeCompOffDays", () => {
+describe("overtimeCompOffDays (one request's share of a day)", () => {
   it("gives one day for eight hours", () => {
     expect(overtimeCompOffDays({ startTime: "09:00", endTime: "17:00" })).toBe(1);
   });
 
-  it("floors to half-day steps", () => {
-    expect(overtimeCompOffDays({ startTime: "09:00", endTime: "14:00" })).toBe(0.5);
+  it("is the exact share — rounding happens on the year's total, not per request", () => {
+    expect(overtimeCompOffDays({ startTime: "09:00", endTime: "14:00" })).toBe(0.63);
+    expect(overtimeCompOffDays({ startTime: "18:00", endTime: "00:00" })).toBe(0.75);
+  });
+
+  it("divides by the configured day length", () => {
+    expect(overtimeCompOffDays({ startTime: "08:00", endTime: "18:00" }, 10)).toBe(1);
   });
 
   it("handles an overnight shift", () => {
@@ -181,6 +187,34 @@ describe("overtimeCompOffDays", () => {
 
   it("returns 0 when times are missing", () => {
     expect(overtimeCompOffDays({})).toBe(0);
+  });
+});
+
+describe("overtimeDaysFromHours (accumulated hours → leave days)", () => {
+  it.each([
+    [4, 0.5],
+    [6, 0.5],
+    [8, 1],
+    [10, 1],
+    [12, 1.5],
+    [16, 2],
+    [18, 2],
+    [0, 0],
+  ])("%sh at an 8h day credits %s day(s), in half-day steps", (hours, days) => {
+    expect(overtimeDaysFromHours(hours, 8)).toBe(days);
+  });
+
+  it("uses the configured day length instead of a fixed 8", () => {
+    expect(overtimeDaysFromHours(9, 9)).toBe(1);
+    expect(overtimeDaysFromHours(8, 9)).toBe(0.5);
+    expect(overtimeDaysFromHours(8, 10)).toBe(0.5);
+    expect(overtimeDaysFromHours(20, 10)).toBe(2);
+  });
+
+  it("falls back to 8 hours when the setting is missing or nonsense", () => {
+    expect(overtimeDaysFromHours(8, 0)).toBe(1);
+    expect(overtimeDaysFromHours(8, Number.NaN)).toBe(1);
+    expect(overtimeDaysFromHours(8, undefined)).toBe(1);
   });
 });
 
@@ -511,12 +545,38 @@ describe("computeLeaveLedger — overtime summary", () => {
     const l = ledgerOf({
       requests: [ot("2026-02-01", "09:00", "17:00"), ot("2026-03-01", "18:00", "22:00")],
     });
-    expect(l.overtime).toEqual({ count: 2, hours: 12, daysEarned: 1.5 });
+    expect(l.overtime).toEqual({ count: 2, hours: 12, daysEarned: 1.5, carryHours: 0, fullDayHours: 8 });
     expect(l.fl.entitled).toBe(1.5);
   });
 
+  it("accumulates hours across requests before converting (3 × 6h = 18h = 2 days, 2h carried)", () => {
+    const l = ledgerOf({
+      requests: [
+        ot("2026-02-01", "18:00", "00:00"),
+        ot("2026-02-08", "18:00", "00:00"),
+        ot("2026-02-15", "18:00", "00:00"),
+      ],
+    });
+    // Per-request flooring used to give 0.5 + 0.5 + 0.5 = 1.5 and lose 6 hours.
+    expect(l.overtime).toEqual({ count: 3, hours: 18, daysEarned: 2, carryHours: 2, fullDayHours: 8 });
+    expect(l.fl.entitled).toBe(2);
+    expect(l.flSources.overtime).toBe(2);
+  });
+
+  it("converts at the configured working-day length", () => {
+    const l = computeLeaveLedger({
+      requests: [ot("2026-02-01", "08:00", "18:00"), ot("2026-02-02", "18:00", "02:00")],
+      adjustments: [],
+      sundayDuties: [],
+      quota: { casualLeave: 12, sickLeave: 12, earnedLeave: 15 },
+      year: 2026,
+      fullDayHours: 10,
+    });
+    expect(l.overtime).toEqual({ count: 2, hours: 18, daysEarned: 1.5, carryHours: 3, fullDayHours: 10 });
+  });
+
   it("leaves the summary empty when there is no overtime", () => {
-    expect(ledgerOf({}).overtime).toEqual({ count: 0, hours: 0, daysEarned: 0 });
+    expect(ledgerOf({}).overtime).toEqual({ count: 0, hours: 0, daysEarned: 0, carryHours: 0, fullDayHours: 8 });
   });
 
   it("ignores overtime that was never approved", () => {
@@ -757,5 +817,61 @@ describe("week-off duty, month by month", () => {
     });
     const summed = ledger.sundays.monthlyWorked.reduce((a, b) => a + b, 0);
     expect(summed).toBe(ledger.sundays.worked);
+  });
+});
+
+describe("computeLeaveLedger — FL and OT wallets", () => {
+  const ot8 = (date: string) =>
+    leave(undefined, date, date, { type: "overtime", startTime: "09:00", endTime: "17:00" });
+  const sunday = (date: string) => adjustment("FL", 1, date, { kind: "sunday-credit" });
+
+  it("keeps week-off credit and overtime credit in separate wallets", () => {
+    const l = ledgerOf({ requests: [ot8("2026-02-01"), ot8("2026-02-02")], adjustments: [sunday("2026-03-01")] });
+    expect(l.wallets.fl).toEqual({ earned: 1, used: 0, balance: 1 });
+    expect(l.wallets.ot).toEqual({ earned: 2, used: 0, balance: 2 });
+    // The printed sheet's FL column is still the total of both.
+    expect(l.fl.balance).toBe(3);
+  });
+
+  it("spends the wallet the request names", () => {
+    const l = ledgerOf({
+      requests: [
+        ot8("2026-02-01"),
+        ot8("2026-02-02"),
+        leave("CO", "2026-04-06", "2026-04-06", { leaveWallet: "OT" }),
+      ],
+      adjustments: [sunday("2026-03-01")],
+    });
+    expect(l.wallets.ot).toEqual({ earned: 2, used: 1, balance: 1 });
+    expect(l.wallets.fl).toEqual({ earned: 1, used: 0, balance: 1 });
+  });
+
+  it("spends FL first, then OT, for a day with no wallet (register mark or older request)", () => {
+    const l = ledgerOf({
+      requests: [ot8("2026-02-01"), ot8("2026-02-02"), leave("CO", "2026-04-06", "2026-04-07")],
+      adjustments: [sunday("2026-03-01"), adjustment("FL", -1, "2026-05-04", { sourceAttendanceId: "a1" })],
+    });
+    // 3 unassigned days: 1 from FL (all it has), 2 from OT.
+    expect(l.wallets.fl).toEqual({ earned: 1, used: 1, balance: 0 });
+    expect(l.wallets.ot).toEqual({ earned: 2, used: 2, balance: 0 });
+  });
+
+  it("lets an admin credit or debit a named wallet", () => {
+    const l = ledgerOf({
+      adjustments: [adjustment("FL", 1.5, "2026-03-01", { wallet: "OT" }), adjustment("FL", -0.5, "2026-03-02", { wallet: "OT" })],
+    });
+    expect(l.wallets.ot).toEqual({ earned: 1.5, used: 0.5, balance: 1 });
+    expect(l.wallets.fl).toEqual({ earned: 0, used: 0, balance: 0 });
+  });
+
+  it("puts an overdraw beyond both wallets on FL, the default wallet", () => {
+    const l = ledgerOf({ requests: [leave("CO", "2026-04-06", "2026-04-07")], allowNegative: true });
+    expect(l.wallets.fl).toEqual({ earned: 0, used: 2, balance: -2 });
+    expect(l.wallets.ot.balance).toBe(0);
+  });
+
+  it("floors wallet balances at zero unless negatives are allowed", () => {
+    const l = ledgerOf({ requests: [leave("CO", "2026-04-06", "2026-04-06", { leaveWallet: "OT" })] });
+    expect(l.wallets.ot).toEqual({ earned: 0, used: 1, balance: 0 });
   });
 });

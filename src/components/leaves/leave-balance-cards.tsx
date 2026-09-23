@@ -53,8 +53,18 @@ export function LeaveBalanceCards({ ledger }: { ledger: LeaveLedger }) {
             <p className="mt-1 text-xs text-slate-500">
               {days(bucket.used)} used of {days(bucket.entitled)}
             </p>
-            {code === "FL" && bucket.credited > 0 && (
-              <p className="mt-1 text-xs text-slate-500">{days(bucket.credited)} earned</p>
+            {code === "FL" && (
+              // Two balances, spent separately: the request names the wallet.
+              <div className="mt-2 grid grid-cols-2 gap-2 border-t border-orange-200/70 pt-2">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">FL · Sun/holiday</p>
+                  <p className="text-sm font-bold text-orange-700">{days(ledger.wallets.fl.balance)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">OT · overtime</p>
+                  <p className="text-sm font-bold text-orange-700">{days(ledger.wallets.ot.balance)}</p>
+                </div>
+              </div>
             )}
             {negative && <p className="mt-1 text-xs font-medium text-rose-600">Over the allowance</p>}
           </div>
@@ -132,13 +142,17 @@ export function OvertimeCards({
   requests?: StaffRequest[];
 }) {
   const { overtime } = ledger;
+  const dayHours = days(overtime.fullDayHours);
   const items = [
     { label: "Approved overtime", value: String(overtime.count), hint: "Requests this year" },
     { label: "Hours worked", value: `${days(overtime.hours)}h`, hint: "Across those requests" },
     {
-      label: "Earned as flexible leave",
+      label: "Earned as overtime leave (OT)",
       value: days(overtime.daysEarned),
-      hint: "8 hours makes 1 day",
+      hint:
+        overtime.carryHours > 0
+          ? `${dayHours}h makes 1 day · ${days(overtime.carryHours)}h carried toward the next half day`
+          : `${dayHours} hours makes 1 day`,
     },
   ];
 
@@ -152,7 +166,9 @@ export function OvertimeCards({
         <div>
           <h3 className="text-sm font-semibold text-slate-900">Overtime</h3>
           <p className="text-xs text-slate-500">
-            Extra hours beyond the shift. Every 8 approved hours credit one flexible leave day.
+            Extra hours beyond the shift, paid back as leave — not as salary. Approved hours add up across
+            requests; every {dayHours} of them credit one day to the OT balance, given in half days.
+            OT balance left: <b className="text-slate-700">{days(ledger.wallets.ot.balance)}</b> day(s).
           </p>
         </div>
 
@@ -174,7 +190,8 @@ export function OvertimeCards({
           <ul className="divide-y divide-slate-100">
             {logged.map((r) => {
               const hours = overtimeHours(r);
-              const earned = overtimeCompOffDays(r);
+              // This request's share of a day — the credit itself is on the total above.
+              const share = overtimeCompOffDays(r, overtime.fullDayHours);
               return (
                 <li key={r.id} className="flex flex-wrap items-center gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
@@ -193,7 +210,7 @@ export function OvertimeCards({
                     {days(hours)}h
                   </span>
                   <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-bold text-orange-700 tabular-nums">
-                    {days(earned)} FL
+                    {days(share)} day
                   </span>
                 </li>
               );

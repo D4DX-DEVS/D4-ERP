@@ -10,6 +10,7 @@ import {
   portalPathFor,
   landingPathFor,
   deniedRedirectFor,
+  otherShellFor,
 } from "@/lib/portal-nav";
 
 const PORTAL_ROOT = path.resolve(__dirname, "../app/(staff-portal)/staff-portal");
@@ -135,6 +136,23 @@ describe("landingPathFor (which shell a role belongs in)", () => {
   it("falls back to the portal when the role is missing — the shell nobody is locked out of", () => {
     expect(landingPathFor(null)).toBe("/staff-portal");
     expect(landingPathFor(undefined)).toBe("/staff-portal");
+  });
+});
+
+describe("otherShellFor (a role that works in both shells)", () => {
+  it("links department heads and accounts from each shell to the other", () => {
+    expect(otherShellFor("department-head", "/dashboard")).toBe("/staff-portal");
+    expect(otherShellFor("department-head", "/staff-portal")).toBe("/dashboard");
+    expect(otherShellFor("accounts", "/dashboard")).toBe("/staff-portal");
+    expect(otherShellFor("accounts", "/staff-portal")).toBe("/dashboard");
+  });
+
+  it("offers no switch to roles that only have one shell", () => {
+    // Admins have no self-service session; plain staff cannot open /dashboard.
+    expect(otherShellFor("admin", "/dashboard")).toBeNull();
+    expect(otherShellFor("staff", "/staff-portal")).toBeNull();
+    expect(otherShellFor(null, "/staff-portal")).toBeNull();
+    expect(otherShellFor(undefined, "/dashboard")).toBeNull();
   });
 });
 

@@ -84,6 +84,26 @@ export async function approverRecipientIds(role: "admin" | "accounts" = "admin")
 }
 
 /**
+ * The department heads who can decide `departmentId`'s approval step —
+ * resolved server-side for the same scoping reason as approverRecipientIds.
+ */
+export async function departmentHeadRecipientIds(departmentId?: string | null): Promise<string[]> {
+  if (!departmentId) return [];
+  try {
+    const res = await fetch(
+      `/api/notifications/recipients?departmentId=${encodeURIComponent(departmentId)}`,
+      { cache: "no-store" }
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { ids?: string[] };
+    return Array.isArray(data.ids) ? data.ids : [];
+  } catch (error) {
+    console.error("Failed to resolve department heads:", error);
+    return [];
+  }
+}
+
+/**
  * Creates notifications for multiple recipients at once.
  */
 export async function createBulkNotifications(

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getDocuments, createDocument, updateDocument, where, orderBy, Timestamp } from "@/lib/firestore";
 import { Staff, Payroll, Attendance, StaffRequest } from "@/types";
 import { getAppSettings, isNonWorkingDay } from "@/lib/settings";
+import { overtimeHours as requestOvertimeHours } from "@/lib/leave-ledger";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -125,16 +126,17 @@ export default function PayrollPage() {
     const presentDays = Math.round(effectivePresent * 10) / 10;
     const lopDays = Math.max(0, Math.round((workingDays - effectivePresent - leaveDays) * 10) / 10);
 
-    // Calculate overtime hours
+    // Overtime hours, for the record only: approved overtime is paid back as
+    // leave (OT balance, fullDayHours = 1 day), never as salary — paying it here
+    // too compensated the same hours twice.
     let overtimeHours = Math.round(liveAttendance.reduce((sum, r) => sum + (r.overtimeHours || 0), 0) * 10) / 10;
     for (const req of overtimeRequests) {
       const start = new Date(req.startDate.seconds * 1000);
       const end = new Date(req.endDate.seconds * 1000);
       if (req.startTime && req.endTime) {
-        const [startH, startMin] = req.startTime.split(":").map(Number);
-        const [endH, endMin] = req.endTime.split(":").map(Number);
-        const hours = (endH * 60 + endMin - (startH * 60 + startMin)) / 60;
-        overtimeHours += Math.round(hours * 10) / 10;
+        // Shared with the leave ledger: an overnight window (22:00–02:00) is 4h,
+        // where the inline end-minus-start here read it as −20h and docked pay.
+        overtimeHours += Math.round(requestOvertimeHours(req) * 10) / 10;
       } else {
         const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) || 1;
         overtimeHours += days * fullDayHours;
@@ -149,7 +151,7 @@ export default function PayrollPage() {
       basic: basicSalary,
       hra: Math.round(basicSalary * 0.4),
       da: Math.round(basicSalary * 0.1),
-      overtime: Math.round((perDayRate / 8) * overtimeHours),
+      overtime: 0,
       bonus: 0,
       allowances: 0,
       other: 0,
@@ -456,7 +458,7 @@ export default function PayrollPage() {
                   <Input type="number" step="0.5" value={editingPayroll.lopDays} onChange={(e) => setEditingPayroll({ ...editingPayroll, lopDays: Number(e.target.value) })} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Overtime Hours</Label>
+                  <Label>Overtime Hours <span className="font-normal text-slate-500">(paid as OT leave, not salary)</span></Label>
                   <Input type="number" step="0.5" value={editingPayroll.overtimeHours} onChange={(e) => setEditingPayroll({ ...editingPayroll, overtimeHours: Number(e.target.value) })} />
                 </div>
               </div>

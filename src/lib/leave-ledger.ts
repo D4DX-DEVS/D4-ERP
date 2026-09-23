@@ -18,6 +18,7 @@ import type {
   Attendance,
   AttendanceStatus,
   EmploymentType,
+  FlexWallet,
   LeaveAdjustment,
   LeaveBucket,
   LeaveQuota,
@@ -93,15 +94,36 @@ export function overtimeHours(req: Pick<StaffRequest, "startTime" | "endTime">):
   return Math.round((mins / 60) * 100) / 100;
 }
 
-/** Comp-off days earned by one approved overtime request. 8h OT = 1 day, floored to 0.5 steps. */
-export function overtimeCompOffDays(req: Pick<StaffRequest, "startTime" | "endTime">): number {
-  if (!req.startTime || !req.endTime) return 0;
-  const [sh, sm] = req.startTime.split(":").map(Number);
-  const [eh, em] = req.endTime.split(":").map(Number);
-  if ([sh, sm, eh, em].some(Number.isNaN)) return 0;
-  let mins = eh * 60 + em - (sh * 60 + sm);
-  if (mins <= 0) mins += 24 * 60; // overnight OT
-  return Math.floor((mins / 60 / 8) * 2) / 2;
+/** The working-day length overtime converts at; anything unusable falls back to 8h. */
+export function overtimeDayLength(fullDayHours?: number): number {
+  return typeof fullDayHours === "number" && Number.isFinite(fullDayHours) && fullDayHours > 0
+    ? fullDayHours
+    : 8;
+}
+
+/**
+ * One overtime request's exact share of a working day (display only). Credit is
+ * never floored per request: 6h + 6h + 6h is 18h, which is 2 days, whereas
+ * flooring each request to a half day paid out 1.5 and silently lost 6 hours.
+ */
+export function overtimeCompOffDays(
+  req: Pick<StaffRequest, "startTime" | "endTime">,
+  fullDayHours?: number
+): number {
+  return Math.round((overtimeHours(req) / overtimeDayLength(fullDayHours)) * 100) / 100;
+}
+
+/**
+ * Leave days credited for a year's accumulated overtime hours: every
+ * `fullDayHours` (the org's working day, `settings.attendanceRules`) is one day,
+ * credited in half-day steps because leave is taken in half days. The remainder
+ * carries until it makes up the next half day.
+ */
+export function overtimeDaysFromHours(hours: number, fullDayHours?: number): number {
+  if (!Number.isFinite(hours) || hours <= 0) return 0;
+  // Rounded before flooring so 17.999… from summed minutes still reads as 18h.
+  const halfDays = Math.round(((hours / overtimeDayLength(fullDayHours)) * 2) * 1e6) / 1e6;
+  return Math.floor(halfDays) / 2;
 }
 
 // ==================== Week-off duty ====================
@@ -309,8 +331,29 @@ export interface OvertimeSummary {
   count: number;
   /** Total overtime hours across them. */
   hours: number;
-  /** Flexible-leave days those hours earned (8h = 1 day). */
+  /** Flexible-leave days those hours earned, in half-day steps. */
   daysEarned: number;
+  /** Hours not yet converted: short of the next half day, carried forward. */
+  carryHours: number;
+  /** The working-day length the hours were converted at. */
+  fullDayHours: number;
+}
+
+/** One wallet inside the FL bucket. */
+export interface WalletLedger {
+  earned: number;
+  used: number;
+  /** earned - used. Floored at 0 unless negatives are allowed. */
+  balance: number;
+}
+
+/**
+ * The FL bucket split by where the days came from: FL = Sunday/holiday duty
+ * (and admin grants), OT = approved overtime. They sum to the bucket.
+ */
+export interface FlexWallets {
+  fl: WalletLedger;
+  ot: WalletLedger;
 }
 
 /** Where the flexible-leave entitlement came from, so the credit is explainable. */
@@ -361,6 +404,8 @@ export interface LeaveLedger {
   overtime: OvertimeSummary;
   /** Breakdown of the flexible-leave entitlement by where it was earned. */
   flSources: FlexibleLeaveSources;
+  /** The FL bucket as two separately spendable balances. */
+  wallets: FlexWallets;
   /** Jan..Dec total leave days across every bucket, matching the sheet's row. */
   monthly: number[];
   /** Sum of `monthly` — the sheet's TOTAL column. */
@@ -385,8 +430,8 @@ function zeroSundays(): SundaySummary {
   return { worked: 0, converted: 0, pending: 0, creditedDays: 0, monthlyWorked: new Array(12).fill(0) };
 }
 
-function zeroOvertime(): OvertimeSummary {
-  return { count: 0, hours: 0, daysEarned: 0 };
+function zeroOvertime(fullDayHours = 8): OvertimeSummary {
+  return { count: 0, hours: 0, daysEarned: 0, carryHours: 0, fullDayHours };
 }
 
 function zeroOnDuty(): OnDutySummary {
@@ -485,6 +530,8 @@ export interface LedgerInput {
   quota: LeaveQuota;
   year: number;
   allowNegative?: boolean;
+  /** `settings.attendanceRules.fullDayHours`: overtime hours per leave day. Default 8. */
+  fullDayHours?: number;
 }
 
 /**
@@ -499,6 +546,7 @@ export function computeLeaveLedger({
   quota,
   year,
   allowNegative = false,
+  fullDayHours,
 }: LedgerInput): LeaveLedger {
   const buckets: Record<LeaveBucket, BucketLedger> = {
     CL: emptyBucket(quota.casualLeave ?? 0),
@@ -508,8 +556,16 @@ export function computeLeaveLedger({
   };
   let hd = 0;
   let lop = 0;
-  const overtime = zeroOvertime();
+  const overtime = zeroOvertime(overtimeDayLength(fullDayHours));
   const flSources: FlexibleLeaveSources = { overtime: 0, weekOff: 0, manual: 0 };
+  // FL-bucket movements by wallet; `unassigned` is spent FL first, then OT.
+  const walletEarned: Record<FlexWallet, number> = { FL: 0, OT: 0 };
+  const walletUsed: Record<FlexWallet, number> = { FL: 0, OT: 0 };
+  let unassignedUsed = 0;
+  const spendFlex = (wallet: FlexWallet | undefined, n: number) => {
+    if (wallet === "FL" || wallet === "OT") walletUsed[wallet] += n;
+    else unassignedUsed += n;
+  };
 
   // ── Approved requests ────────────────────────────────────────────────
   for (const r of requests ?? []) {
@@ -518,12 +574,9 @@ export function computeLeaveLedger({
     if (r.type === "overtime") {
       // Overtime earns flexible leave in the year the overtime happened.
       if (yearOf(r.startDate?.seconds) !== year) continue;
-      const earned = overtimeCompOffDays(r);
-      buckets.FL.credited += earned;
-      flSources.overtime += earned;
+      // Hours accumulate here; they convert to days once, after the loop.
       overtime.count += 1;
       overtime.hours += overtimeHours(r);
-      overtime.daysEarned += earned;
       continue;
     }
 
@@ -546,7 +599,17 @@ export function computeLeaveLedger({
     if (!bucket) continue;
     buckets[bucket].fromRequests += daysInYear;
     for (let m = 0; m < 12; m++) buckets[bucket].monthly[m] += months[m];
+    if (bucket === "FL") spendFlex(r.leaveWallet, daysInYear);
   }
+
+  // ── Overtime → flexible leave ────────────────────────────────────────
+  // Converted once, on the year's total hours (see overtimeDaysFromHours).
+  overtime.hours = round(overtime.hours);
+  overtime.daysEarned = overtimeDaysFromHours(overtime.hours, overtime.fullDayHours);
+  overtime.carryHours = round(overtime.hours - overtime.daysEarned * overtime.fullDayHours);
+  buckets.FL.credited += overtime.daysEarned;
+  flSources.overtime += overtime.daysEarned;
+  walletEarned.OT += overtime.daysEarned;
 
   // ── Manual adjustments ───────────────────────────────────────────────
   // `days` is signed: positive adds entitlement, negative consumes it. Storing
@@ -564,11 +627,13 @@ export function computeLeaveLedger({
         // A week-off conversion is tagged; anything else an admin credits is manual.
         if (a.kind === "sunday-credit") flSources.weekOff += days;
         else flSources.manual += days;
+        walletEarned[a.wallet === "OT" ? "OT" : "FL"] += days;
       }
     } else {
       const used = -days;
       buckets[bucket].debited += used;
       buckets[bucket].monthly[monthColumn(a, year)] += used;
+      if (bucket === "FL") spendFlex(a.wallet, used);
     }
   }
 
@@ -600,8 +665,7 @@ export function computeLeaveLedger({
     }
   }
   sundays.creditedDays = round(sundays.creditedDays);
-  overtime.hours = round(overtime.hours);
-  overtime.daysEarned = round(overtime.daysEarned);
+  const wallets = splitFlexWallets(walletEarned, walletUsed, unassignedUsed, allowNegative);
   flSources.overtime = round(flSources.overtime);
   flSources.weekOff = round(flSources.weekOff);
   flSources.manual = round(flSources.manual);
@@ -631,10 +695,41 @@ export function computeLeaveLedger({
     onDuty,
     overtime,
     flSources,
+    wallets,
     monthly,
     totalDays: round(monthly.reduce((a, b) => a + b, 0)),
     allowNegative,
   };
+}
+
+/**
+ * Settles the FL bucket into its two wallets. Days that named a wallet are
+ * charged to it; the rest (register marks, requests filed before the split)
+ * spend FL first, then OT — the rule agreed with the org — and anything beyond
+ * both lands on FL, the default wallet.
+ */
+function splitFlexWallets(
+  earned: Record<FlexWallet, number>,
+  used: Record<FlexWallet, number>,
+  unassigned: number,
+  allowNegative: boolean
+): FlexWallets {
+  let flUsed = used.FL;
+  let otUsed = used.OT;
+  const fromFl = Math.min(unassigned, Math.max(0, earned.FL - flUsed));
+  const fromOt = Math.min(unassigned - fromFl, Math.max(0, earned.OT - otUsed));
+  flUsed += unassigned - fromOt;
+  otUsed += fromOt;
+  const wallet = (e: number, u: number): WalletLedger => {
+    const raw = round(e - u);
+    return { earned: round(e), used: round(u), balance: allowNegative ? raw : Math.max(0, raw) };
+  };
+  return { fl: wallet(earned.FL, flUsed), ot: wallet(earned.OT, otUsed) };
+}
+
+/** The wallet a flexible-leave request spends, as the ledger reads it. */
+export function walletOf(ledger: LeaveLedger, wallet: FlexWallet): WalletLedger {
+  return wallet === "OT" ? ledger.wallets.ot : ledger.wallets.fl;
 }
 
 /** An empty ledger for a staff member with no records yet (table placeholders). */

@@ -9,6 +9,7 @@ import {
   MAX_QUERY_LIMIT,
   scopeFilter,
   authorizeOwnWorkLogWrite,
+  authorizeSubCollection,
 } from "@/lib/db-authz";
 import type { TokenPayload } from "@/lib/auth";
 
@@ -567,5 +568,70 @@ describe("work_logs read scoping", () => {
 
   it("keeps dept heads scoped to their department", () => {
     expect(scopeFilter(deptHead, "work_logs", "d1", null)).toEqual({ departmentId: "d1" });
+  });
+});
+
+describe("authorizeSubCollection (findSub / createSub)", () => {
+  const self = { ...staff, uid: "u1" };
+
+  it("refuses a sub-collection name that is not on the allow-list", () => {
+    // leave + adjustments would resolve to the admin-only leave ledger.
+    expect(authorizeSubCollection(admin, "createSub", "leave", "adjustments", "x", "leave_adjustments")).toMatch(
+      /not accessible/i
+    );
+    expect(authorizeSubCollection(admin, "findSub", "company", "tools", "x", "company_tools")).toMatch(
+      /not accessible/i
+    );
+  });
+
+  it("refuses when the authorized collection name differs from the one written", () => {
+    expect(authorizeSubCollection(admin, "findSub", "staff", "salaryHistory", "u1", "clients")).toMatch(
+      /not accessible/i
+    );
+  });
+
+  it("lets only an admin create sub-documents", () => {
+    expect(
+      authorizeSubCollection(admin, "createSub", "staff", "salaryHistory", "u9", "staff_salaryHistory")
+    ).toBeNull();
+    expect(
+      authorizeSubCollection(self, "createSub", "staff", "salaryHistory", "u1", "staff_salaryHistory")
+    ).toMatch(/permission/i);
+    expect(
+      authorizeSubCollection(deptHead, "createSub", "assets", "assignments", "a1", "assets_assignments")
+    ).toMatch(/permission/i);
+  });
+
+  it("lets staff read their own staff history but nobody else's", () => {
+    expect(
+      authorizeSubCollection(self, "findSub", "staff", "salaryHistory", "u1", "staff_salaryHistory")
+    ).toBeNull();
+    expect(
+      authorizeSubCollection(self, "findSub", "staff", "salaryHistory", "u9", "staff_salaryHistory")
+    ).toMatch(/permission/i);
+    expect(
+      authorizeSubCollection(deptHead, "findSub", "staff", "salaryHistory", "u9", "staff_salaryHistory")
+    ).toMatch(/permission/i);
+  });
+
+  it("lets admin and payroll holders read any staff history", () => {
+    expect(
+      authorizeSubCollection(admin, "findSub", "staff", "statusHistory", "u9", "staff_statusHistory")
+    ).toBeNull();
+    expect(
+      authorizeSubCollection(accounts, "findSub", "staff", "salaryHistory", "u9", "staff_salaryHistory")
+    ).toBeNull();
+  });
+
+  it("requires a parent id on reads (a missing one matched every row)", () => {
+    expect(
+      authorizeSubCollection(admin, "findSub", "staff", "salaryHistory", undefined, "staff_salaryHistory")
+    ).toMatch(/parent/i);
+  });
+
+  it("keeps asset assignment history readable by any signed-in user", () => {
+    expect(
+      authorizeSubCollection(self, "findSub", "assets", "assignments", "a1", "assets_assignments")
+    ).toBeNull();
   });
 });

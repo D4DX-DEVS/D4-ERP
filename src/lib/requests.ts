@@ -2,73 +2,44 @@
 
 import {
   createDocument,
-  getDocument,
   getDocuments,
   updateDocument,
   where,
   Timestamp,
 } from "@/lib/firestore";
-import { approverRecipientIds, createNotification, createBulkNotifications } from "@/lib/notifications";
+import {
+  approverRecipientIds,
+  createNotification,
+  createBulkNotifications,
+  departmentHeadRecipientIds,
+} from "@/lib/notifications";
 import { loadStaffLedger } from "@/lib/leave-adjustments";
 import { consumesLeaveBalance, type LeaveLedger } from "@/lib/leave-ledger";
 import { applyRequestWriteback, withdrawRequestWriteback } from "@/lib/leave-writeback";
+import { isLegacyRequest, resolveRequestStatus } from "@/lib/request-status";
+import { REQUEST_TYPE_LABELS } from "@/lib/request-labels";
 import type {
   ApprovalStep,
   AuthUser,
-  Department,
-  RequestStatus,
   StaffRequest,
   StaffRequestType,
 } from "@/types";
 
-export const REQUEST_TYPE_LABELS: Record<StaffRequestType, string> = {
-  leave: "Leave",
-  wfh: "Work From Home",
-  "long-leave": "Long Leave",
-  "salary-increment": "Salary Increment",
-  overtime: "Overtime",
-  "on-duty": "On Duty",
-  other: "Other",
-};
-
-// Stored leave-type codes are legacy (SL/CO) — labels use the org's vocabulary
-// (ML = Medical Leave, FL = Flexible Leave earned from overtime, e.g. Sunday work).
-export const LEAVE_TYPE_LABELS: Record<string, string> = {
-  CL: "Casual Leave (CL)",
-  SL: "Medical Leave (ML)",
-  EL: "Earned Leave (EL)",
-  CO: "Flexible Leave (FL)",
-  HD: "Half Day",
-  LOP: "Loss of Pay (LOP)",
-};
-
-/** Display code for a stored leave-type value (SL shows as ML, CO as FL). */
-export const LEAVE_TYPE_CODES: Record<string, string> = {
-  CL: "CL",
-  SL: "ML",
-  EL: "EL",
-  CO: "FL",
-  HD: "HD",
-  LOP: "LOP",
-};
+// Labels live in a pure module so server messages use the same words.
+export {
+  REQUEST_TYPE_LABELS,
+  LEAVE_TYPE_LABELS,
+  LEAVE_TYPE_CODES,
+  OT_LEAVE_LABEL,
+  leaveTypeLabel,
+  leaveTypeCode,
+} from "@/lib/request-labels";
 
 const COLLECTION = "leaveRequests";
 const PENDING_STEP: ApprovalStep = { status: "pending" };
 
-/** Overall status from the two approval steps. Terminal states are immutable. */
-export function resolveRequestStatus(
-  req: Pick<StaffRequest, "deptHead" | "admin"> & { status?: RequestStatus }
-): RequestStatus {
-  if (req.status === "cancelled") return "cancelled";
-  if (req.admin?.status === "rejected" || req.deptHead?.status === "rejected") return "rejected";
-  if (req.admin?.status === "approved") return "approved";
-  return "pending";
-}
-
-/** Legacy docs (pre two-step) have no deptHead/admin fields. */
-export function isLegacyRequest(req: Partial<StaffRequest>): boolean {
-  return !req.deptHead && !req.admin;
-}
+// The status rules live in a pure module so the /api/db guard applies the same ones.
+export { resolveRequestStatus, isLegacyRequest };
 
 /**
  * Admins to notify. Resolved server-side because a department head filing their
@@ -78,15 +49,19 @@ export async function getAdminStaffIds(): Promise<string[]> {
   return approverRecipientIds();
 }
 
-export async function getDeptHeadStaffId(departmentId: string): Promise<string | null> {
-  if (!departmentId) return null;
-  const dept = await getDocument<Department>("departments", departmentId);
-  return dept?.headId || null;
+/**
+ * The department heads who can decide this department's step. Not
+ * `departments.headId`: that was unset for most departments (and named a
+ * plain-staff head for one), so requests notified nobody able to act on them.
+ */
+export async function getDeptHeadStaffIds(departmentId: string): Promise<string[]> {
+  return departmentHeadRecipientIds(departmentId);
 }
 
 export interface CreateRequestInput {
   type: StaffRequestType;
   leaveType?: StaffRequest["leaveType"];
+  leaveWallet?: StaffRequest["leaveWallet"];
   isHalfDay?: boolean;
   session?: StaffRequest["session"];
   startDate: Timestamp;
@@ -121,9 +96,9 @@ export async function createStaffRequest(input: CreateRequestInput, user: AuthUs
   const id = await createDocument(COLLECTION, doc as unknown as Record<string, unknown>);
 
   const label = REQUEST_TYPE_LABELS[input.type];
-  const headId = await getDeptHeadStaffId(user.departmentId);
+  const headIds = await getDeptHeadStaffIds(user.departmentId);
   const adminIds = await getAdminStaffIds();
-  const recipients = new Set<string>([...adminIds, ...(headId ? [headId] : [])]);
+  const recipients = new Set<string>([...adminIds, ...headIds]);
   recipients.delete(user.staffId); // don't notify self
   await createBulkNotifications([...recipients], {
     type: "leave",
@@ -204,18 +179,17 @@ export async function decideRequest({ request, step, decision, remarks }: Decide
 
   // Admin's decision is final — keep the dept head in the loop even on override
   if (step === "admin" && next.status !== "pending") {
-    const headId = await getDeptHeadStaffId(request.departmentId);
-    if (headId && headId !== request.staffId && headId !== user.staffId) {
-      await createNotification({
-        recipientId: headId,
-        type: "leave",
-        title: `${label} request ${next.status} by admin`,
-        message: `${request.staffName}'s ${label.toLowerCase()} request was ${next.status} by admin${next.adminOverride ? " (override — covers department head approval)" : ""}.`,
-        link: "/dashboard/leaves",
-        entityId: request.id,
-        entityType: "staff_request",
-      });
-    }
+    const headIds = (await getDeptHeadStaffIds(request.departmentId)).filter(
+      (id) => id !== request.staffId && id !== user.staffId
+    );
+    await createBulkNotifications(headIds, {
+      type: "leave",
+      title: `${label} request ${next.status} by admin`,
+      message: `${request.staffName}'s ${label.toLowerCase()} request was ${next.status} by admin${next.adminOverride ? " (override — covers department head approval)" : ""}.`,
+      link: "/dashboard/leaves",
+      entityId: request.id,
+      entityType: "staff_request",
+    });
   }
 
   if (next.status === "approved" && request.type === "overtime") {

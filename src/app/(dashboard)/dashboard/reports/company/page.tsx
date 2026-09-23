@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
+import { useAuthStore } from "@/store/auth-store";
+import { createBulkNotifications } from "@/lib/notifications";
 import { BarChart3, Building2, ChevronDown, ChevronRight, FileText, Inbox, TrendingUp } from "lucide-react";
 import type { DepartmentReport } from "@/types";
 
@@ -33,6 +35,7 @@ function monthLabel(key: string): string {
 
 export default function CompanyReportPage() {
   const { toast } = useToast();
+  const { user } = useAuthStore();
   const [reports, setReports] = useState<DepartmentReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState<Record<string, boolean>>({});
@@ -65,7 +68,8 @@ export default function CompanyReportPage() {
   );
 
   const pending = scoped.filter((r) => r.status === "submitted");
-  const published = scoped.filter((r) => r.status === "published");
+  // Approved on the filings page or here — `published` is the older name for it.
+  const published = scoped.filter((r) => r.status === "approved" || r.status === "published");
   const departments = new Set(scoped.map((r) => r.departmentId));
 
   // Company totals read from the published set: the signed-off numbers only.
@@ -88,12 +92,23 @@ export default function CompanyReportPage() {
   async function handlePublish(report: DepartmentReport) {
     setPublishing((prev) => ({ ...prev, [report.id!]: true }));
     try {
+      const reviewedByName = user ? `${user.firstName} ${user.lastName}`.trim() : undefined;
       await updateDocument("department_reports", report.id!, {
-        status: "published" as const,
+        status: "approved" as const,
+        reviewedAt: Timestamp.now(),
+        ...(user ? { reviewedBy: user.staffId, reviewedByName } : {}),
         updatedAt: Timestamp.now(),
       });
-      setReports((prev) => prev.map((r) => (r.id === report.id ? { ...r, status: "published" as const } : r)));
-      toast("success", `${report.departmentName} published into the final report`);
+      if (report.generatedBy) {
+        await createBulkNotifications([report.generatedBy], {
+          type: "system",
+          title: `${(report.kind ?? "report") === "plan" ? "Plan" : "Report"} approved`,
+          message: `${report.departmentName} ${report.kind ?? "report"} for ${report.startDate} to ${report.endDate} was approved.`,
+          link: "/dashboard/reports/department?status=approved",
+        });
+      }
+      setReports((prev) => prev.map((r) => (r.id === report.id ? { ...r, status: "approved" as const } : r)));
+      toast("success", `${report.departmentName} approved into the final report`);
     } catch {
       toast("error", "Failed to publish report");
     } finally {
@@ -152,7 +167,7 @@ export default function CompanyReportPage() {
                   <TableCell className="text-center">{r.planItems?.length ?? 0}</TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" onClick={() => handlePublish(r)} disabled={publishing[r.id!]}>
-                      {publishing[r.id!] ? "Publishing…" : "Publish"}
+                      {publishing[r.id!] ? "Approving…" : "Approve"}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -193,7 +208,7 @@ export default function CompanyReportPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="bg-emerald-100 text-emerald-700">Published</Badge>
+                      <Badge variant="bg-emerald-100 text-emerald-700">Approved</Badge>
                       {open ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
                     </div>
                   </button>

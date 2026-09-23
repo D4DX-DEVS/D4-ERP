@@ -56,6 +56,9 @@ function yearColumns(ledger: LeaveLedger): CsvRow {
   for (const code of LEAVE_BUCKETS) base[`Balance ${code}`] = ledgerBucket(ledger, code).balance;
   for (const code of LEAVE_BUCKETS) base[`Current ${code}`] = ledgerBucket(ledger, code).entitled;
   for (const code of LEAVE_BUCKETS) base[`Used ${code}`] = ledgerBucket(ledger, code).used;
+  // The FL column above is the sheet's total; these are its two spendable halves.
+  base["FL Balance (Sun/holiday)"] = ledger.wallets.fl.balance;
+  base["OT Balance (overtime)"] = ledger.wallets.ot.balance;
   base.OD = ledger.onDuty.total;
   base["Overtime Hours"] = ledger.overtime.hours;
   base["Week-offs Worked"] = ledger.sundays.worked;

@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { LeaveRequest, Staff, Department, AttendanceStatus, StaffRequest } from "@/types";
 import { countDocuments, createDocument, getDocuments, updateDocument, where, Timestamp } from "@/lib/firestore";
 import { getAppSettings, isNonWorkingDay } from "@/lib/settings";
-import { decideRequest, REQUEST_TYPE_LABELS, LEAVE_TYPE_LABELS, LEAVE_TYPE_CODES, isLegacyRequest } from "@/lib/requests";
+import { decideRequest, REQUEST_TYPE_LABELS, LEAVE_TYPE_LABELS, leaveTypeCode, isLegacyRequest } from "@/lib/requests";
 import { loadOrgLedgers, type OrgLedgerRow } from "@/lib/leave-adjustments";
-import { ledgerBucket, LEAVE_BUCKETS } from "@/lib/leave-ledger";
+import { bucketForLeaveType, consumesLeaveBalance, ledgerBucket, LEAVE_BUCKETS } from "@/lib/leave-ledger";
+import { attendanceDayKey } from "@/lib/leave-attendance-sync";
 import { useAuthStore } from "@/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -220,7 +221,7 @@ export default function LeavesPage() {
       await decideRequest({ request, step, decision, remarks }, user!);
 
       const status = decision === "approved" && step === "admin" ? "approved" : decision === "rejected" ? "rejected" : "pending";
-      if (status === "approved" || status === "rejected") {
+      if ((status === "approved" || status === "rejected") && !writtenBackByDecision(request)) {
         await syncLeaveToAttendance(request, status);
       }
       toast("success", `Request ${decision} successfully`);
@@ -235,10 +236,17 @@ export default function LeavesPage() {
     setBulkProcessing(true);
     let successCount = 0;
     let failCount = 0;
+    let skippedCount = 0;
     for (const id of selectedIds) {
       try {
         const req = requests.find((r) => r.id === id) as StaffRequest & { id: string };
         if (!req) continue;
+        // A head's bulk pass only reaches requests their step is still open on —
+        // the server refuses the rest, which used to surface as bare failures.
+        if (user?.role === "department-head" && !canHeadDecide(req)) {
+          skippedCount++;
+          continue;
+        }
 
         const isLegacy = isLegacyRequest(req);
         if (isLegacy) {
@@ -254,7 +262,7 @@ export default function LeavesPage() {
           const step: "deptHead" | "admin" = user?.role === "admin" ? "admin" : "deptHead";
           await decideRequest({ request: req, step, decision }, user!);
           const finalStatus = decision === "approved" && step === "admin" ? "approved" : decision === "rejected" ? "rejected" : "pending";
-          if (finalStatus === "approved" || finalStatus === "rejected") {
+          if ((finalStatus === "approved" || finalStatus === "rejected") && !writtenBackByDecision(req)) {
             await syncLeaveToAttendance(req as LeaveRequest, finalStatus);
           }
         }
@@ -266,6 +274,7 @@ export default function LeavesPage() {
     setBulkProcessing(false);
     if (successCount > 0) toast("success", `${successCount} request(s) ${decision}`);
     if (failCount > 0) toast("error", `${failCount} request(s) failed`);
+    if (skippedCount > 0) toast("info", `${skippedCount} request(s) skipped — your own, or already decided at your step`);
     await refreshLeaves();
   };
 
@@ -287,6 +296,18 @@ export default function LeavesPage() {
     }
   };
 
+
+  /** Balance leave is written to the register inside decideRequest (planner + request stamp). */
+  const writtenBackByDecision = (req: LeaveRequest | StaffRequest) =>
+    consumesLeaveBalance(req.type) && !!bucketForLeaveType(req.leaveType);
+
+  /** A head decides the department step on other people's own-department requests, once. */
+  const canHeadDecide = (req: StaffRequest) =>
+    !isLegacyRequest(req) &&
+    req.departmentId === user?.departmentId &&
+    req.staffId !== user?.staffId &&
+    req.deptHead?.status === "pending" &&
+    req.status === "pending";
 
   // Map an approved request onto a stored attendance status. Legacy code wrote
   // "leave", which normalizeAttendanceStatus folds to "absent" — staff then saw
@@ -329,6 +350,27 @@ export default function LeavesPage() {
     const dayStatus: AttendanceStatus = isHalfDay ? "half-day" : baseStatus;
     const staffCompanyId = staffMap[leave.staffId]?.companyId;
 
+    // Rows are matched by local day, not by the stored instant: the register
+    // holds both UTC- and IST-midnight rows, and an exact-instant lookup missed
+    // the other kind and created a duplicate day. The window is padded a day
+    // each side so either midnight falls inside it.
+    const windowStart = new Date(start);
+    windowStart.setDate(windowStart.getDate() - 1);
+    const windowEnd = new Date(end);
+    windowEnd.setDate(windowEnd.getDate() + 1);
+    const rowsInWindow = await getDocuments<{ id: string; source?: string; leaveId?: string; isDeleted?: boolean; date?: Timestamp }>("attendance", [
+      where("staffId", "==", leave.staffId),
+      where("date", ">=", Timestamp.fromDate(windowStart)),
+      where("date", "<=", Timestamp.fromDate(windowEnd)),
+    ]);
+    const rowsByDay = new Map<string, (typeof rowsInWindow)[number][]>();
+    for (const row of rowsInWindow) {
+      if (row.isDeleted) continue;
+      const key = attendanceDayKey(row.date?.seconds);
+      if (!key) continue;
+      rowsByDay.set(key, [...(rowsByDay.get(key) ?? []), row]);
+    }
+
     for (let d = new Date(start); d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)) {
       const day = new Date(d);
       day.setHours(0, 0, 0, 0);
@@ -336,10 +378,7 @@ export default function LeavesPage() {
       // Leave should not consume scheduled off days or holidays.
       if (isNonWorkingDay(settings, day, staffCompanyId)) continue;
 
-      const existing = await getDocuments<{ id: string; source?: string }>("attendance", [
-        where("staffId", "==", leave.staffId),
-        where("date", "==", Timestamp.fromDate(day)),
-      ]);
+      const existing = rowsByDay.get(attendanceDayKey(day.getTime() / 1000) ?? "") ?? [];
 
       if (status === "approved") {
         const data: Record<string, unknown> = {
@@ -357,8 +396,9 @@ export default function LeavesPage() {
           await createDocument("attendance", data);
         }
       } else {
-        // Reverse: only remove records this leave created.
-        const created = existing.find((rec) => rec.source === "leave");
+        // Reverse: only remove records THIS request created — another approved
+        // request on the same day owns its own row.
+        const created = existing.find((rec) => rec.source === "leave" && rec.leaveId === leave.id);
         if (created) {
           await updateDocument("attendance", created.id, {
             isDeleted: true,
@@ -685,7 +725,7 @@ export default function LeavesPage() {
               const end = req.endDate?.seconds && req.endDate.seconds !== req.startDate?.seconds
                 ? formatDate(new Date(req.endDate.seconds * 1000))
                 : null;
-              const canActDeptHead = user?.role === "department-head" && user?.departmentId === req.departmentId && !isLegacy && req.deptHead?.status === "pending";
+              const canActDeptHead = user?.role === "department-head" && canHeadDecide(req);
               const canActAdmin = user?.role === "admin" && !isLegacy;
               const canActLegacy = user?.role === "admin" && isLegacy && req.status === "pending";
 
@@ -714,7 +754,7 @@ export default function LeavesPage() {
                           <p className="font-medium text-slate-900 truncate">{req.staffName || getStaffName(req.staffId)}</p>
                           <Badge variant="outline" className="text-xs">{deptName}</Badge>
                           <Badge>{REQUEST_TYPE_LABELS[req.type]}</Badge>
-                          {req.leaveType && <Badge variant="bg-slate-100 text-slate-700">{LEAVE_TYPE_CODES[req.leaveType] ?? req.leaveType}</Badge>}
+                          {req.leaveType && <Badge variant="bg-slate-100 text-slate-700">{leaveTypeCode(req)}</Badge>}
                           {req.isHalfDay && <Badge variant="bg-amber-100 text-amber-700">½ {req.session === "first-half" ? "AM" : "PM"}</Badge>}
                           <span className="text-xs text-slate-600">{end ? `${start} – ${end}` : start}</span>
                         </div>
