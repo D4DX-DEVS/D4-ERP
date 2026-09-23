@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { navigationModules, getAllNavItems, type NavItem } from "@/lib/navigation";
+import { navigationModules, getAllNavItems, roleMenuShows, defaultRoleMenu, materializeRoleMenus, type NavItem } from "@/lib/navigation";
 import { PORTAL_MODULES } from "@/lib/portal-nav";
 
 /** Item-level feature, else the feature declared on the owning module. */
@@ -69,5 +69,58 @@ describe("dashboard navigation feature gating", () => {
     expect(people?.roles).toContain("department-head");
     const headItems = (people?.items ?? []).filter((i) => i.roles?.includes("department-head"));
     expect(headItems.map((i) => i.href)).toContain("/dashboard/attendance");
+  });
+});
+
+describe("roleMenuShows (saved role menu vs items added later)", () => {
+  const saved = ["/dashboard/leaves", "/dashboard/attendance"];
+  const catalog = ["/dashboard/leaves", "/dashboard/attendance", "/dashboard/staff"];
+
+  it("follows the saved list for items the admin saw when saving", () => {
+    expect(roleMenuShows(saved, catalog, "/dashboard/leaves", true)).toBe(true);
+    expect(roleMenuShows(saved, catalog, "/dashboard/staff", true)).toBe(false);
+  });
+
+  it("falls back to the code default for an item added after the list was saved", () => {
+    expect(roleMenuShows(saved, catalog, "/dashboard/reports/department", true)).toBe(true);
+    expect(roleMenuShows(saved, catalog, "/dashboard/reports/department", false)).toBe(false);
+  });
+
+  it("keeps the old strict behaviour for a config saved before the catalog existed", () => {
+    expect(roleMenuShows(saved, undefined, "/dashboard/reports/department", true)).toBe(false);
+  });
+
+  it("uses the code default when the role has no saved list", () => {
+    expect(roleMenuShows(undefined, catalog, "/dashboard/staff", true)).toBe(true);
+    expect(roleMenuShows(undefined, catalog, "/dashboard/staff", false)).toBe(false);
+  });
+});
+
+describe("defaultRoleMenu", () => {
+  it("lists every item the code shows a role by default", () => {
+    const items = getAllNavItems();
+    const head = defaultRoleMenu(items, "department-head");
+    expect(head).toContain("/dashboard/reports/department");
+    expect(head).toContain("/dashboard/leaves");
+    expect(head).not.toContain("/dashboard/reports/company");
+  });
+});
+
+describe("materializeRoleMenus", () => {
+  const items = [
+    { href: "/a", label: "A", moduleId: "m", moduleLabel: "M", roles: ["department-head"] },
+    { href: "/b", label: "B", moduleId: "m", moduleLabel: "M", roles: ["department-head"] },
+    { href: "/new", label: "New", moduleId: "m", moduleLabel: "M", roles: ["department-head"] },
+  ];
+
+  it("writes a later-added default page into a saved list, so saving does not hide it", () => {
+    const out = materializeRoleMenus({ "department-head": ["/a"] }, ["/a", "/b"], items);
+    expect(out.roleMenus["department-head"]).toEqual(["/a", "/new"]);
+    expect(out.catalog).toEqual(["/a", "/b", "/new"]);
+  });
+
+  it("leaves roles without a saved list on the code default", () => {
+    const out = materializeRoleMenus({}, undefined, items);
+    expect(out.roleMenus["department-head"]).toBeUndefined();
   });
 });

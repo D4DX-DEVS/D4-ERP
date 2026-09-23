@@ -5,7 +5,7 @@
 
 import { createDocument, getDocuments, where } from "@/lib/firestore";
 import { sendPush } from "@/lib/notifications";
-import { getAdminStaffIds, getDeptHeadStaffId } from "@/lib/requests";
+import { getAdminStaffIds, getDeptHeadStaffIds } from "@/lib/requests";
 import type { Task } from "@/types";
 
 type TsLike = { seconds: number };
@@ -81,8 +81,9 @@ export async function notifyPendingTaskUpdates(
   const recipients = new Map<string, number>(); // staffId → pending count shown to them
   for (const id of await getAdminStaffIds()) recipients.set(id, pending.length);
   for (const [deptId, count] of byDept) {
-    const headId = await getDeptHeadStaffId(deptId);
-    if (headId && !recipients.has(headId)) recipients.set(headId, count);
+    for (const headId of await getDeptHeadStaffIds(deptId)) {
+      if (!recipients.has(headId)) recipients.set(headId, count);
+    }
   }
 
   for (const [recipientId, count] of recipients) {

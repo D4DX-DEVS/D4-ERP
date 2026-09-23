@@ -38,6 +38,7 @@ import {
 import type {
   Attendance,
   AuthUser,
+  FlexWallet,
   LeaveAdjustment,
   LeaveAdjustmentKind,
   LeaveBucket,
@@ -181,6 +182,7 @@ export async function loadStaffLedger(
     quota,
     year,
     allowNegative: allowsNegativeBalance(staff, policy),
+    fullDayHours: settings.attendanceRules?.fullDayHours,
   });
   return { ledger, quota, adjustments, sundayDuties, requests };
 }
@@ -250,6 +252,7 @@ export async function loadOrgLedgers(staffList: Staff[], year: number): Promise<
         quota,
         year,
         allowNegative: allowsNegativeBalance(staff, policy),
+        fullDayHours: settings.attendanceRules?.fullDayHours,
       }),
     };
   }
@@ -269,6 +272,8 @@ export interface CreateAdjustmentInput {
   date?: string;
   reason: string;
   sundayDutyId?: string;
+  /** FL bucket only: which wallet this moves (see FlexWallet). */
+  wallet?: FlexWallet;
 }
 
 export async function createLeaveAdjustment(
@@ -295,6 +300,7 @@ export async function createLeaveAdjustment(
     date: Timestamp.fromDate(atMidnight(when)),
     reason: input.reason.trim(),
     ...(input.sundayDutyId ? { sundayDutyId: input.sundayDutyId } : {}),
+    ...(input.bucket === "FL" && input.wallet ? { wallet: input.wallet } : {}),
     createdBy: user?.staffId,
     createdByName: user ? `${user.firstName} ${user.lastName}` : undefined,
     createdAt: Timestamp.now(),

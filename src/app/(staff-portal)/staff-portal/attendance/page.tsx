@@ -8,7 +8,7 @@ import { clearCache, createDocument, getDocuments, orderBy, where, Timestamp } f
 import { pickAttendanceRecord } from "@/lib/attendance-dedupe";
 import { Attendance, AttendanceCorrection } from "@/types";
 import { getAppSettings, weeklyOffDayNames, Holiday } from "@/lib/settings";
-import { getAdminStaffIds, getDeptHeadStaffId } from "@/lib/requests";
+import { getAdminStaffIds, getDeptHeadStaffIds } from "@/lib/requests";
 import { createBulkNotifications } from "@/lib/notifications";
 import {
   ATTENDANCE_STATUS_CONFIG,
@@ -256,11 +256,11 @@ export default function StaffAttendancePage() {
       setCorrections((prev) => [{ ...correctionDoc, id: newId } as AttendanceCorrection & { id: string }, ...prev]);
       // Notify dept head + admins — review happens on the corrections page
       try {
-        const [headId, adminIds] = await Promise.all([
-          getDeptHeadStaffId(user.departmentId),
+        const [headIds, adminIds] = await Promise.all([
+          getDeptHeadStaffIds(user.departmentId),
           getAdminStaffIds(),
         ]);
-        const recipients = new Set<string>([...adminIds, ...(headId ? [headId] : [])]);
+        const recipients = new Set<string>([...adminIds, ...headIds]);
         recipients.delete(user.staffId);
         await createBulkNotifications([...recipients], {
           type: "system",

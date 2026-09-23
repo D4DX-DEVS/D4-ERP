@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { getDocument, Timestamp } from "@/lib/firestore";
-import { createStaffRequest, getStaffLeaveLedger, LEAVE_TYPE_LABELS, REQUEST_TYPE_LABELS } from "@/lib/requests";
-import { consumesLeaveBalance, ledgerBucket, type LeaveLedger } from "@/lib/leave-ledger";
+import { createStaffRequest, getStaffLeaveLedger, LEAVE_TYPE_LABELS, OT_LEAVE_LABEL, REQUEST_TYPE_LABELS } from "@/lib/requests";
+import { consumesLeaveBalance, ledgerBucket, walletOf, type LeaveLedger } from "@/lib/leave-ledger";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { TimePicker } from "@/components/ui/time-picker";
@@ -15,7 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { FileUpload } from "@/components/ui/file-upload";
 import { Loader2, CheckCircle, AlertTriangle } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
-import type { Staff, StaffRequest } from "@/types";
+import type { FlexWallet, Staff, StaffRequest } from "@/types";
 
 const CL_MAX_WITHOUT_APPROVAL = 2;
 
@@ -85,8 +85,17 @@ export default function NewRequestPage() {
   // A long leave spans a period, so the half-day option never applies to it.
   const isLongLeave = form.type === "long-leave";
   const exceedsClCap = form.leaveType === "CL" && requestedDays > CL_MAX_WITHOUT_APPROVAL;
-  const isCoLeave = consumesLeaveBalance(form.type) && form.leaveType === "CO";
-  const exceedsCoBalance = isCoLeave && balances !== null && requestedDays > balances.fl.balance;
+  // Flexible leave is paid from one of two wallets. The form offers them as two
+  // leave types ("CO" = FL from Sunday/holiday duty, "OT" = earned by overtime);
+  // both are stored as CO with the wallet named.
+  const wallet: FlexWallet | null =
+    consumesLeaveBalance(form.type) && (form.leaveType === "CO" || form.leaveType === "OT")
+      ? form.leaveType === "OT"
+        ? "OT"
+        : "FL"
+      : null;
+  const walletBalance = wallet && balances ? walletOf(balances, wallet) : null;
+  const exceedsCoBalance = walletBalance !== null && requestedDays > walletBalance.balance;
 
   const handleAddAttachment = (url: string, meta?: { name: string; size: number }) => {
     if (!url) return;
@@ -107,8 +116,26 @@ export default function NewRequestPage() {
       return;
     }
     if (exceedsCoBalance) {
-      toast("error", `Not enough flexible leave balance (available: ${balances?.fl.balance ?? 0} day(s)).`);
+      toast(
+        "error",
+        `Not enough ${wallet === "OT" ? "overtime leave (OT)" : "flexible leave (FL)"} balance (available: ${walletBalance?.balance ?? 0} day(s)).`
+      );
       return;
+    }
+    if (form.endDate && new Date(form.endDate).getTime() < new Date(form.startDate).getTime()) {
+      toast("error", "The end date cannot be before the start date");
+      return;
+    }
+    if (form.type === "overtime") {
+      if (!form.startTime || !form.endTime) {
+        toast("error", "Pick the overtime start and end time");
+        return;
+      }
+      // Equal times would read as a 24-hour shift (an end before the start is overnight).
+      if (form.startTime === form.endTime) {
+        toast("error", "Overtime start and end time cannot be the same");
+        return;
+      }
     }
 
     setSaving(true);
@@ -120,7 +147,12 @@ export default function NewRequestPage() {
         {
           type: form.type,
           ...(consumesLeaveBalance(form.type)
-            ? { leaveType: form.leaveType as StaffRequest["leaveType"], isHalfDay: form.isHalfDay, session: form.isHalfDay ? form.session : undefined }
+            ? {
+                leaveType: (wallet ? "CO" : form.leaveType) as StaffRequest["leaveType"],
+                ...(wallet ? { leaveWallet: wallet } : {}),
+                isHalfDay: form.isHalfDay,
+                session: form.isHalfDay ? form.session : undefined,
+              }
             : {}),
           ...(form.type === "overtime" ? { startTime: form.startTime, endTime: form.endTime } : {}),
           ...(form.type === "salary-increment" ? { requestedAmount: form.requestedAmount } : {}),
@@ -200,14 +232,16 @@ export default function NewRequestPage() {
                       { value: "SL", label: LEAVE_TYPE_LABELS.SL },
                       ...(isPermanent ? [{ value: "EL", label: LEAVE_TYPE_LABELS.EL }] : []),
                       { value: "CO", label: LEAVE_TYPE_LABELS.CO },
+                      { value: "OT", label: OT_LEAVE_LABEL },
                       { value: "HD", label: LEAVE_TYPE_LABELS.HD },
                       { value: "LOP", label: LEAVE_TYPE_LABELS.LOP },
                     ]}
                   />
-                  {isCoLeave && balances !== null && (
+                  {wallet && walletBalance !== null && (
                     <p className={`text-xs ${exceedsCoBalance ? "text-rose-600" : "text-slate-600"}`}>
-                      Flexible leave available: <b>{balances.fl.balance}</b> day(s) (earned {balances.fl.entitled} from
-                      week-off duty and approved overtime, used {balances.fl.used}).
+                      {wallet === "OT" ? "Overtime leave" : "Flexible leave"} available: <b>{walletBalance.balance}</b> day(s)
+                      (earned {walletBalance.earned} from {wallet === "OT" ? "approved overtime" : "Sunday / holiday duty"}, used{" "}
+                      {walletBalance.used}).
                       {exceedsCoBalance && " Not enough balance for this request."}
                     </p>
                   )}

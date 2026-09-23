@@ -222,6 +222,39 @@ export const MANAGER_REVIEWED: Record<string, string[]> = {
   attendance_corrections: ["admin", "department-head"],
 };
 
+/**
+ * Sub-document collections (`<parent>_<sub>`) and who may read them. The model
+ * name is assembled from two body fields, so without an allow-list any pair
+ * could land on a real collection (leave + adjustments → leave_adjustments).
+ * "self" = admin, payroll holders, or the staff member the history belongs to.
+ */
+const SUB_COLLECTIONS: Record<string, "self" | "any"> = {
+  staff_salaryHistory: "self",
+  staff_statusHistory: "self",
+  staff_contractHistory: "self",
+  assets_assignments: "any",
+};
+
+/** Rules for findSub / createSub. Returns an error message or null. */
+export function authorizeSubCollection(
+  user: AuthzUser,
+  action: string,
+  parentCollection: unknown,
+  subCollection: unknown,
+  parentId: unknown,
+  collectionName: string
+): string | null {
+  const name = `${String(parentCollection)}_${String(subCollection)}`;
+  const readRule = SUB_COLLECTIONS[name];
+  if (!readRule || name !== collectionName) return "This collection is not accessible.";
+  if (action === "createSub") {
+    return user.role === "admin" ? null : "You do not have permission to modify this resource.";
+  }
+  if (typeof parentId !== "string" || !parentId) return "A parent record is required.";
+  if (readRule === "any" || user.role === "admin" || hasFeature(user, "payroll")) return null;
+  return parentId === user.uid ? null : "You do not have permission to view this resource.";
+}
+
 /** Hard ceiling on how many documents a single query may return (DoS backstop). */
 export const MAX_QUERY_LIMIT = 50000;
 

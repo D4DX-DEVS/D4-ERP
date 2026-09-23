@@ -20,6 +20,15 @@ import { useToast } from "@/components/ui/toast";
 import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { departmentHeadStatus, type HeadIssue } from "@/lib/department-heads";
+
+/** What the head column says when the named head and the approvers disagree. */
+const HEAD_ISSUE_TEXT: Record<HeadIssue, string> = {
+  "head-not-approver": "Role is not Department Head — cannot approve",
+  "head-other-department": "Belongs to another department — cannot approve here",
+  "head-not-set": "Not named — approvals go to",
+  "no-approver": "No one can approve — requests wait for admin",
+};
 
 export default function DepartmentsPage() {
   const [companies, setCompanies] = useState<(Company & { id: string })[]>([]);
@@ -30,6 +39,9 @@ export default function DepartmentsPage() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", description: "", companyId: "", headId: "", isActive: true });
+  // Approvals follow the staff role, not this field: offer to grant it when the
+  // chosen head does not already hold it.
+  const [promoteHead, setPromoteHead] = useState(true);
   const { toast } = useToast();
   const router = useRouter();
   const {
@@ -91,17 +103,38 @@ export default function DepartmentsPage() {
       setEditingId(null);
       setForm({ name: "", description: "", companyId: "", headId: "", isActive: true });
     }
+    setPromoteHead(true);
     setDialogOpen(true);
   };
+
+  const staffName = (id?: string) => {
+    const s = staffList.find((x) => x.id === id);
+    return s ? `${s.firstName} ${s.lastName}` : "";
+  };
+
+  // The head picked in the form, and whether they can approve for this department.
+  const chosenHead = staffList.find((s) => s.id === form.headId);
+  const headNeedsRole = Boolean(chosenHead && chosenHead.role !== "department-head" && chosenHead.role !== "admin");
+  const headInOtherDept = Boolean(chosenHead && editingId && chosenHead.departmentId !== editingId);
+  const formApprovers = editingId ? departmentHeadStatus({ id: editingId, headId: null }, staffList).approverIds : [];
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
+      let departmentId = editingId;
       if (editingId) {
         await updateDocument("departments", editingId, form);
       } else {
-        await createDocument("departments", form);
+        departmentId = await createDocument("departments", form);
+      }
+      // A head only approves if their staff role says so — keep the two in step.
+      if (chosenHead && headNeedsRole && promoteHead && departmentId) {
+        await updateDocument("staff", chosenHead.id, {
+          role: "department-head",
+          ...(chosenHead.departmentId ? {} : { departmentId }),
+        });
+        setStaffList((prev) => prev.map((s) => (s.id === chosenHead.id ? { ...s, role: "department-head" } : s)));
       }
       setDialogOpen(false);
       toast("success", editingId ? "Department updated" : "Department created");
@@ -207,7 +240,24 @@ export default function DepartmentsPage() {
                   >
                     <TableCell className="font-medium">{dept.name}</TableCell>
                     <TableCell>{getCompanyName(dept.companyId)}</TableCell>
-                    <TableCell>{getHeadName(dept.headId)}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const { approverIds, issue } = departmentHeadStatus(dept, staffList);
+                        return (
+                          <div className="space-y-0.5">
+                            <p>{getHeadName(dept.headId)}</p>
+                            {issue ? (
+                              <p
+                                className={`text-xs ${issue === "no-approver" ? "text-slate-500" : "text-amber-700"}`}
+                              >
+                                {HEAD_ISSUE_TEXT[issue]}
+                                {issue === "head-not-set" ? ` ${approverIds.map(staffName).join(", ")}` : ""}
+                              </p>
+                            ) : null}
+                          </div>
+                        );
+                      })()}
+                    </TableCell>
                     <TableCell className="max-w-[200px] truncate">{dept.description || "—"}</TableCell>
                     <TableCell>
                       <Badge variant={getStatusColor(dept.isActive ? "active" : "terminated")}>
@@ -272,6 +322,41 @@ export default function DepartmentsPage() {
                 ...staffList.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` })),
               ]}
             />
+            {!form.headId && formApprovers.length > 0 ? (
+              <p className="text-xs text-slate-600">
+                Approves this department&apos;s requests by role:{" "}
+                {formApprovers.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className="mr-2 font-medium text-indigo-600 underline-offset-2 hover:underline"
+                    onClick={() => setForm({ ...form, headId: id })}
+                  >
+                    Set {staffName(id)} as head
+                  </button>
+                ))}
+              </p>
+            ) : null}
+            {headNeedsRole ? (
+              <label className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-indigo-600"
+                  checked={promoteHead}
+                  onChange={(e) => setPromoteHead(e.target.checked)}
+                />
+                <span>
+                  {chosenHead?.firstName}&apos;s role is <b>{chosenHead?.role}</b>, so they cannot approve leave or
+                  review tasks yet. Give them the <b>Department Head</b> role when saving.
+                </span>
+              </label>
+            ) : null}
+            {headInOtherDept && !headNeedsRole ? (
+              <p className="text-xs text-amber-700">
+                {chosenHead?.firstName} belongs to another department — they approve that department&apos;s requests,
+                not this one&apos;s. Move them in Staff if they should lead this team.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-2">

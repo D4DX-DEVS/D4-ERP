@@ -9,6 +9,7 @@ import Link from "next/link";
 import {
   ArrowUpRight,
   Bell,
+  Briefcase,
   CalendarDays,
   CalendarOff,
   CalendarRange,
@@ -25,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 import { hasFeature, type FeatureKey, type PortalSection } from "@/lib/permissions";
-import { PORTAL_MODULES, resolvePortalRoute, dashboardPathFor } from "@/lib/portal-nav";
+import { PORTAL_MODULES, resolvePortalRoute, dashboardPathFor, otherShellFor } from "@/lib/portal-nav";
 import { useAuthRefresh } from "@/hooks/use-auth-refresh";
 import { Receipt, Wallet, Package, Box, Clapperboard, Users, BarChart3 } from "lucide-react";
 
@@ -96,6 +97,8 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
     setMoreOpen(false);
   }
 
+  // Heads and accounts approve and file from the dashboard; this is only their own self-service.
+  const teamWorkspaceHref = otherShellFor(user?.role, "/staff-portal");
   const grantedModules = portalModules.filter((m) => hasFeature(user, m.feature));
   const grantedSections = SECTION_ORDER.map((section) => ({
     section,
@@ -180,6 +183,18 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto scrollbar-hide px-4 py-4">
+          {teamWorkspaceHref && (
+            <Link
+              href={teamWorkspaceHref}
+              className="mb-2 flex items-center gap-3 rounded-[20px] border border-indigo-200 bg-indigo-50 px-3.5 py-2.5 text-sm font-semibold text-indigo-800 transition-colors hover:bg-indigo-100"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white text-indigo-600">
+                <Briefcase className="h-4.5 w-4.5" />
+              </span>
+              <span className="flex-1">Team workspace</span>
+              <ArrowUpRight className="h-4 w-4 text-indigo-400" />
+            </Link>
+          )}
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -342,6 +357,19 @@ export default function StaffPortalLayout({ children }: { children: React.ReactN
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-slate-200" />
+            {teamWorkspaceHref && (
+              <Link
+                href={teamWorkspaceHref}
+                className="mb-4 flex min-h-11 items-center gap-3 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-semibold text-indigo-800"
+              >
+                <Briefcase className="h-5 w-5 text-indigo-600" />
+                <span className="flex-1">
+                  Team workspace
+                  <span className="block text-xs font-normal text-indigo-600/80">Approvals, department reports</span>
+                </span>
+                <ArrowUpRight className="h-4 w-4 text-indigo-400" />
+              </Link>
+            )}
             {grantedSections.map(({ section, modules }) => (
               <div key={section}>
                 <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">{section}</p>

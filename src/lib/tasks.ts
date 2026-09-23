@@ -1,9 +1,9 @@
 "use client";
 
-import { createDocument, getDocument, updateDocument, Timestamp } from "@/lib/firestore";
-import { createNotification } from "@/lib/notifications";
+import { createDocument, updateDocument, Timestamp } from "@/lib/firestore";
+import { createNotification, departmentHeadRecipientIds } from "@/lib/notifications";
 import { canTransitionTask, transitionNeedsRemark, TASK_STATUS_LABELS } from "@/lib/task-workflow";
-import type { AuthUser, Department, Task, TaskStatus, TaskStatusChange } from "@/types";
+import type { AuthUser, Task, TaskStatus, TaskStatusChange } from "@/types";
 
 type TaskDoc = Task & { id: string };
 
@@ -65,10 +65,9 @@ export async function changeTaskStatus(
   return update;
 }
 
-async function deptHeadStaffId(departmentId?: string): Promise<string | null> {
-  if (!departmentId) return null;
-  const dept = await getDocument<Department>("departments", departmentId);
-  return dept?.headId || null;
+/** Department heads who review this department's tasks (by role; see lib/department-heads). */
+async function deptHeadStaffIds(departmentId?: string): Promise<string[]> {
+  return departmentHeadRecipientIds(departmentId);
 }
 
 async function notifyTransition(
@@ -82,8 +81,8 @@ async function notifyTransition(
 
   if (to === "review") {
     // Submitted for review → dept head + whoever assigned the task
-    const headId = await deptHeadStaffId(task.departmentId);
-    const recipients = new Set([headId, task.assignedBy].filter(Boolean) as string[]);
+    const headIds = await deptHeadStaffIds(task.departmentId);
+    const recipients = new Set([...headIds, task.assignedBy].filter(Boolean) as string[]);
     recipients.delete(actor.staffId);
     await Promise.allSettled(
       [...recipients].map((recipientId) =>

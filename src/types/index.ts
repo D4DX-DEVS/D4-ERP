@@ -197,6 +197,14 @@ export type LeaveType = "CL" | "SL" | "EL" | "CO" | "HD" | "LOP";
  */
 export type LeaveBucket = "CL" | "ML" | "EL" | "FL";
 
+/**
+ * The two wallets inside the FL bucket. FL is earned by working a Sunday or
+ * holiday, OT by approved overtime; the printed sheet's FL column is their sum.
+ * A flexible-leave request names the wallet it spends; a day with no wallet
+ * (a register mark, or a request filed before the split) spends FL first, then OT.
+ */
+export type FlexWallet = "FL" | "OT";
+
 /** Annual day allowance per bucket. FL has none — it is earned, not granted. */
 export interface LeaveQuota {
   casualLeave: number;
@@ -232,6 +240,8 @@ export interface LeaveAdjustment extends BaseDocument {
   kind: LeaveAdjustmentKind;
   /** Signed days. Positive credits entitlement, negative consumes it. */
   days: number;
+  /** FL bucket only: the wallet this row moves. Unset credits FL; unset debits spend FL first, then OT. */
+  wallet?: FlexWallet;
   /** Effective date — drives which month column the debit lands in. */
   date: Timestamp;
   reason: string;
@@ -303,6 +313,8 @@ export interface StaffRequest extends BaseDocument {
   departmentId: string;
   type: StaffRequestType;
   leaveType?: LeaveType;
+  /** Flexible leave (`leaveType: "CO"`) only: which wallet pays for it. */
+  leaveWallet?: FlexWallet;
   isHalfDay?: boolean;
   session?: HalfDaySession;
   startDate: Timestamp;
@@ -1218,7 +1230,12 @@ export interface ReportSection {
  * publishes it or sends it back with a reason (rejected → the head edits the
  * same report and resubmits).
  */
-export type ReportStatus = "draft" | "submitted" | "published" | "rejected";
+/**
+ * draft → submitted → approved (signed off, with optional admin feedback) or
+ * rejected (sent back with a required note, editable again). `published` is
+ * the older name for approved and reads the same everywhere.
+ */
+export type ReportStatus = "draft" | "submitted" | "approved" | "published" | "rejected";
 
 export interface CustomKPI {
   label: string;
@@ -1299,10 +1316,11 @@ export interface DepartmentReport extends BaseDocument {
   planItems?: ReportPlanItem[];
   submittedAt?: Timestamp;
   submittedBy?: string;
-  /** Why an admin sent the report back; cleared when it is resubmitted. */
+  /** The admin's feedback: why it was sent back, or a note on approval. Cleared on resubmit. */
   reviewNote?: string;
   reviewedAt?: Timestamp;
   reviewedBy?: string;
+  reviewedByName?: string;
 }
 
 /** One department's slot in a master organization report. */
@@ -1368,6 +1386,8 @@ export interface CompanyReport extends BaseDocument {
 export interface NavigationConfig extends BaseDocument {
   /** role → allowed nav item hrefs. */
   roleMenus?: Partial<Record<StaffRole, string[]>>;
+  /** Every href the matrix listed when roleMenus was saved; later pages fall back to the code default. */
+  catalog?: string[];
   /** staffId → per-person overrides on top of their role menu. */
   staffOverrides?: Record<string, { allow?: string[]; deny?: string[] }>;
   /** role → visible dashboard widget keys, in display order. */

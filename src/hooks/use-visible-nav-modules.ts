@@ -4,7 +4,7 @@ import { useCallback, useMemo } from "react";
 import { useAuthStore } from "@/store/auth-store";
 import { useNavConfigStore } from "@/store/nav-config-store";
 import { hasFeature } from "@/lib/permissions";
-import { navigationModules } from "@/lib/navigation";
+import { navigationModules, roleMenuShows } from "@/lib/navigation";
 
 /** Role/feature/config-aware nav visibility — shared by the sidebar drawer and the mobile bottom bar. */
 export function useVisibleNavModules() {
@@ -35,11 +35,8 @@ export function useVisibleNavModules() {
           if (override.allow?.includes(href)) return true;
         }
 
-        // Check role menu list
-        const roleMenuItems = config.roleMenus?.[user.role];
-        if (roleMenuItems) {
-          return roleMenuItems.includes(href);
-        }
+        // Role menu list (pages added after it was saved keep the code default)
+        return roleMenuShows(config.roleMenus?.[user.role], config.catalog, href, Boolean(baselineVisible));
       }
 
       return baselineVisible;

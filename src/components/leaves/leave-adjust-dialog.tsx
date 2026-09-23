@@ -37,6 +37,7 @@ import { leaveMonthSources, type LeaveMonthSource } from "@/lib/leave-month-sour
 import { LeaveCellSources } from "@/components/leaves/leave-cell-sources";
 import type {
   AuthUser,
+  FlexWallet,
   LeaveAdjustment,
   LeaveAdjustmentKind,
   LeaveBucket,
@@ -122,6 +123,8 @@ export function LeaveAdjustDialog({
     days: "1",
     date: prefill ? monthStartDateKey(year, prefill.month) : todayKey(),
     reason: "",
+    // FL only: which of its two balances this moves.
+    wallet: "FL" as FlexWallet,
   });
 
   const isDebit = adjustForm.direction === "debit";
@@ -223,6 +226,7 @@ export function LeaveAdjustDialog({
           days: isDebit ? -magnitude : magnitude,
           date: adjustForm.date,
           reason: adjustForm.reason,
+          ...(adjustForm.bucket === "FL" ? { wallet: adjustForm.wallet } : {}),
         },
         user
       );
@@ -345,6 +349,21 @@ export function LeaveAdjustDialog({
                 }
               />
             </div>
+
+            {adjustForm.bucket === "FL" && (
+              <div className="space-y-2">
+                <Label htmlFor="adjust-wallet">Which balance</Label>
+                <Select
+                  id="adjust-wallet"
+                  options={[
+                    { value: "FL", label: "FL — Sunday / holiday duty" },
+                    { value: "OT", label: "OT — overtime" },
+                  ]}
+                  value={adjustForm.wallet}
+                  onChange={(e) => setAdjustForm({ ...adjustForm, wallet: e.target.value as FlexWallet })}
+                />
+              </div>
+            )}
 
             {/* The old "Entry type" select mixed direction with description, so
                 the balance moved a way the label never stated. Direction first,

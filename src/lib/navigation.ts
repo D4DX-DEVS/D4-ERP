@@ -66,6 +66,49 @@ export interface FlatNavItem {
   roles: string[];
 }
 
+/**
+ * Whether an admin-saved role menu shows `href`. A saved menu is an allow-list,
+ * so on its own it hid every page added to the sidebar after it was saved (the
+ * Dept Reports page, for one). `catalog` — the hrefs the matrix listed when it
+ * was saved — tells those apart: an href the admin never saw keeps the code's
+ * default. Configs saved before the catalog existed stay strict.
+ */
+export function roleMenuShows(
+  roleMenu: string[] | undefined,
+  catalog: string[] | undefined,
+  href: string,
+  codeDefault: boolean
+): boolean {
+  if (!roleMenu) return codeDefault;
+  if (catalog && !catalog.includes(href)) return codeDefault;
+  return roleMenu.includes(href);
+}
+
+/**
+ * Saved role menus rewritten as complete lists against today's sidebar, with a
+ * catalog of every current href. The matrix edits this form, so saving it can
+ * never hide a page the role is seeing right now.
+ */
+export function materializeRoleMenus(
+  roleMenus: Partial<Record<string, string[]>>,
+  catalog: string[] | undefined,
+  items: FlatNavItem[]
+): { roleMenus: Partial<Record<string, string[]>>; catalog: string[] } {
+  const out: Partial<Record<string, string[]>> = {};
+  for (const [role, list] of Object.entries(roleMenus)) {
+    if (!list) continue;
+    out[role] = items
+      .filter((item) => roleMenuShows(list, catalog, item.href, item.roles.includes(role)))
+      .map((item) => item.href);
+  }
+  return { roleMenus: out, catalog: items.map((item) => item.href) };
+}
+
+/** The hrefs the code shows a role when no menu has been saved for it. */
+export function defaultRoleMenu(items: FlatNavItem[], role: string): string[] {
+  return items.filter((item) => item.roles.includes(role)).map((item) => item.href);
+}
+
 export function getAllNavItems(): FlatNavItem[] {
   const items: FlatNavItem[] = [];
 
