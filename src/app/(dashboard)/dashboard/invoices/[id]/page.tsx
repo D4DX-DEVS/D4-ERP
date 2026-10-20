@@ -23,7 +23,7 @@ import Link from "next/link";
 import { useToast } from "@/components/ui/toast";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { clampDiscount, discountAmount } from "@/lib/invoice-discount";
-import { generateDocNumber } from "@/lib/numbering";
+import { generateDocNumber, isDocNumberTaken, toLocalDateKey } from "@/lib/numbering";
 import { generateDocumentPdfBlob, downloadPdfBlob as savePdfBlob, printPdfBlob as printPdfDoc } from "@/lib/document-pdf";
 import { useWorkspaceBase } from "@/hooks/use-workspace-base";
 
@@ -48,6 +48,8 @@ export default function InvoiceDetailPage() {
   const [editForm, setEditForm] = useState({
     companyId: "",
     clientId: "",
+    invoiceNumber: "",
+    date: "",
     dueDate: "",
     items: [{ description: "", subDescription: "", quantity: 1, rate: 0, amount: 0, sacCode: "" }],
     taxType: "non-gst" as "gst" | "non-gst",
@@ -258,11 +260,14 @@ export default function InvoiceDetailPage() {
 
   const openEdit = () => {
     if (!invoice) return;
+    const issued = invoice.date || invoice.createdAt;
     setEditForm({
       companyId: invoice.companyId,
       clientId: invoice.clientId,
+      invoiceNumber: invoice.invoiceNumber || "",
+      date: issued?.seconds ? toLocalDateKey(new Date(issued.seconds * 1000)) : "",
       dueDate: invoice.dueDate?.seconds
-        ? new Date(invoice.dueDate.seconds * 1000).toISOString().split("T")[0]
+        ? toLocalDateKey(new Date(invoice.dueDate.seconds * 1000))
         : "",
       items: (invoice.items || []).map((it) => ({
         description: it.description,
@@ -311,8 +316,17 @@ export default function InvoiceDetailPage() {
 
   const handleEditSave = async () => {
     if (!invoice) return;
+    const invoiceNumber = editForm.invoiceNumber.trim();
+    if (!invoiceNumber) {
+      toast("error", "Number is required");
+      return;
+    }
     setEditSaving(true);
     try {
+      if (invoiceNumber !== invoice.invoiceNumber && (await isDocNumberTaken(invoiceNumber, invoice.type, invoiceId))) {
+        toast("error", `Number ${invoiceNumber} is already used`);
+        return;
+      }
       const subtotal = editSubtotal;
       const taxable = subtotal - editDiscountAmount;
       let cgst = 0, sgst = 0, igst = 0;
@@ -324,6 +338,8 @@ export default function InvoiceDetailPage() {
       const paidAmount = invoice.paidAmount ?? 0;
 
       await updateDocument("invoices", invoiceId, {
+        invoiceNumber,
+        ...(editForm.date ? { date: Timestamp.fromDate(new Date(editForm.date)) } : {}),
         companyId: editForm.companyId,
         clientId: editForm.clientId,
         dueDate: editForm.dueDate ? Timestamp.fromDate(new Date(editForm.dueDate)) : null,
@@ -345,6 +361,11 @@ export default function InvoiceDetailPage() {
         notes: editForm.notes,
         terms: editForm.terms,
       });
+      // Receipts carry a copy of the invoice number — keep them in step
+      if (invoiceNumber !== invoice.invoiceNumber) {
+        const receipts = await getDocuments<{ invoiceId: string }>("receipts", [where("invoiceId", "==", invoiceId)]);
+        await Promise.all(receipts.map((r) => updateDocument("receipts", r.id, { invoiceNumber })));
+      }
 
       setEditOpen(false);
       toast("success", "Invoice updated successfully");
@@ -982,6 +1003,16 @@ export default function InvoiceDetailPage() {
                 <SelectTrigger><SelectValue placeholder="Select Client">{allClients.find((c) => c.id === editForm.clientId)?.companyName}</SelectValue></SelectTrigger>
                 <SelectContent>{allClients.map((c) => <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>)}</SelectContent>
               </SelectRoot>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>{invoice.type === "quotation" ? "Quotation" : "Invoice"} Number</Label>
+              <Input value={editForm.invoiceNumber} onChange={(e) => setEditForm({ ...editForm, invoiceNumber: e.target.value })} required />
+            </div>
+            <div className="space-y-1">
+              <Label>{invoice.type === "quotation" ? "Quotation" : "Invoice"} Date</Label>
+              <DatePicker value={editForm.date} onChange={(e) => setEditForm({ ...editForm, date: e.target.value })} />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4">

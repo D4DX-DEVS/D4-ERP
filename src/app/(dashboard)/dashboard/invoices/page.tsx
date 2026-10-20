@@ -24,6 +24,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { usePagination } from "@/hooks/use-pagination";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { useWorkspaceBase } from "@/hooks/use-workspace-base";
+import { generateDocNumber, isDocNumberTaken, toLocalDateKey } from "@/lib/numbering";
 
 export default function InvoicesPage() {
   const base = useWorkspaceBase();
@@ -68,6 +69,8 @@ export default function InvoicesPage() {
     type: "invoice" as Invoice["type"],
     companyId: "",
     clientId: "",
+    invoiceNumber: "",
+    date: toLocalDateKey(new Date()),
     dueDate: "",
     items: [{ description: "", quantity: 1, rate: 0, amount: 0, sacCode: "", subDescription: "" }],
     taxType: "gst" as Invoice["taxType"],
@@ -151,9 +154,15 @@ export default function InvoicesPage() {
       const totals = calculateTotals();
       const comp = companies.find((c) => c.id === form.companyId);
       const client = clients.find((c) => c.id === form.clientId);
-      const count = invoices.filter((i) => i.companyId === form.companyId && i.type === form.type).length;
-      const prefix = comp?.invoicePrefix || "INV";
-      const invoiceNumber = `${prefix}-${String(count + 1).padStart(4, "0")}`;
+      const invoiceDate = form.date ? new Date(form.date) : new Date();
+      const manualNumber = form.invoiceNumber.trim();
+      if (manualNumber && (await isDocNumberTaken(manualNumber, form.type))) {
+        toast("error", `Invoice number ${manualNumber} is already used`);
+        return;
+      }
+      // Blank = atomic server-side sequence, so two invoices never share a number
+      const invoiceNumber =
+        manualNumber || (await generateDocNumber({ series: "invoice", company: comp, date: invoiceDate }));
 
       await createDocument("invoices", {
         invoiceNumber,
@@ -161,7 +170,7 @@ export default function InvoicesPage() {
         companyId: form.companyId,
         clientId: form.clientId,
         clientName: client?.companyName || "",
-        date: Timestamp.now(),
+        date: Timestamp.fromDate(invoiceDate),
         dueDate: form.dueDate ? Timestamp.fromDate(new Date(form.dueDate)) : Timestamp.now(),
         items: form.items,
         subtotal: totals.subtotal,
@@ -186,7 +195,8 @@ export default function InvoicesPage() {
         source: base === "/staff-portal" ? "staff" : "admin",
       });
       setDialogOpen(false);
-      toast("success", "Invoice created successfully");
+      setForm((f) => ({ ...f, invoiceNumber: "", date: toLocalDateKey(new Date()) }));
+      toast("success", `Invoice ${invoiceNumber} created`);
       refresh();
     } catch (error) {
       console.error("Error:", error);
@@ -358,6 +368,17 @@ export default function InvoicesPage() {
             <div className="space-y-2">
               <Label>Due Date *</Label>
               <DatePicker value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} required />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label>Invoice Date *</Label>
+              <DatePicker value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required />
+            </div>
+            <div className="col-span-2 space-y-2">
+              <Label>Invoice Number</Label>
+              <Input value={form.invoiceNumber} onChange={(e) => setForm({ ...form, invoiceNumber: e.target.value })}
+                placeholder="Leave blank to auto-generate" />
             </div>
           </div>
 

@@ -96,12 +96,16 @@ export interface WritebackDay {
   dayKey: string;
   status: AttendanceStatus;
   isHalfDay: boolean;
+  /** The row to claim — the one the register shows for the day. Absent: create one. */
+  attendanceId?: string;
   /**
    * What stood on the day before this request claimed it, when anything did.
    * Withdrawing the approval puts it back, so claiming a day is reversible
    * rather than a quiet loss of whatever the register already knew.
    */
   replacesStatus?: AttendanceStatus;
+  /** Who wrote what stood there, so a restored import row is an import row again. */
+  replacesSource?: Attendance["source"];
 }
 
 /** Why a day was left as it stood. Each one is something a person should see. */
@@ -119,14 +123,37 @@ export interface RequestWritebackPlan {
   conflicts: WritebackConflict[];
 }
 
-type ExistingRow = Pick<Attendance, "date" | "status" | "leaveRequestId" | "isDeleted"> & {
+type ExistingRow = Pick<
+  Attendance,
+  "date" | "status" | "leaveRequestId" | "isDeleted" | "source" | "updatedAt" | "createdAt"
+> & {
   id?: string;
 };
 
 /** Statuses that mean the person turned up, whatever the request says. */
 const WORKED: ReadonlySet<string> = new Set(["present", "half-day", "on-duty", "overtime"]);
-/** Days that were never working days to begin with. */
-const NON_WORKING: ReadonlySet<string> = new Set(["week-off", "public-holiday"]);
+/** Sources whose rows are a person's decision rather than a machine's reading. */
+const DECIDED_BY_A_PERSON: ReadonlySet<string> = new Set(["manual", "correction"]);
+
+/**
+ * Whether a day marked off should stay off despite an approved leave.
+ *
+ * A holiday always does. A week-off does when the schedule agrees, or when a
+ * person marked it. What is left is an import's "WO" on a scheduled working day
+ * — ESSL prints that for any punch-less Saturday, including one spent on the
+ * very leave being approved, so it is the leave that tells the truth there.
+ */
+function staysOff(
+  row: ExistingRow,
+  folded: AttendanceStatus,
+  dayKey: string,
+  isWorkingDay: (dayKey: string) => boolean
+): boolean {
+  if (folded === "public-holiday") return true;
+  if (folded !== "week-off") return false;
+  if (row.source && DECIDED_BY_A_PERSON.has(row.source)) return true;
+  return !isWorkingDay(dayKey);
+}
 
 /**
  * The attendance days an approved request should own.
@@ -135,14 +162,23 @@ const NON_WORKING: ReadonlySet<string> = new Set(["week-off", "public-holiday"])
  * they actually worked is not: that contradiction is a fact for someone to look
  * at, not something to erase quietly. Re-running is safe, because a day already
  * stamped with this request is rewritten rather than skipped.
+ *
+ * A day can hold several live rows (see attendance-dedupe.ts), so each day is
+ * decided on the row the register shows for it, and that is the row claimed.
  */
 export function planRequestWriteback(input: {
   request: Pick<StaffRequest, "type" | "leaveType" | "startDate" | "endDate" | "isHalfDay"> & {
     id?: string;
   };
   existingRows: ExistingRow[];
+  /**
+   * Whether the schedule and holidays make this a working day. Unknown means a
+   * week-off marker is trusted as it stands.
+   */
+  isWorkingDay?: (dayKey: string) => boolean;
 }): RequestWritebackPlan {
   const { request, existingRows } = input;
+  const isWorkingDay = input.isWorkingDay ?? (() => false);
   const plan: RequestWritebackPlan = { upserts: [], conflicts: [] };
 
   if (!consumesLeaveBalance(request.type)) return plan;
@@ -154,7 +190,9 @@ export function planRequestWriteback(input: {
   for (const row of existingRows) {
     if (row.isDeleted) continue;
     const key = attendanceDayKey(row.date?.seconds);
-    if (key) byDay.set(key, row);
+    if (!key) continue;
+    const held = byDay.get(key);
+    byDay.set(key, held ? pickAttendanceRecord(held, row) : row);
   }
 
   for (const dayKey of dayKeysBetween(request.startDate?.seconds, request.endDate?.seconds)) {
@@ -164,13 +202,21 @@ export function planRequestWriteback(input: {
         dayKey,
         status,
         isHalfDay: Boolean(request.isHalfDay),
+        ...(existing?.id ? { attendanceId: existing.id } : {}),
         // Its own earlier write is not something to remember replacing.
         ...(existing && existing.leaveRequestId !== request.id
-          ? { replacesStatus: existing.status }
+          ? {
+              replacesStatus: existing.status,
+              ...(existing.source ? { replacesSource: existing.source } : {}),
+            }
           : {}),
       });
 
     if (!existing) {
+      // A scheduled off day stays off, as it would had the import come first —
+      // otherwise the leave row beats the later import's WO and the day's fate
+      // turns on which happened first.
+      if (input.isWorkingDay && !input.isWorkingDay(dayKey)) continue;
       write();
       continue;
     }
@@ -194,7 +240,7 @@ export function planRequestWriteback(input: {
         });
         continue;
       }
-      if (NON_WORKING.has(folded)) {
+      if (staysOff(existing, folded, dayKey, isWorkingDay)) {
         plan.conflicts.push({
           dayKey,
           attendanceId: existing.id,
