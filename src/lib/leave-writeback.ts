@@ -11,14 +11,19 @@
 // reconcile looks for before posting a debit, and so the thing that stops an
 // approved leave being deducted twice.
 
-import { createDocument, deleteDocument, getDocuments, updateDocument, where, Timestamp } from "@/lib/firestore";
-import { logAudit } from "@/lib/audit";
 import {
-  attendanceDayKey,
-  planRequestWriteback,
-  type WritebackConflict,
-} from "@/lib/leave-attendance-sync";
-import type { Attendance, AuthUser, StaffRequest } from "@/types";
+  createDocument,
+  deleteDocument,
+  getDocument,
+  getDocuments,
+  updateDocument,
+  where,
+  Timestamp,
+} from "@/lib/firestore";
+import { logAudit } from "@/lib/audit";
+import { planRequestWriteback, type WritebackConflict } from "@/lib/leave-attendance-sync";
+import { getAppSettings, isNonWorkingDay } from "@/lib/settings";
+import type { Attendance, AuthUser, Staff, StaffRequest } from "@/types";
 
 const COLLECTION = "attendance";
 
@@ -34,16 +39,42 @@ function midnight(dayKey: string): Date {
   return d;
 }
 
-/** Attendance rows for one staff member across the days a request covers. */
+/**
+ * Attendance rows for one staff member across the days a request covers.
+ *
+ * Whole days, not instants: the ESSL import stores a day at UTC midnight, which
+ * here is 05:30 the same morning. Stopping at the last day's local midnight
+ * missed that row, so the planner never saw what the import had said and wrote
+ * a second row beside it instead of claiming the first.
+ */
 async function rowsForRequest(request: StaffRequest): Promise<(Attendance & { id: string })[]> {
   const startSec = request.startDate?.seconds;
   const endSec = request.endDate?.seconds ?? startSec;
-  if (!startSec) return [];
+  if (!startSec || !endSec) return [];
+  const from = new Date(startSec * 1000);
+  from.setHours(0, 0, 0, 0);
+  const until = new Date(endSec * 1000);
+  until.setHours(0, 0, 0, 0);
+  until.setDate(until.getDate() + 1);
   return getDocuments<Attendance & { id: string }>(COLLECTION, [
     where("staffId", "==", request.staffId),
-    where("date", ">=", Timestamp.fromDate(midnight(attendanceDayKey(startSec)!))),
-    where("date", "<=", Timestamp.fromDate(midnight(attendanceDayKey(endSec)!))),
+    where("date", ">=", Timestamp.fromDate(from)),
+    where("date", "<", Timestamp.fromDate(until)),
   ]);
+}
+
+/**
+ * Whether the schedule and holidays make a day a working day for this person.
+ * Null when settings cannot be read, which leaves every week-off as it stands.
+ */
+async function workingDayRule(staffId: string): Promise<((dayKey: string) => boolean) | null> {
+  try {
+    const settings = await getAppSettings();
+    const staff = await getDocument<Staff>("staff", staffId).catch(() => null);
+    return (dayKey) => !isNonWorkingDay(settings, midnight(dayKey), staff?.companyId);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -58,24 +89,23 @@ export async function applyRequestWriteback(
 ): Promise<RequestWritebackResult> {
   if (!request.id || !request.staffId) return { written: 0, conflicts: [] };
 
-  const existingRows = await rowsForRequest(request);
+  const [existingRows, isWorkingDay] = await Promise.all([
+    rowsForRequest(request),
+    workingDayRule(request.staffId),
+  ]);
   const plan = planRequestWriteback({
     request: { ...request, id: request.id },
     existingRows,
+    ...(isWorkingDay ? { isWorkingDay } : {}),
   });
   if (plan.upserts.length === 0 && plan.conflicts.length === 0) {
     return { written: 0, conflicts: [] };
   }
 
-  const byDay = new Map<string, Attendance & { id: string }>();
-  for (const row of existingRows) {
-    if (row.isDeleted) continue;
-    const key = attendanceDayKey(row.date?.seconds);
-    if (key) byDay.set(key, row);
-  }
+  const byId = new Map(existingRows.map((row) => [row.id, row]));
 
   for (const day of plan.upserts) {
-    const existing = byDay.get(day.dayKey);
+    const existing = day.attendanceId ? byId.get(day.attendanceId) : undefined;
     const shared = {
       status: day.status,
       leaveRequestId: request.id,
@@ -89,7 +119,10 @@ export async function applyRequestWriteback(
         // re-run must not overwrite it with this request's own status, or the
         // original day is lost after all.
         ...(day.replacesStatus && !existing.statusBeforeLeave
-          ? { statusBeforeLeave: day.replacesStatus }
+          ? {
+              statusBeforeLeave: day.replacesStatus,
+              ...(day.replacesSource ? { sourceBeforeLeave: day.replacesSource } : {}),
+            }
           : {}),
       });
     } else {
@@ -144,7 +177,10 @@ export async function withdrawRequestWriteback(
         status: row.statusBeforeLeave,
         leaveRequestId: null,
         statusBeforeLeave: null,
-        source: "manual",
+        sourceBeforeLeave: null,
+        // An import row goes back to being an import row, so the next import may
+        // correct it. Older claims never recorded a source; those stay manual.
+        source: row.sourceBeforeLeave ?? "manual",
         updatedAt: Timestamp.now(),
       });
       restored += 1;

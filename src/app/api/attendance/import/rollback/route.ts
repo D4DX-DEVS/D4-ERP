@@ -26,8 +26,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "This import has already been rolled back" }, { status: 400 });
   }
 
+  // An approved request may since have claimed one of this batch's rows in
+  // place — stamped by leave-writeback.ts, or source "leave" from the older
+  // sync on the leaves page. That row is the request now, not the import's
+  // reading, so rolling back must not take it along. What it remembers of the
+  // import goes, though: withdrawing the request later must not restore data
+  // from a batch that was rolled back.
+  const claimed = { importBatchId: batchId, isDeleted: { $ne: true }, $or: [{ leaveRequestId: { $ne: null } }, { source: "leave" }] };
+  await Attendance.updateMany(claimed, {
+    $unset: { importBatchId: "", statusBeforeLeave: "", sourceBeforeLeave: "" },
+    $set: { updatedAt: new Date() },
+  });
+
   const result = await Attendance.updateMany(
-    { importBatchId: batchId, isDeleted: { $ne: true } },
+    { importBatchId: batchId, isDeleted: { $ne: true }, leaveRequestId: null, source: { $ne: "leave" } },
     {
       $set: {
         isDeleted: true,

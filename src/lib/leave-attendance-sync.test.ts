@@ -155,6 +155,99 @@ describe("planRequestWriteback — what it will and will not overwrite", () => {
     }
   });
 
+  it("overwrites an imported week-off on a day the schedule says is working", () => {
+    // ESSL prints "WO" for a punch-less working Saturday; the approved leave is the truth.
+    for (const source of ["biometric", "sheet", undefined] as const) {
+      const plan = planRequestWriteback({
+        request: request("CL", "2026-09-05"),
+        existingRows: [row("a1", "2026-09-05", "week-off", { source })],
+        isWorkingDay: () => true,
+      });
+      expect(plan.conflicts).toEqual([]);
+      expect(plan.upserts).toEqual([
+        expect.objectContaining({
+          dayKey: "2026-09-05",
+          attendanceId: "a1",
+          replacesStatus: "week-off",
+          ...(source ? { replacesSource: source } : {}),
+        }),
+      ]);
+    }
+  });
+
+  it("still leaves a week-off alone on a scheduled off day or holiday", () => {
+    const plan = planRequestWriteback({
+      request: request("CL", "2026-09-06"),
+      existingRows: [row("a1", "2026-09-06", "week-off", { source: "biometric" })],
+      isWorkingDay: () => false,
+    });
+    expect(plan.upserts).toEqual([]);
+    expect(plan.conflicts[0].reason).toBe("non-working");
+  });
+
+  it("does not claim an empty scheduled off day, so it stays off whichever came first", () => {
+    const plan = planRequestWriteback({
+      request: request("CL", "2026-09-04", "2026-09-07"),
+      existingRows: [],
+      isWorkingDay: (k) => k !== "2026-09-06",
+    });
+    expect(plan.upserts.map((u) => u.dayKey)).toEqual(["2026-09-04", "2026-09-05", "2026-09-07"]);
+    expect(plan.conflicts).toEqual([]);
+  });
+
+  it("still leaves a week-off someone marked by hand alone, even on a working day", () => {
+    for (const source of ["manual", "correction"] as const) {
+      const plan = planRequestWriteback({
+        request: request("CL", "2026-09-05"),
+        existingRows: [row("a1", "2026-09-05", "week-off", { source })],
+        isWorkingDay: () => true,
+      });
+      expect(plan.upserts).toEqual([]);
+      expect(plan.conflicts[0].reason).toBe("non-working");
+    }
+  });
+
+  it("never overwrites a public holiday, whatever the schedule says", () => {
+    const plan = planRequestWriteback({
+      request: request("CL", "2026-09-05"),
+      existingRows: [row("a1", "2026-09-05", "public-holiday", { source: "biometric" })],
+      isWorkingDay: () => true,
+    });
+    expect(plan.upserts).toEqual([]);
+    expect(plan.conflicts[0].reason).toBe("non-working");
+  });
+
+  it("decides a day with two rows on the row the register shows, not the last one read", () => {
+    // ESSL row at UTC midnight + app row at IST midnight: same calendar day.
+    const imported = row("imp", "2026-09-07", "present", {
+      source: "biometric",
+      date: Timestamp.fromDate(new Date("2026-09-07T05:30:00")),
+    });
+    const manual = row("man", "2026-09-07", "absent", { source: "manual" });
+    const plan = planRequestWriteback({
+      request: request("CL", "2026-09-07"),
+      existingRows: [manual, imported],
+    });
+    // The manual row wins the register, so the day is an absence and gets claimed.
+    expect(plan.conflicts).toEqual([]);
+    expect(plan.upserts[0]).toMatchObject({ attendanceId: "man", replacesStatus: "absent" });
+  });
+
+  it("rewrites its own leave row rather than an import duplicate beside it", () => {
+    const own = row("own", "2026-09-05", "casual-leave", { source: "leave", leaveRequestId: "req-1" });
+    const imported = row("imp", "2026-09-05", "week-off", {
+      source: "biometric",
+      date: Timestamp.fromDate(new Date("2026-09-05T05:30:00")),
+    });
+    const plan = planRequestWriteback({
+      request: request("CL", "2026-09-05"),
+      existingRows: [imported, own],
+    });
+    expect(plan.conflicts).toEqual([]);
+    expect(plan.upserts[0]).toMatchObject({ attendanceId: "own" });
+    expect(plan.upserts[0].replacesStatus).toBeUndefined();
+  });
+
   it("leaves a day another request already owns alone", () => {
     const plan = planRequestWriteback({
       request: request("CL", "2026-09-07"),

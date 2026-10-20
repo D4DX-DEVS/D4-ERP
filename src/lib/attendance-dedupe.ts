@@ -5,6 +5,9 @@
 // can hold multiple live rows. Every view must resolve duplicates the same way:
 // correction > manual > everything else, then newest write wins.
 
+import { normalizeAttendanceStatus } from "@/lib/attendance-status";
+import type { AttendanceStatus } from "@/types";
+
 interface TimestampLike {
   seconds: number;
 }
@@ -31,6 +34,27 @@ export const dayKeyFromSec = (s: number): string => localDayKey(new Date(s * 100
 const sourceRank = (source?: string): number =>
   source === "correction" ? 3 : source === "manual" ? 2 : 1;
 
+/** Statuses that mean the person turned up — mirrors WORKED in leave-attendance-sync. */
+const WORKED: ReadonlySet<string> = new Set(["present", "half-day", "on-duty", "overtime"]);
+
+/** Legacy "late" and "wfh" fold to present first, as the planner reads them. */
+const worked = (status: string): boolean =>
+  WORKED.has(normalizeAttendanceStatus(status as AttendanceStatus));
+
+/**
+ * An approved-leave row against an import row that never saw the leave. ESSL
+ * prints "A" or "WO" for a punch-less day — including a working Saturday — and a
+ * re-import is always newer, so newest-wins would hide the approved leave. A real
+ * punch is still a fact and stands, as the writeback treats it.
+ */
+function leaveOverImport<T extends AttendanceLike>(a: T, b: T): T | null {
+  const isLeave = (r: T) => r.source === "leave";
+  const isImport = (r: T) => sourceRank(r.source) === 1 && !isLeave(r);
+  if (isLeave(a) && isImport(b)) return worked(b.status) ? b : a;
+  if (isLeave(b) && isImport(a)) return worked(a.status) ? a : b;
+  return null;
+}
+
 /**
  * Given two live rows for the same staff+day, return the one views should show.
  * Stable: returns `a` on a full tie so callers can fold left over query order.
@@ -39,6 +63,9 @@ export function pickAttendanceRecord<T extends AttendanceLike>(a: T, b: T): T {
   const rankA = sourceRank(a.source);
   const rankB = sourceRank(b.source);
   if (rankA !== rankB) return rankA > rankB ? a : b;
+
+  const leave = leaveOverImport(a, b);
+  if (leave) return leave;
 
   const updatedA = secOf(a.updatedAt) || secOf(a.createdAt);
   const updatedB = secOf(b.updatedAt) || secOf(b.createdAt);

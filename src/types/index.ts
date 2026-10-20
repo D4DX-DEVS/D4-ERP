@@ -896,6 +896,8 @@ export interface Attendance extends BaseDocument {
    * approval can put the day back instead of destroying what the register knew.
    */
   statusBeforeLeave?: AttendanceStatus;
+  /** Who wrote that earlier status, so withdrawing restores the row's origin too. */
+  sourceBeforeLeave?: Attendance["source"];
   correctionId?: string;
   shiftId?: string;
   /** Source of the record — manual admin entry, self check-in, leave/holiday sync, biometric import. */

@@ -4,7 +4,7 @@
 // atomic findOneAndUpdate ($inc, upsert) on the server, so two concurrent
 // users can never be handed the same number (satisfies FR-QT-003).
 
-import { getNextSequence, Timestamp } from "@/lib/firestore";
+import { getDocuments, getNextSequence, Timestamp, where } from "@/lib/firestore";
 import { getAppSettings, type AppSettings, type NumberFormats } from "@/lib/settings";
 import type { Company } from "@/types";
 
@@ -43,6 +43,44 @@ export function companyCode(company?: Pick<Company, "code" | "name"> | null): st
     return name.slice(0, 2).toUpperCase();
   }
   return "NA";
+}
+
+/** Strips trailing separators/case so "MC-", "mc" and "MC /" are the same prefix. */
+export function normalizePrefix(prefix?: string | null): string {
+  return (prefix ?? "").trim().replace(/[\s\-/_.]+$/, "").toUpperCase();
+}
+
+type NumberingCompany = Pick<Company, "name"> & Partial<Pick<Company, "code" | "invoicePrefix">>;
+
+/**
+ * A company's own invoice prefix overrides the shared template's leading text
+ * so each company runs its own series (MC-001, MC-002 …) instead of every
+ * company printing the main company's prefix. The company whose prefix already
+ * matches the template keeps the shared series. Templates that already render
+ * {COMP} are left alone so their existing counters keep running.
+ */
+export function resolveSeriesTemplate(
+  series: DocSeries,
+  template: string,
+  company?: NumberingCompany | null
+): { template: string; comp: string } {
+  const comp = companyCode(company);
+  const prefix = normalizePrefix(company?.invoicePrefix);
+  if (series !== "invoice" || !prefix || template.includes("{COMP}")) return { template, comp };
+
+  const firstToken = template.indexOf("{");
+  if (firstToken < 0) return { template, comp };
+  const literal = template.slice(0, firstToken);
+  if (normalizePrefix(literal) === prefix) return { template, comp };
+
+  const separator = literal.match(/[\-/_.]+$/)?.[0] ?? "-";
+  return { template: `{COMP}${separator}${template.slice(firstToken)}`, comp: prefix };
+}
+
+/** YYYY-MM-DD of the local calendar day (toISOString would give the UTC day). */
+export function toLocalDateKey(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 interface FormatTokens {
@@ -97,7 +135,7 @@ export function sequenceScope(
 
 export interface GenerateNumberOptions {
   series: DocSeries;
-  company?: Pick<Company, "code" | "name"> | null;
+  company?: NumberingCompany | null;
   settings?: AppSettings;
   /** Date the document is dated; defaults to now. */
   date?: Date;
@@ -112,12 +150,31 @@ export async function generateDocNumber(options: GenerateNumberOptions): Promise
   const date = options.date ?? new Date();
   const fyStartMonth = Number(settings.financialYearStart) || 4;
   const fy = getFinancialYear(date, fyStartMonth);
-  const comp = companyCode(options.company);
-  const template = settings.numberFormats?.[options.series] ?? "{COMP}/{YYYY}/{SEQ:3}";
+  const { template, comp } = resolveSeriesTemplate(
+    options.series,
+    settings.numberFormats?.[options.series] ?? "{COMP}/{YYYY}/{SEQ:3}",
+    options.company
+  );
 
   const scope = sequenceScope(options.series, template, comp, fy);
   const seq = await getNextSequence(scope.key, scope.legacy);
   return formatDocNumber(template, { comp, fy, seq });
+}
+
+/**
+ * True when another document of the same type already uses this number.
+ * Guards hand-typed numbers; auto-generated ones are unique by construction.
+ */
+export async function isDocNumberTaken(
+  number: string,
+  type: string,
+  excludeId?: string
+): Promise<boolean> {
+  const matches = await getDocuments<{ type: string }>("invoices", [
+    where("invoiceNumber", "==", number),
+    where("type", "==", type),
+  ]);
+  return matches.some((doc) => doc.id !== excludeId);
 }
 
 /** Convenience helper returning a Timestamp-friendly issue date alongside the number. */

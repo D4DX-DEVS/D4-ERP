@@ -34,6 +34,37 @@ describe("pickAttendanceRecord", () => {
     expect(pickAttendanceRecord(manual, imported).id).toBe("man");
   });
 
+  it("approved leave beats a newer import week-off or absent on the same day", () => {
+    // ESSL re-import after approval: "WO" on a working Saturday must not hide the leave.
+    for (const status of ["week-off", "absent"]) {
+      const leave = rec({ id: "lv", source: "leave", status: "casual-leave", updatedAt: ts("2026-09-01T10:00:00Z") });
+      const imported = rec({ id: "imp", source: "biometric", status, updatedAt: ts("2026-09-03T10:00:00Z") });
+      expect(pickAttendanceRecord(leave, imported).id).toBe("lv");
+      expect(pickAttendanceRecord(imported, leave).id).toBe("lv");
+    }
+  });
+
+  it("a real punch from the import still beats approved leave", () => {
+    const leave = rec({ id: "lv", source: "leave", status: "casual-leave", updatedAt: ts("2026-09-03T10:00:00Z") });
+    const imported = rec({ id: "imp", source: "biometric", status: "present", updatedAt: ts("2026-09-01T10:00:00Z") });
+    expect(pickAttendanceRecord(leave, imported).id).toBe("imp");
+    expect(pickAttendanceRecord(imported, leave).id).toBe("imp");
+  });
+
+  it("a legacy late or wfh import row counts as worked against leave", () => {
+    for (const status of ["late", "wfh"]) {
+      const leave = rec({ id: "lv", source: "leave", status: "casual-leave" });
+      const imported = rec({ id: "imp", source: "biometric", status });
+      expect(pickAttendanceRecord(leave, imported).id).toBe("imp");
+    }
+  });
+
+  it("manual still beats approved leave", () => {
+    const leave = rec({ id: "lv", source: "leave", status: "casual-leave", updatedAt: ts("2026-09-03T10:00:00Z") });
+    const manual = rec({ id: "man", source: "manual", status: "full-leave", updatedAt: ts("2026-09-01T10:00:00Z") });
+    expect(pickAttendanceRecord(leave, manual).id).toBe("man");
+  });
+
   it("same source class: newer updatedAt wins", () => {
     const older = rec({ id: "old", source: "biometric", updatedAt: ts("2026-09-01T10:00:00Z") });
     const newer = rec({ id: "new", source: "biometric", updatedAt: ts("2026-09-02T10:00:00Z") });

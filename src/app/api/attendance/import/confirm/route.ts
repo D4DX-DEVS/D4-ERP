@@ -7,7 +7,8 @@ import { hasFeature } from "@/lib/permissions";
 import type { ParsedEmployee } from "@/lib/attendance-import/parsers";
 import type { AttendanceStatus } from "@/types";
 import { normalizeSettings, isNonWorkingDay, evaluateCheckIn, type AppSettings } from "@/lib/settings";
-import { DEFAULT_TIME_ZONE, hoursBetween, zonedDateAt } from "@/lib/tz";
+import { DEFAULT_TIME_ZONE, hoursBetween, zonedDateAt, zonedDayStart } from "@/lib/tz";
+import { planImportDay, type ImportDayRow } from "@/lib/attendance-import/merge-day";
 
 interface ParsedRecord {
   date: string;
@@ -30,6 +31,18 @@ function dateOnly(iso: string): Date {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(y, m - 1, d, 0, 0, 0, 0);
 }
+
+/** The office calendar day as an instant range, so every writer's midnight falls inside. */
+function officeDayWindow(iso: string, timeZone: string, fallback: Date): { from: Date; until: Date } {
+  const [y, m, d] = iso.split("-").map(Number);
+  const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+  const from = zonedDayStart(iso, timeZone) ?? fallback;
+  const until = zonedDayStart(next, timeZone) ?? new Date(from.getTime() + 86400000);
+  return { from, until };
+}
+
+const toSeconds = (v: unknown): { seconds: number } | null =>
+  v instanceof Date ? { seconds: Math.floor(v.getTime() / 1000) } : null;
 /**
  * The same punch expressed in the HOST's clock.
  *
@@ -159,14 +172,32 @@ export async function POST(req: NextRequest) {
           : false;
 
         // Same staff+day rows can carry different midnight conventions (see
-        // attendance-dedupe.ts), so match the whole local day, not one exact Date.
-        const existing = (await Attendance.findOne({
+        // attendance-dedupe.ts), so match the whole office day, not one exact
+        // Date — on a UTC host `date` is 05:30 IST, and a window starting there
+        // never saw the app's rows at IST midnight, approved leave included.
+        const { from, until } = officeDayWindow(rec.date, timeZone, date);
+        const sameDay = (await Attendance.find({
           staffId,
-          date: { $gte: date, $lt: new Date(date.getTime() + 86400000) },
+          date: { $gte: from, $lt: until },
           isDeleted: { $ne: true },
-        }).lean()) as { _id: unknown } | null;
+        }).lean()) as unknown as (Omit<ImportDayRow, "id" | "updatedAt" | "createdAt"> & {
+          _id: unknown;
+          updatedAt?: unknown;
+          createdAt?: unknown;
+        })[];
 
-        if (existing && !overwriteExisting) {
+        const action = planImportDay({
+          rows: sameDay.map((r) => ({
+            ...r,
+            id: String(r._id),
+            updatedAt: toSeconds(r.updatedAt),
+            createdAt: toSeconds(r.createdAt),
+          })),
+          overwriteExisting,
+          // ESSL can print "P" with no times; the register still reads that as worked.
+          hasPunches: Boolean(checkIn || checkOut) || rec.status === "present",
+        });
+        if (action.kind === "skip") {
           skippedCount += 1;
           continue;
         }
@@ -191,8 +222,8 @@ export async function POST(req: NextRequest) {
           updatedAt: new Date(),
         };
 
-        if (existing) {
-          await Attendance.findByIdAndUpdate(existing._id, { $set: data });
+        if (action.kind === "update") {
+          await Attendance.findByIdAndUpdate(action.id, { $set: data });
           updatedCount += 1;
         } else {
           data.createdAt = new Date();
