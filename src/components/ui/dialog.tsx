@@ -1,8 +1,16 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
+
+// Overlays render into <body>: an ancestor with backdrop-filter/transform (e.g. Card's
+// backdrop-blur) becomes the containing block for position:fixed and clips the dialog.
+function DialogPortal({ children }: { children: React.ReactNode }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
+}
 
 /* ===== Compound Dialog (shadcn-like: Dialog + DialogTrigger + DialogContent) ===== */
 
@@ -50,6 +58,7 @@ export function Dialog({ children, open: controlledOpen, onOpenChange, onClose, 
     // Legacy inline mode
     return (
       <DialogContext.Provider value={{ open, setOpen }}>
+        <DialogPortal>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 lg:left-[calc(var(--sidebar-width)+1.75rem)] lg:w-[calc(100vw-var(--sidebar-width)-1.75rem)] lg:pr-6">
           <div className="fixed inset-0 bg-slate-950/38 backdrop-blur-[3px]" onClick={() => setOpen(false)} />
           <div
@@ -67,6 +76,7 @@ export function Dialog({ children, open: controlledOpen, onOpenChange, onClose, 
             {children}
           </div>
         </div>
+        </DialogPortal>
       </DialogContext.Provider>
     );
   }
@@ -121,6 +131,7 @@ export function DialogContent({
   if (!open) return null;
 
   return (
+    <DialogPortal>
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 lg:left-[calc(var(--sidebar-width)+1.75rem)] lg:w-[calc(100vw-var(--sidebar-width)-1.75rem)] lg:pr-6">
       <div className="fixed inset-0 bg-slate-950/38 backdrop-blur-[3px]" onClick={() => setOpen(false)} />
       <div
@@ -138,6 +149,7 @@ export function DialogContent({
         {children}
       </div>
     </div>
+    </DialogPortal>
   );
 }
 

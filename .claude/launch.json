@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "d4erp-new",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "D:/Projects/d4erp-new", "run", "dev", "--", "-p", "3100"],
+      "port": 3100
+    }
+  ]
+}
